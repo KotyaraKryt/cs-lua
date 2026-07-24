@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Вопрос по API
+    url: https://github.com/KotyaraKryt/cs-lua/discussions/categories/вопросы
+    about: Как сделать X, почему не работает Y — сюда, а не в issue.
+  - name: Готовые плагины
+    url: https://github.com/KotyaraKryt/cs-lua-plugins
+    about: Плагины живут в отдельном репозитории.
