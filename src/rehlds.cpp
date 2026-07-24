@@ -3,7 +3,7 @@
 
 #include <rehlds_api.h>
 
-#include <windows.h>
+#include "platform.h"
 
 static IRehldsApi *s_api = nullptr;
 static IRehldsHookchains *s_hooks = nullptr;
@@ -29,20 +29,21 @@ bool cslua_rehlds_init()
 	if (s_api)
 		return true;
 
-	// The engine lives in swds.dll for a dedicated server; the listen-server
-	// builds keep it in hw/sw.dll.
-	static const char *const candidates[] = { "swds.dll", "hw.dll", "sw.dll" };
-
-	HMODULE engine = NULL;
-	for (int i = 0; i < 3 && !engine; i++)
-		engine = GetModuleHandleA(candidates[i]);
+	// Which file the engine lives in depends on the platform and on how the
+	// server was started; the list is in platform.cpp.
+	void *engine = NULL;
+	for (int i = 0; CSLUA_ENGINE_MODULES[i] && !engine; i++)
+		engine = cslua_module_open(CSLUA_ENGINE_MODULES[i]);
 
 	if (!engine) {
 		cslua_print("engine module not found, precache accounting will be approximate");
 		return false;
 	}
 
-	CreateInterfaceFn factory = (CreateInterfaceFn)GetProcAddress(engine, "CreateInterface");
+	CreateInterfaceFn factory =
+		(CreateInterfaceFn)cslua_module_symbol(engine, "CreateInterface");
+	cslua_module_close(engine);
+
 	if (!factory) {
 		cslua_print("engine exports no CreateInterface: not ReHLDS, precache accounting will be approximate");
 		return false;
@@ -72,7 +73,7 @@ bool cslua_rehlds_init()
 
 	s_api = api;
 	s_hooks = api->GetHookchains();
-	_snprintf(s_version, sizeof s_version, "%d.%d", major, minor);
+	cslua_snprintf(s_version, sizeof s_version, "%d.%d", major, minor);
 	s_version[sizeof s_version - 1] = '\0';
 
 	cslua_print("ReHLDS API %s connected", s_version);

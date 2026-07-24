@@ -9,17 +9,11 @@
 #include "lua_sound.h"
 #include "lua_menu.h"
 #include "regamedll.h"
+#include "platform.h"
 
-#include <windows.h>
 #include <algorithm>
 
 LuaEngine g_lua;
-
-static bool file_exists(const std::string &path)
-{
-	DWORD attr = GetFileAttributesA(path.c_str());
-	return attr != INVALID_FILE_ATTRIBUTES && !(attr & FILE_ATTRIBUTE_DIRECTORY);
-}
 
 // pcall message handler: turns "file:line: msg" into a full traceback.
 static int cslua_traceback(lua_State *L)
@@ -110,7 +104,7 @@ std::string LuaEngine::resolve_module(int plugin_index, const char *modname) con
 	int n = module_paths(plugin_index, modname, candidates);
 
 	for (int i = 0; i < n; i++)
-		if (file_exists(candidates[i]))
+		if (cslua_file_exists(candidates[i]))
 			return candidates[i];
 
 	return std::string();
@@ -265,16 +259,18 @@ void LuaEngine::load_core()
 {
 	std::string dir = cslua_base_dir() + "/core";
 
-	std::vector<std::string> files;
-	WIN32_FIND_DATAA fd;
-	HANDLE h = FindFirstFileA((dir + "/*.lua").c_str(), &fd);
-	if (h == INVALID_HANDLE_VALUE)
+	std::vector<CsLuaDirEntry> entries;
+	if (!cslua_list_dir(dir, entries))
 		return;			// no core layer installed; base API just won't exist
-	do {
-		if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
-			files.push_back(fd.cFileName);
-	} while (FindNextFileA(h, &fd));
-	FindClose(h);
+
+	std::vector<std::string> files;
+	for (size_t i = 0; i < entries.size(); i++) {
+		const std::string &name = entries[i].name;
+		if (entries[i].is_dir || name.size() < 5)
+			continue;
+		if (name.compare(name.size() - 4, 4, ".lua") == 0)
+			files.push_back(name);
+	}
 
 	std::sort(files.begin(), files.end());
 
@@ -301,27 +297,24 @@ void LuaEngine::discover_plugins()
 {
 	std::string dir = cslua_base_dir() + "/plugins";
 
-	WIN32_FIND_DATAA fd;
-	HANDLE h = FindFirstFileA((dir + "/*").c_str(), &fd);
-	if (h == INVALID_HANDLE_VALUE) {
+	std::vector<CsLuaDirEntry> entries;
+	if (!cslua_list_dir(dir, entries)) {
 		cslua_print("no plugins found in %s", dir.c_str());
 		return;
 	}
 
-	do {
-		std::string entry = fd.cFileName;
-		if (entry == "." || entry == "..")
-			continue;
+	for (size_t i = 0; i < entries.size(); i++) {
+		const std::string &entry = entries[i].name;
 
 		// A leading underscore disables a plugin without deleting it.
-		if (entry[0] == '_' || entry[0] == '.')
+		if (entry.empty() || entry[0] == '_' || entry[0] == '.')
 			continue;
 
 		LuaPlugin plugin;
 
-		if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+		if (entries[i].is_dir) {
 			std::string init = dir + "/" + entry + "/init.lua";
-			if (!file_exists(init)) {
+			if (!cslua_file_exists(init)) {
 				cslua_error("plugin folder '%s' has no init.lua, skipped", entry.c_str());
 				continue;
 			}
@@ -340,9 +333,7 @@ void LuaEngine::discover_plugins()
 
 		plugin.name = plugin.id;
 		m_plugins.push_back(plugin);
-	} while (FindNextFileA(h, &fd));
-
-	FindClose(h);
+	}
 
 	// Deterministic load order.
 	std::sort(m_plugins.begin(), m_plugins.end(),

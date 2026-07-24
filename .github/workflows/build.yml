@@ -37,3 +37,52 @@ jobs:
           name: lua_mm-x86
           path: build/Release/lua_mm.dll
           if-no-files-found: error
+
+  linux:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      # GoldSrc is 32-bit, so everything down to libstdc++ has to be.
+      - name: Install the 32-bit toolchain
+        run: |
+          sudo dpkg --add-architecture i386
+          sudo apt-get update
+          sudo apt-get install -y gcc-multilib g++-multilib
+
+      # -fPIC matters: the stock static objects are position-dependent, and
+      # they cannot be linked into a shared object.
+      - name: Build LuaJIT (x86, static, PIC)
+        run: |
+          make -C third_party/luajit/src \
+            CC="gcc -m32" BUILDMODE=static TARGET_CFLAGS=-fPIC -j"$(nproc)"
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCSLUA_SERVER_DIR=
+
+      - name: Build
+        run: cmake --build build -j"$(nproc)"
+
+      # A module that pulls in a symbol the engine does not provide loads fine
+      # and dies later, so check the file is what it claims to be and that
+      # nothing is left dangling.
+      - name: Check the module
+        run: |
+          file build/lua_mm_i386.so
+          file build/lua_mm_i386.so | grep -q "ELF 32-bit" \
+            || { echo "not a 32-bit ELF"; exit 1; }
+          echo "--- undefined symbols ---"
+          nm -D --undefined-only build/lua_mm_i386.so | head -40
+          echo "--- exported plugin API ---"
+          nm -D --defined-only build/lua_mm_i386.so \
+            | grep -E "GiveFnptrsToDll|Meta_(Query|Attach|Detach)|GetEntityAPI2" \
+            || { echo "plugin entry points are missing"; exit 1; }
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: lua_mm-linux-x86
+          path: build/lua_mm_i386.so
+          if-no-files-found: error

@@ -2,12 +2,26 @@ cmake_minimum_required(VERSION 3.20)
 
 project(cslua CXX)
 
-if(NOT CMAKE_SIZEOF_VOID_P EQUAL 4)
-	message(FATAL_ERROR "cs-lua must be built for x86. Configure with: cmake -S . -B build -A Win32")
+# GoldSrc is 32-bit, and so is everything the module links against. On Linux
+# that means -m32 rather than a generator flag, so ask for it before the
+# compiler is probed - CMAKE_SIZEOF_VOID_P is decided during that probe.
+if(UNIX)
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m32")
+	set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -m32")
 endif()
 
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+if(NOT CMAKE_SIZEOF_VOID_P EQUAL 4)
+	if(WIN32)
+		message(FATAL_ERROR "cs-lua must be built for x86. Configure with: cmake -S . -B build -A Win32")
+	else()
+		message(FATAL_ERROR "cs-lua must be built for x86, and -m32 did not produce a 32-bit compiler. "
+			"Install the multilib toolchain: gcc-multilib g++-multilib (Debian/Ubuntu) "
+			"or glibc-devel.i686 libstdc++-devel.i686 (Fedora).")
+	endif()
+endif()
 
 set(MM_ROOT     "${CMAKE_SOURCE_DIR}/third_party/metamod-r/metamod")
 # One SDK for everything: the HLSDK metamod needs, the CS class hierarchy and
@@ -21,8 +35,18 @@ if(NOT EXISTS "${HLSDK_ROOT}/dlls/regamedll_api.h")
 	message(FATAL_ERROR "ReGameDLL SDK not found at ${HLSDK_ROOT}. See third_party/regamedll/README.md.")
 endif()
 
-if(NOT EXISTS "${LUAJIT_ROOT}/lua51.lib")
-	message(FATAL_ERROR "lua51.lib not found. Build LuaJIT first: open a x86 dev prompt, cd ${LUAJIT_ROOT} && msvcbuild.bat static")
+if(WIN32)
+	set(LUAJIT_LIB "${LUAJIT_ROOT}/lua51.lib")
+	set(LUAJIT_HINT "open a x86 dev prompt, cd ${LUAJIT_ROOT} && msvcbuild.bat static")
+else()
+	set(LUAJIT_LIB "${LUAJIT_ROOT}/libluajit.a")
+	# -fPIC is not optional: the default static objects are position-dependent,
+	# and linking those into a shared object fails on relocations.
+	set(LUAJIT_HINT "cd ${LUAJIT_ROOT} && make CC=\"gcc -m32\" BUILDMODE=static TARGET_CFLAGS=-fPIC -j")
+endif()
+
+if(NOT EXISTS "${LUAJIT_LIB}")
+	message(FATAL_ERROR "LuaJIT not built: ${LUAJIT_LIB} is missing. Build it first: ${LUAJIT_HINT}")
 endif()
 
 add_library(lua_mm SHARED
@@ -31,6 +55,7 @@ add_library(lua_mm SHARED
 	src/dllapi.cpp
 	src/commands.cpp
 	src/players.cpp
+	src/platform.cpp
 	src/lua_engine.cpp
 	src/lua_events.cpp
 	src/lua_natives.cpp
@@ -43,12 +68,6 @@ add_library(lua_mm SHARED
 	src/lua_menu.cpp
 	src/regamedll.cpp
 	src/rehlds.cpp
-)
-
-set_target_properties(lua_mm PROPERTIES
-	PREFIX ""
-	OUTPUT_NAME "lua_mm"
-	MSVC_RUNTIME_LIBRARY "MultiThreaded"
 )
 
 target_include_directories(lua_mm PRIVATE
@@ -65,19 +84,53 @@ target_include_directories(lua_mm PRIVATE
 	"${LUAJIT_ROOT}"
 )
 
-target_compile_definitions(lua_mm PRIVATE
-	_CRT_SECURE_NO_WARNINGS
-	WIN32_LEAN_AND_MEAN
-	NOMINMAX
-)
+target_link_libraries(lua_mm PRIVATE "${LUAJIT_LIB}")
 
-target_link_libraries(lua_mm PRIVATE "${LUAJIT_ROOT}/lua51.lib")
+if(WIN32)
+	# lua_mm.dll next to metamod's own plugins.
+	set_target_properties(lua_mm PROPERTIES
+		PREFIX ""
+		OUTPUT_NAME "lua_mm"
+		MSVC_RUNTIME_LIBRARY "MultiThreaded"
+		# GiveFnptrsToDll must be exported undecorated (stdcall), and metamod
+		# writes into the plugin's .data section, so it stays writable.
+		LINK_FLAGS "/DEF:\"${CMAKE_SOURCE_DIR}/msvc/lua_mm.def\""
+	)
 
-# GiveFnptrsToDll must be exported undecorated (stdcall), and metamod writes
-# into the plugin's .data section, so it has to stay writable.
-set_target_properties(lua_mm PROPERTIES
-	LINK_FLAGS "/DEF:\"${CMAKE_SOURCE_DIR}/msvc/lua_mm.def\""
-)
+	target_compile_definitions(lua_mm PRIVATE
+		_CRT_SECURE_NO_WARNINGS
+		WIN32_LEAN_AND_MEAN
+		NOMINMAX
+	)
+else()
+	# metamod's own convention for a 32-bit Linux module: no "lib" prefix, an
+	# _i386 suffix.
+	set_target_properties(lua_mm PROPERTIES
+		PREFIX ""
+		OUTPUT_NAME "lua_mm_i386"
+		POSITION_INDEPENDENT_CODE ON
+	)
+
+	target_compile_options(lua_mm PRIVATE
+		-Wall
+		-fno-strict-aliasing	# the SDK casts entvars around constantly
+		# Only what the plugin API asks for leaves the module. Anything else
+		# would be visible to the engine and to every other metamod plugin.
+		-fvisibility=hidden
+		-fvisibility-inlines-hidden
+	)
+
+	target_link_libraries(lua_mm PRIVATE dl)
+
+	# LuaJIT on x86 needs its exported symbols reachable from the module's own
+	# code, and static libgcc/libstdc++ keep the module working on servers with
+	# an older toolchain than the one that built it.
+	target_link_options(lua_mm PRIVATE
+		-Wl,--no-undefined
+		-static-libgcc
+		-static-libstdc++
+	)
+endif()
 
 # Drop the build straight into a test server, so a rebuild is the whole
 # deploy step. Point CSLUA_SERVER_DIR at your own <gamedir> to use a server
@@ -94,9 +147,9 @@ if(CSLUA_SERVER_DIR)
 	# Plugins are deliberately not touched - they are not ours to overwrite.
 	add_custom_command(TARGET lua_mm POST_BUILD
 		COMMAND "${CMAKE_COMMAND}" -E make_directory "${SERVER_LUA_DIR}"
-		COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:lua_mm>" "${SERVER_LUA_DIR}/lua_mm.dll"
+		COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:lua_mm>" "${SERVER_LUA_DIR}/$<TARGET_FILE_NAME:lua_mm>"
 		COMMAND "${CMAKE_COMMAND}" -E copy_directory "${CMAKE_SOURCE_DIR}/scripts/core" "${SERVER_LUA_DIR}/core"
 		COMMAND "${CMAKE_COMMAND}" -E copy_directory "${CMAKE_SOURCE_DIR}/scripts/include" "${SERVER_LUA_DIR}/include"
-		COMMENT "Installing lua_mm.dll and the core layer into ${SERVER_LUA_DIR}"
+		COMMENT "Installing $<TARGET_FILE_NAME:lua_mm> and the core layer into ${SERVER_LUA_DIR}"
 	)
 endif()

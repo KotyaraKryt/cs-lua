@@ -4,8 +4,7 @@
 #include "regamedll.h"
 #include "lua_events.h"
 #include "players.h"
-
-#include <windows.h>
+#include "platform.h"
 
 static IReGameApi *s_api = nullptr;
 static IReGameHookchains *s_hooks = nullptr;
@@ -32,15 +31,18 @@ bool cslua_regamedll_init()
 		return true;
 
 	// metamod knows exactly which file it loaded as the game DLL, so ask it
-	// instead of guessing "mp.dll".
+	// instead of guessing "mp.dll" or "cs.so".
 	const char *path = GET_GAME_INFO(PLID, GINFO_REALDLL_FULLPATH);
-	HMODULE gamedll = path ? GetModuleHandleA(path) : NULL;
+	void *gamedll = path ? cslua_module_open(path) : NULL;
 	if (!gamedll) {
 		cslua_print("game DLL handle not found, CS-specific features are off");
 		return false;
 	}
 
-	CreateInterfaceFn factory = (CreateInterfaceFn)GetProcAddress(gamedll, "CreateInterface");
+	CreateInterfaceFn factory =
+		(CreateInterfaceFn)cslua_module_symbol(gamedll, "CreateInterface");
+	cslua_module_close(gamedll);
+
 	if (!factory) {
 		cslua_print("game DLL exports no CreateInterface: not ReGameDLL, CS-specific features are off");
 		return false;
@@ -71,7 +73,7 @@ bool cslua_regamedll_init()
 
 	s_api = api;
 	s_hooks = api->GetHookchains();
-	_snprintf(s_version, sizeof s_version, "%d.%d", major, minor);
+	cslua_snprintf(s_version, sizeof s_version, "%d.%d", major, minor);
 	s_version[sizeof s_version - 1] = '\0';
 
 	cslua_print("ReGameDLL API %s connected", s_version);

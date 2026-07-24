@@ -31,7 +31,7 @@ plugin_info_t Plugin_info =
 static void cslua_vprint(bool is_error, const char *fmt, va_list ap)
 {
 	char msg[1024];
-	int n = _vsnprintf(msg, sizeof msg - 1, fmt, ap);
+	int n = cslua_vsnprintf(msg, sizeof msg - 1, fmt, ap);
 	if (n < 0)
 		n = (int)sizeof msg - 1;
 	msg[n] = '\0';
@@ -49,7 +49,7 @@ static void cslua_vprint(bool is_error, const char *fmt, va_list ap)
 
 	// Before Meta_Query we have nothing but the raw engine.
 	char raw[1024 + 32];
-	_snprintf(raw, sizeof raw, "%s%s\n", CSLUA_TAG, msg);
+	cslua_snprintf(raw, sizeof raw, "%s%s\n", CSLUA_TAG, msg);
 	raw[sizeof raw - 1] = '\0';
 	g_engfuncs.pfnServerPrint(raw);
 }

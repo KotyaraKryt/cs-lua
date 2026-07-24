@@ -103,7 +103,7 @@ static int l_command(lua_State *L)
 	s_commands.push_back(cmd);
 
 	if (!engine_name(name)) {
-		char *stable = _strdup(name);
+		char *stable = cslua_strdup(name);
 		s_engine_registered.push_back(stable);
 		REG_SVR_COMMAND(stable, command_trampoline);
 	}

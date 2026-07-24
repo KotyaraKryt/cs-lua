@@ -121,7 +121,7 @@ static void to_cp1251(const char *in, char *out, size_t outsz)
 		}
 		int len = 0;
 		if (!utf8_decode(s + i, len)) {
-			_snprintf(out, outsz, "%s", in);	// not UTF-8, leave it alone
+			cslua_snprintf(out, outsz, "%s", in);	// not UTF-8, leave it alone
 			out[outsz - 1] = '\0';
 			return;
 		}
@@ -130,7 +130,7 @@ static void to_cp1251(const char *in, char *out, size_t outsz)
 	}
 
 	if (!multibyte) {
-		_snprintf(out, outsz, "%s", in);
+		cslua_snprintf(out, outsz, "%s", in);
 		out[outsz - 1] = '\0';
 		return;
 	}
@@ -276,7 +276,7 @@ static void prepare(const char *text, char *out, size_t outsz, bool newline)
 	if (cp1251_enabled()) {
 		to_cp1251(text, out, room);
 	} else {
-		_snprintf(out, room, "%s", text);
+		cslua_snprintf(out, room, "%s", text);
 		out[room - 1] = '\0';
 	}
 

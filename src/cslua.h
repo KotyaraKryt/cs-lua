@@ -8,6 +8,8 @@ class CBaseEntity;
 #include <extdll.h>
 #include <meta_api.h>
 
+#include "platform.h"
+
 #include <string>
 
 #define CSLUA_NAME		"cs-lua"

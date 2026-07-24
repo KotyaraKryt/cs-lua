@@ -339,7 +339,7 @@ static int l_kick(lua_State *L)
 		cslua_send_console(id, reason);
 
 	char cmd[64];
-	_snprintf(cmd, sizeof cmd, "kick #%d\n", g_engfuncs.pfnGetPlayerUserId(e));
+	cslua_snprintf(cmd, sizeof cmd, "kick #%d\n", g_engfuncs.pfnGetPlayerUserId(e));
 	cmd[sizeof cmd - 1] = '\0';
 	SERVER_COMMAND(cmd);
 	return 0;
@@ -368,7 +368,7 @@ static int l_ban(lua_State *L)
 
 	// banid takes minutes; "kick" makes it drop the player right away.
 	char cmd[96];
-	_snprintf(cmd, sizeof cmd, "banid %d #%d kick\n", minutes, g_engfuncs.pfnGetPlayerUserId(e));
+	cslua_snprintf(cmd, sizeof cmd, "banid %d #%d kick\n", minutes, g_engfuncs.pfnGetPlayerUserId(e));
 	cmd[sizeof cmd - 1] = '\0';
 	SERVER_COMMAND(cmd);
 	SERVER_COMMAND("writeid\n");

@@ -208,7 +208,7 @@ bool LuaEvents::fire_client_connect(int id, const char *name, const char *ip, Re
 			bool blocked = lua_isboolean(L, -2) && !lua_toboolean(L, -2);
 			if (blocked) {
 				const char *why = lua_isstring(L, -1) ? lua_tostring(L, -1) : NULL;
-				_snprintf(reject.reason, sizeof reject.reason, "%s",
+				cslua_snprintf(reject.reason, sizeof reject.reason, "%s",
 					why ? why : "Rejected by a Lua plugin");
 				reject.reason[sizeof reject.reason - 1] = '\0';
 				rejected = true;
