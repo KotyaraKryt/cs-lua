@@ -32,26 +32,27 @@ static void cslua_vprint(bool is_error, const char *fmt, va_list ap)
 {
 	char msg[1024];
 	int n = cslua_vsnprintf(msg, sizeof msg - 1, fmt, ap);
-	if (n < 0)
+	// _vsnprintf (MSVC) returns -1 on overflow; vsnprintf (C99) returns the
+	// length it WANTED, which can be past the buffer. Clamp for both.
+	if (n < 0 || n > (int)sizeof msg - 1)
 		n = (int)sizeof msg - 1;
 	msg[n] = '\0';
 
-	// metamod's loggers tag the line and send it to both the console and the
-	// server log, which is the only place output survives when hlds runs
-	// without an interactive console.
-	if (gpMetaUtilFuncs) {
-		if (is_error)
-			LOG_ERROR(PLID, "%s", msg);
-		else
-			LOG_MESSAGE(PLID, "%s", msg);
-		return;
-	}
-
-	// Before Meta_Query we have nothing but the raw engine.
+	// Straight to the server console. Con_Printf is what a command reply has to
+	// go through: it reaches the interactive console, an rcon caller (it honours
+	// the rcon redirect), and a game panel's stdout alike. metamod's LOG_MESSAGE
+	// does not - it lands in the metamod log file and nowhere a person watching
+	// a console would see it, which reads as "the command printed nothing".
 	char raw[1024 + 32];
 	cslua_snprintf(raw, sizeof raw, "%s%s\n", CSLUA_TAG, msg);
 	raw[sizeof raw - 1] = '\0';
-	g_engfuncs.pfnServerPrint(raw);
+	if (g_engfuncs.pfnServerPrint)
+		g_engfuncs.pfnServerPrint(raw);
+
+	// An error also goes to the metamod log, so a plugin blowing up at load
+	// leaves a trace after the console has scrolled away.
+	if (is_error && gpMetaUtilFuncs)
+		LOG_ERROR(PLID, "%s", msg);
 }
 
 void cslua_print(const char *fmt, ...)
