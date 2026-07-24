@@ -1,14 +1,17 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(cslua CXX)
-
 # GoldSrc is 32-bit, and so is everything the module links against. On Linux
-# that means -m32 rather than a generator flag, so ask for it before the
-# compiler is probed - CMAKE_SIZEOF_VOID_P is decided during that probe.
-if(UNIX)
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m32")
-	set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -m32")
+# that means -m32, and it has to be in place before project() runs: that call
+# probes the compiler, and the probe is what decides CMAKE_SIZEOF_VOID_P.
+# Hence the _INIT variables and CMAKE_HOST_UNIX - the plain UNIX variable does
+# not exist yet at this point.
+if(CMAKE_HOST_UNIX)
+	set(CMAKE_CXX_FLAGS_INIT "-m32")
+	set(CMAKE_SHARED_LINKER_FLAGS_INIT "-m32")
+	set(CMAKE_EXE_LINKER_FLAGS_INIT "-m32")
 endif()
+
+project(cslua CXX)
 
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
