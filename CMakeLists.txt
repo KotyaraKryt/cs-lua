@@ -114,6 +114,22 @@ else()
 		POSITION_INDEPENDENT_CODE ON
 	)
 
+	# The vendored SDK headers call a few MSVC names outright - dbg.h uses
+	# _vsnprintf, static_map.h uses _stricmp. The HL codebase maps them exactly
+	# like this on Linux. Doing it here rather than editing the copy keeps
+	# third_party/regamedll a clean import, and -D lands before any include,
+	# which a header of our own could not.
+	#
+	# _strupr and _strlwr are deliberately absent: strtools.h defines those as
+	# real inline functions on Linux, and a macro would break them.
+	target_compile_definitions(lua_mm PRIVATE
+		_vsnprintf=vsnprintf
+		_snprintf=snprintf
+		_strdup=strdup
+		_stricmp=strcasecmp
+		_strnicmp=strncasecmp
+	)
+
 	target_compile_options(lua_mm PRIVATE
 		-Wall
 		-fno-strict-aliasing	# the SDK casts entvars around constantly
