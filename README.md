@@ -20,7 +20,7 @@ end, { perm = "heal.use" })
 Файл в `addons/lua/plugins/heal.lua`, в консоли `lua_reload` — работает.
 Рестарт сервера не нужен.
 
-Готовые плагины — в [cs-lua-plugins](https://github.com/kotyarakryt/cs-lua-plugins).
+Готовые плагины — в [cs-lua-plugins](https://github.com/KotyaraKryt/cs-lua-plugins).
 Здесь только модуль и core-слой.
 
 ## Документация
@@ -53,7 +53,7 @@ end, { perm = "heal.use" })
 CMake и MSVC с x86-тулчейном. Зависимости — сабмодули:
 
 ```
-git clone --recursive https://github.com/kotyarakryt/cs-lua.git
+git clone --recursive https://github.com/KotyaraKryt/cs-lua.git
 cd cs-lua
 ```
 
@@ -108,7 +108,7 @@ win32 addons/lua/lua_mm.dll
 В репозитории его нет: это игровой контент Valve. Поднимается руками —
 HLDS с CS 1.6, поверх [ReHLDS](https://github.com/dreamstalker/rehlds) +
 [ReGameDLL_CS](https://github.com/s1lentq/ReGameDLL_CS) и
-[metamod-r](https://github.com/theAsmodai/metamod-r). Без ReGameDLL модуль
+[metamod-r](https://github.com/rehlds/Metamod-R). Без ReGameDLL модуль
 заведётся, но события геймплея и CS-состояние работать не будут.
 
 `data/groups.lua` и `data/users.lua` копируются из `scripts/data/` один раз
@@ -129,5 +129,5 @@ HLDS с CS 1.6, поверх [ReHLDS](https://github.com/dreamstalker/rehlds) +
 | зависимость | лицензия | как подключено |
 |-------------|----------|----------------|
 | [LuaJIT](https://luajit.org/) | MIT | сабмодуль, линкуется статически |
-| [metamod-r](https://github.com/theAsmodai/metamod-r) | GPLv3 | сабмодуль, только plugin-заголовки |
+| [metamod-r](https://github.com/rehlds/Metamod-R) | GPLv3 | сабмодуль, только plugin-заголовки |
 | cssdk из [ReAPI](https://github.com/s1lentq/reapi) | GPLv3 | копия в `third_party/regamedll/cssdk` |

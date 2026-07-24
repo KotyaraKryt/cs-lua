@@ -20,7 +20,7 @@ plugin_info_t Plugin_info =
 	CSLUA_VERSION,				// version
 	__DATE__,					// date
 	"kotyarakryt",				// author
-	"https://github.com/kotyarakryt/cs-lua",	// url
+	"https://github.com/KotyaraKryt/cs-lua",	// url
 	"CSLUA",					// logtag
 	PT_STARTUP,					// (when) loadable
 	PT_NEVER,					// (when) unloadable - we hand out function pointers
