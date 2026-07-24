@@ -1,0 +1,6 @@
+[submodule "third_party/luajit"]
+	path = third_party/luajit
+	url = https://github.com/LuaJIT/LuaJIT.git
+[submodule "third_party/metamod-r"]
+	path = third_party/metamod-r
+	url = https://github.com/rehlds/Metamod-R.git

@@ -1,0 +1,14 @@
+# Normalize to LF in the repository; checkout uses whatever the platform wants.
+* text=auto
+
+*.cpp   text
+*.h     text
+*.lua   text
+*.md    text
+*.txt   text
+*.def   text eol=crlf
+
+*.dll   binary
+*.lib   binary
+*.wav   binary
+*.mdl   binary

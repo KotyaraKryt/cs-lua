@@ -1,0 +1,28 @@
+# Build output.
+/build/
+
+# The local test server: HLDS with the game content, none of which is ours to
+# ship. See the "Тестовый сервер" section of the README for how to set one up.
+/server/
+
+# Plugins live in their own repository, this one is the runtime and the core
+# layer only. Keep a local copy here to test against; it stays out of git.
+/scripts/plugins/
+
+# LuaJIT is built in place, in the submodule working tree.
+third_party/luajit/src/*.lib
+third_party/luajit/src/*.obj
+third_party/luajit/src/*.exe
+third_party/luajit/src/*.dll
+third_party/luajit/src/*.pdb
+third_party/luajit/src/*.exp
+third_party/luajit/src/luajit.h
+third_party/luajit/src/host/buildvm*
+third_party/luajit/src/host/minilua*
+
+# Visual Studio.
+.vs/
+*.user
+*.suo
+*.sdf
+*.opendb
