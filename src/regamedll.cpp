@@ -35,7 +35,9 @@ bool cslua_regamedll_init()
 	const char *path = GET_GAME_INFO(PLID, GINFO_REALDLL_FULLPATH);
 	void *gamedll = path ? cslua_module_open(path) : NULL;
 	if (!gamedll) {
-		cslua_print("game DLL handle not found, CS-specific features are off");
+		// Naming the path makes this one debuggable instead of mysterious.
+		cslua_print("game DLL handle not found (%s), CS-specific features are off",
+			path ? path : "no path from metamod");
 		return false;
 	}
 

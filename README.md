@@ -42,6 +42,7 @@ end, { perm = "heal.use" })
   не текут наружу, ошибка при загрузке снимает плагин целиком, а не половину.
 - **Права как именованные ноды.** `shop.vip.buy`: группы, наследование,
   иммунитет по весу, выдача на срок, личные разрешения и запреты.
+- **Windows и Linux.** Один код, `lua_mm.dll` и `lua_mm_i386.so`.
 - **Без оффсетов.** Состояние игрока читается через entvars и ReGameDLL API, а
   не по сигнатурам — не ломается от обновления игры.
 - **Прекеш не роняет сервер.** Модуль считает занятые слоты и отключает
@@ -50,14 +51,19 @@ end, { perm = "heal.use" })
 
 ## Сборка
 
-CMake и MSVC с x86-тулчейном. Зависимости — сабмодули:
+Зависимости — сабмодули, поэтому клонировать рекурсивно:
 
 ```
 git clone --recursive https://github.com/KotyaraKryt/cs-lua.git
 cd cs-lua
 ```
 
-LuaJIT собирается один раз, в консоли **x86 Native Tools Command Prompt**:
+Только x86 — GoldSrc 32-битный. Конфигурация под x64 упадёт на этапе `cmake`.
+
+### Windows
+
+CMake и MSVC с x86-тулчейном. LuaJIT собирается один раз, в консоли
+**x86 Native Tools Command Prompt**:
 
 ```
 cd third_party\luajit\src
@@ -71,14 +77,35 @@ cmake -S . -B build -A Win32
 cmake --build build --config Release
 ```
 
-Только x86 — конфигурация под x64 упадёт на этапе `cmake`.
+Результат — `lua_mm.dll`.
 
-Сборка раскладывается на тестовый сервер сама: `lua_mm.dll`, `core/` и
-`include/` копируются в `<gamedir>/addons/lua/`.
+### Linux
+
+Нужен 32-битный тулчейн: `gcc-multilib g++-multilib` (Debian/Ubuntu) или
+`glibc-devel.i686 libstdc++-devel.i686 (Fedora)`. LuaJIT — статически и с PIC,
+иначе не слинкуется в `.so`:
 
 ```
-cmake -S . -B build -A Win32 -DCSLUA_SERVER_DIR="C:/hlds/cstrike"
-cmake -S . -B build -A Win32 -DCSLUA_SERVER_DIR=      # выключить копирование
+make -C third_party/luajit/src CC="gcc -m32" BUILDMODE=static TARGET_CFLAGS=-fPIC -j
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j
+```
+
+Результат — `lua_mm_i386.so` (соглашение metamod для 32-битного модуля).
+
+> Собирай на distro не новее целевого сервера. Модуль, слинкованный с
+> современной glibc, потребует символы (`GLIBC_2.38` и подобные), которых на
+> боксах под CS 1.6 обычно нет, и не загрузится. Debian 11 (glibc 2.31)
+> покрывает всё, что ещё в строю.
+
+### Установка на тестовый сервер
+
+Сборка раскладывается сама: модуль, `core/` и `include/` копируются в
+`<gamedir>/addons/lua/`.
+
+```
+cmake -S . -B build -DCSLUA_SERVER_DIR="/home/hlds/cstrike"
+cmake -S . -B build -DCSLUA_SERVER_DIR=      # выключить копирование
 ```
 
 `data/` и `plugins/` не трогаются: там живут права и чужой код.
@@ -86,17 +113,18 @@ cmake -S . -B build -A Win32 -DCSLUA_SERVER_DIR=      # выключить ко�
 ## Установка
 
 ```
-cstrike/addons/lua/lua_mm.dll
-cstrike/addons/lua/core/          базовый слой, едет с модулем
-cstrike/addons/lua/data/          groups.lua, users.lua
-cstrike/addons/lua/include/       библиотеки для require
-cstrike/addons/lua/plugins/       плагины
+cstrike/addons/lua/lua_mm.dll         (Windows) или lua_mm_i386.so (Linux)
+cstrike/addons/lua/core/              базовый слой, едет с модулем
+cstrike/addons/lua/data/              groups.lua, users.lua
+cstrike/addons/lua/include/           библиотеки для require
+cstrike/addons/lua/plugins/           плагины
 ```
 
 В `cstrike/addons/metamod/plugins.ini`:
 
 ```
 win32 addons/lua/lua_mm.dll
+linux addons/lua/lua_mm_i386.so
 ```
 
 Модуль грузится при старте сервера и не выгружается — `meta unload` запрещён,

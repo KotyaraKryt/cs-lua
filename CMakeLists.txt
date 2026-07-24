@@ -132,6 +132,12 @@ else()
 
 	target_compile_options(lua_mm PRIVATE
 		-Wall
+		# Both of these fire only inside the SDK's MSVC-era API: it carries
+		# #pragma warning() everywhere, and its function signatures take char*
+		# where a string literal is the only sane argument. Left on, they bury
+		# the warnings that are actually ours.
+		-Wno-unknown-pragmas
+		-Wno-write-strings
 		-fno-strict-aliasing	# the SDK casts entvars around constantly
 		# Only what the plugin API asks for leaves the module. Anything else
 		# would be visible to the engine and to every other metamod plugin.
@@ -141,14 +147,18 @@ else()
 
 	target_link_libraries(lua_mm PRIVATE dl)
 
-	# LuaJIT on x86 needs its exported symbols reachable from the module's own
-	# code, and static libgcc/libstdc++ keep the module working on servers with
-	# an older toolchain than the one that built it.
+	# The version script is what actually keeps LuaJIT's ~450 symbols out of the
+	# dynamic table; -fvisibility=hidden cannot, it does not reach into a static
+	# library. See the script for why that matters. Static libgcc/libstdc++ keep
+	# the module loadable on servers older than the box that built it.
 	target_link_options(lua_mm PRIVATE
+		"-Wl,--version-script=${CMAKE_SOURCE_DIR}/linux/lua_mm.lds"
 		-Wl,--no-undefined
 		-static-libgcc
 		-static-libstdc++
 	)
+	set_property(TARGET lua_mm APPEND PROPERTY
+		LINK_DEPENDS "${CMAKE_SOURCE_DIR}/linux/lua_mm.lds")
 endif()
 
 # Drop the build straight into a test server, so a rebuild is the whole

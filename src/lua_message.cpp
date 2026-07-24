@@ -276,8 +276,14 @@ static void prepare(const char *text, char *out, size_t outsz, bool newline)
 	if (cp1251_enabled()) {
 		to_cp1251(text, out, room);
 	} else {
-		cslua_snprintf(out, room, "%s", text);
-		out[room - 1] = '\0';
+		// Copied, not formatted: the truncation here is the point - `room` is
+		// what the channel carries - and spelling it out this way says so,
+		// where snprintf only looked like an oversight the compiler warned about.
+		size_t len = strlen(text);
+		if (len > room - 1)
+			len = room - 1;
+		memcpy(out, text, len);
+		out[len] = '\0';
 	}
 
 	if (newline) {

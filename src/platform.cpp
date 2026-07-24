@@ -1,6 +1,7 @@
-#ifndef _WIN32
-	// RTLD_NOLOAD is a GNU extension, and it is the whole point of the module
-	// lookup below: we want a handle to what is already there, never a load.
+// RTLD_NOLOAD is a GNU extension, and it is the whole point of the module
+// lookup below: we want a handle to what is already there, never a load.
+// g++ defines this for us already; a bare #define would warn about that.
+#if !defined(_WIN32) && !defined(_GNU_SOURCE)
 	#define _GNU_SOURCE
 #endif
 
@@ -152,14 +153,18 @@ void *cslua_module_open(const char *name)
 		return NULL;
 
 	// A path we were handed (metamod knows exactly which file it loaded as the
-	// game DLL) needs no searching.
+	// game DLL) is worth trying as it came.
 	if (strchr(name, '/')) {
 		void *handle = dlopen(name, RTLD_NOW | RTLD_NOLOAD);
 		if (handle)
 			return handle;
 	}
 
-	std::string path = mapped_path_of(name);
+	// That can miss: the loader matches on the string a library was opened
+	// with, and metamod may hand us a differently spelled path to the same
+	// file. So fall back to the file name and ask the process what it has.
+	const char *slash = strrchr(name, '/');
+	std::string path = mapped_path_of(slash ? slash + 1 : name);
 	if (path.empty())
 		return NULL;
 

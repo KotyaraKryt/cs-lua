@@ -41,17 +41,28 @@ jobs:
   linux:
     runs-on: ubuntu-latest
 
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          submodules: recursive
+    # Deliberately an old distro. A module linked against a current glibc asks
+    # for symbol versions (GLIBC_2.38 and friends) that the boxes CS servers
+    # actually run on do not have, and it refuses to load there. Debian 11 puts
+    # the floor at glibc 2.31, which covers everything still in service.
+    container: debian:11
 
+    steps:
       # GoldSrc is 32-bit, so everything down to libstdc++ has to be.
       - name: Install the 32-bit toolchain
         run: |
-          sudo dpkg --add-architecture i386
-          sudo apt-get update
-          sudo apt-get install -y gcc-multilib g++-multilib
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            build-essential gcc-multilib g++-multilib \
+            git ca-certificates curl file make
+          # Debian 11 ships cmake 3.18 and the project asks for 3.20.
+          curl -fsSL https://github.com/Kitware/CMake/releases/download/v3.28.6/cmake-3.28.6-linux-x86_64.tar.gz \
+            | tar xz --strip-components=1 -C /usr/local
+
+      # After git is installed, or the submodules do not come down.
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
 
       # -fPIC matters: the stock static objects are position-dependent, and
       # they cannot be linked into a shared object.
