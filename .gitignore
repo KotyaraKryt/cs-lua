@@ -1,5 +1,6 @@
-# Build output.
-/build/
+# Build output. Any directory starting with "build", so build_rel, build_x86
+# and whatever else gets tried are covered without editing this file again.
+/build*/
 
 # The local test server: HLDS with the game content, none of which is ours to
 # ship. See the "Тестовый сервер" section of the README for how to set one up.
