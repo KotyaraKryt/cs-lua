@@ -13,7 +13,7 @@ class CBaseEntity;
 #include <string>
 
 #define CSLUA_NAME		"cs-lua"
-#define CSLUA_VERSION	"0.5.0"
+#define CSLUA_VERSION	"1.0.0"
 #define CSLUA_TAG		"[cs-lua] "
 
 // The scripting API version. A plain integer that bumps on every breaking
