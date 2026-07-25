@@ -97,3 +97,26 @@ jobs:
           name: lua_mm-linux-x86
           path: build/lua_mm_i386.so
           if-no-files-found: error
+
+  # CI artifacts expire, release assets do not - so on a version tag the same
+  # binaries get attached to the release.
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [windows, linux]
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/lua_mm.dll
+            artifacts/lua_mm_i386.so
+          fail_on_unmatched_files: true
