@@ -59,12 +59,12 @@ export default function Home(): ReactNode {
           </p>
 
           <div className="heroButtons">
-            <Link className="button button--primary button--lg" to="/docs/intro">
+            <Link className="button button--primary button--lg" to="/intro">
               Начать
             </Link>
             <Link
               className="button button--secondary button--lg"
-              to="/docs/install">
+              to="/install">
               Установка
             </Link>
           </div>
