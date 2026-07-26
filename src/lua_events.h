@@ -140,10 +140,13 @@ public:
 	// TakeDamage passes damage by reference, so a handler can change it or
 	// zero it out. Returns the final damage the game should apply: whatever
 	// e.damage holds after the chain, or 0 if a handler cancelled.
-	float fire_player_hurt(int victim, int attacker, float damage, int bits);
+	//
+	// hitgroup is the body region TraceAttack last recorded on the victim, or
+	// -1 when the damage did not come from a hit at all (fall, world, gas).
+	float fire_player_hurt(int victim, int attacker, float damage, int bits, int hitgroup);
 
 	// Post variant: the damage the game actually applied, for observers.
-	void fire_player_hurt_post(int victim, int attacker, float damage, int bits);
+	void fire_player_hurt_post(int victim, int attacker, float damage, int bits, int hitgroup);
 
 private:
 	struct Handler

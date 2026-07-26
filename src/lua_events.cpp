@@ -542,6 +542,17 @@ static void set_number(lua_State *L, double v, const char *field)
 	lua_setfield(L, -2, field);
 }
 
+// Damage that never went through TraceAttack - a fall, the world, gas - has no
+// body region. nil rather than 0, because 0 is a real hitgroup (the body).
+static void set_hitgroup(lua_State *L, int hitgroup)
+{
+	if (hitgroup < 0)
+		return;
+
+	lua_pushinteger(L, hitgroup);
+	lua_setfield(L, -2, "hitgroup");
+}
+
 bool LuaEvents::fire_client_connect(int id, const char *name, const char *ip, RejectInfo &reject)
 {
 	std::string nm = name ? name : "";
@@ -616,7 +627,8 @@ void LuaEvents::fire_player_spawn(int id)
 	});
 }
 
-float LuaEvents::fire_player_hurt(int victim, int attacker, float damage, int bits)
+float LuaEvents::fire_player_hurt(int victim, int attacker, float damage, int bits,
+	int hitgroup)
 {
 	float result = damage;
 
@@ -627,6 +639,7 @@ float LuaEvents::fire_player_hurt(int victim, int attacker, float damage, int bi
 			set_number(L, damage, "damage");
 			lua_pushinteger(L, bits);
 			lua_setfield(L, -2, "bits");
+			set_hitgroup(L, hitgroup);
 		},
 		[&result](lua_State *L) {
 			// Whatever the chain left in e.damage is what the game applies.
@@ -644,7 +657,8 @@ float LuaEvents::fire_player_hurt(int victim, int attacker, float damage, int bi
 	return result;
 }
 
-void LuaEvents::fire_player_hurt_post(int victim, int attacker, float damage, int bits)
+void LuaEvents::fire_player_hurt_post(int victim, int attacker, float damage, int bits,
+	int hitgroup)
 {
 	notify(CSLUA_EVENT_PLAYER_HURT_POST, [=](lua_State *L) {
 		set_player(L, victim, "victim");
@@ -652,6 +666,7 @@ void LuaEvents::fire_player_hurt_post(int victim, int attacker, float damage, in
 		set_number(L, damage, "damage");
 		lua_pushinteger(L, bits);
 		lua_setfield(L, -2, "bits");
+		set_hitgroup(L, hitgroup);
 	});
 }
 

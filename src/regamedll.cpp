@@ -149,15 +149,25 @@ static BOOL hook_takedamage(IReGameHook_CBasePlayer_TakeDamage *chain, CBasePlay
 	int vslot = victim->entindex();
 	int aslot = attacker_slot(pevAttacker);
 
+	// TraceAttack records the body region on the victim just before calling
+	// TakeDamage, so by now it describes this hit. Damage that never went
+	// through a trace - a fall, the world, an explosion - leaves whatever the
+	// last real hit put there, which would be a lie, so report nothing for it.
+	//
+	// The shotgun is DMG_BULLET too; the knife arrives as SLASH or CLUB
+	// depending on which attack it was.
+	int hitgroup = (bitsDamageType & (DMG_BULLET | DMG_SLASH | DMG_CLUB))
+		? victim->m_LastHitGroup : -1;
+
 	// Pre: let Lua change or cancel the damage before the game applies it.
-	flDamage = g_events.fire_player_hurt(vslot, aslot, flDamage, bitsDamageType);
+	flDamage = g_events.fire_player_hurt(vslot, aslot, flDamage, bitsDamageType, hitgroup);
 	if (flDamage <= 0.0f)
 		return FALSE;			// fully blocked: no pain sound, no armor loss
 
 	BOOL result = chain->callNext(victim, pevInflictor, pevAttacker, flDamage, bitsDamageType);
 
 	// Post: damage is applied, health/armor are current.
-	g_events.fire_player_hurt_post(vslot, aslot, flDamage, bitsDamageType);
+	g_events.fire_player_hurt_post(vslot, aslot, flDamage, bitsDamageType, hitgroup);
 	return result;
 }
 
