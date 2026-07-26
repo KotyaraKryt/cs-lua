@@ -97,7 +97,7 @@ const config: Config = {
           label: 'Документация',
         },
         {
-          to: '/docs/plugins',
+          to: '/plugins',
           position: 'left',
           label: 'Быстрый старт',
         },
@@ -119,10 +119,10 @@ const config: Config = {
         {
           title: 'Документация',
           items: [
-            {label: 'Структура плагина', to: '/docs/plugins'},
-            {label: 'Справочник API', to: '/docs/api'},
-            {label: 'События', to: '/docs/api/hook'},
-            {label: 'Объект игрока', to: '/docs/api/players'},
+            {label: 'Структура плагина', to: '/plugins'},
+            {label: 'Справочник API', to: '/api'},
+            {label: 'События', to: '/api/hook'},
+            {label: 'Объект игрока', to: '/api/players'},
           ],
         },
         {
