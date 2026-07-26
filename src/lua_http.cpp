@@ -5,6 +5,7 @@
 #include "platform.h"
 
 #include <condition_variable>
+#include <ctype.h>
 #include <deque>
 #include <mutex>
 #include <string>
@@ -14,6 +15,10 @@
 #ifdef _WIN32
 	#include <windows.h>
 	#include <winhttp.h>
+#else
+	// libcurl is looked up by hand, so the loader's own header is the only one
+	// needed - no curl development package anywhere in the build.
+	#include <dlfcn.h>
 #endif
 
 // ---------------------------------------------------------------------------
@@ -289,6 +294,16 @@ const int OPT_USERAGENT = 10018;
 const int OPT_NOSIGNAL = 99;
 const int INFO_RESPONSE_CODE = 0x200002;
 
+// Takes the type from the slot being filled instead of from a name spelled
+// out at the call site. The macro this replaces pasted the typedef together
+// by hand, got it wrong, and only said so on Linux - MSVC never compiles
+// this branch at all.
+template <typename Fn>
+void load_symbol(Fn &slot, const char *name)
+{
+	slot = (Fn)dlsym(s_curl.handle, name);
+}
+
 bool curl_ready()
 {
 	std::lock_guard<std::mutex> guard(s_curl_lock);
@@ -309,19 +324,14 @@ bool curl_ready()
 	if (!s_curl.handle)
 		return false;
 
-	#define CSLUA_CURL_SYM(field, name) \
-		s_curl.field = (field##_fn)dlsym(s_curl.handle, name)
-
-	CSLUA_CURL_SYM(easy_init, "curl_easy_init");
-	CSLUA_CURL_SYM(easy_setopt, "curl_easy_setopt");
-	CSLUA_CURL_SYM(easy_perform, "curl_easy_perform");
-	CSLUA_CURL_SYM(easy_getinfo, "curl_easy_getinfo");
-	CSLUA_CURL_SYM(easy_cleanup, "curl_easy_cleanup");
-	CSLUA_CURL_SYM(easy_strerror, "curl_easy_strerror");
-	CSLUA_CURL_SYM(slist_append, "curl_slist_append");
-	CSLUA_CURL_SYM(slist_free_all, "curl_slist_free_all");
-
-	#undef CSLUA_CURL_SYM
+	load_symbol(s_curl.easy_init, "curl_easy_init");
+	load_symbol(s_curl.easy_setopt, "curl_easy_setopt");
+	load_symbol(s_curl.easy_perform, "curl_easy_perform");
+	load_symbol(s_curl.easy_getinfo, "curl_easy_getinfo");
+	load_symbol(s_curl.easy_cleanup, "curl_easy_cleanup");
+	load_symbol(s_curl.easy_strerror, "curl_easy_strerror");
+	load_symbol(s_curl.slist_append, "curl_slist_append");
+	load_symbol(s_curl.slist_free_all, "curl_slist_free_all");
 
 	if (!s_curl.easy_init || !s_curl.easy_setopt || !s_curl.easy_perform ||
 		!s_curl.easy_cleanup || !s_curl.slist_append || !s_curl.slist_free_all) {
