@@ -4,6 +4,7 @@
 #include "lua_natives.h"
 #include "lua_player.h"
 
+#include <algorithm>
 #include <string.h>
 
 LuaEvents g_events;

@@ -49,7 +49,13 @@ static void cmd_lua_list()
 	}
 
 	const std::vector<LuaPlugin> &plugins = g_lua.plugins();
-	cslua_print("%d plugin(s):", (int)plugins.size());
+
+	int ordered = g_lua.ordered_count();
+	if (ordered > 0)
+		cslua_print("%d plugin(s), first %d placed by load_order.txt:",
+			(int)plugins.size(), ordered);
+	else
+		cslua_print("%d plugin(s):", (int)plugins.size());
 
 	for (size_t i = 0; i < plugins.size(); i++) {
 		const LuaPlugin &p = plugins[i];

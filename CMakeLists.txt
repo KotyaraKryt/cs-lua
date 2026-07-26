@@ -226,6 +226,9 @@ if(CSLUA_SERVER_DIR)
 		COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:lua_mm>" "${SERVER_LUA_DIR}/$<TARGET_FILE_NAME:lua_mm>"
 		COMMAND "${CMAKE_COMMAND}" -E copy_directory "${CMAKE_SOURCE_DIR}/scripts/core" "${SERVER_LUA_DIR}/core"
 		COMMAND "${CMAKE_COMMAND}" -E copy_directory "${CMAKE_SOURCE_DIR}/scripts/include" "${SERVER_LUA_DIR}/include"
+		# Порядок загрузки правит владелец сервера, поэтому существующий файл
+		# не затирается - копируется только если его там ещё нет.
+		COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${CMAKE_SOURCE_DIR}/scripts/load_order.txt" "${SERVER_LUA_DIR}/load_order.txt.example"
 		COMMENT "Installing $<TARGET_FILE_NAME:lua_mm> and the core layer into ${SERVER_LUA_DIR}"
 	)
 endif()

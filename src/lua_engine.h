@@ -57,6 +57,10 @@ public:
 
 	const std::vector<LuaPlugin> &plugins() const { return m_plugins; }
 
+	// How many of them got their position from load_order.txt; the rest are
+	// alphabetical.
+	int ordered_count() const { return m_ordered; }
+
 	// Index of the plugin currently being loaded, or -1. plugin{} uses it to
 	// know which plugin it is describing.
 	int loading_index() const { return m_loading; }
@@ -98,6 +102,10 @@ private:
 	void load_core();
 	void discover_plugins();
 	void load_plugin(int index);
+
+	// Puts m_plugins in the order load_order.txt asks for, with everything it
+	// does not mention after that, by name.
+	void apply_load_order();
 	bool run_file(const std::string &path, int env_ref, const char *where);
 	int module_paths(int plugin_index, const char *modname, std::string out[4]) const;
 
@@ -111,6 +119,9 @@ private:
 	int m_loading = -1;
 	int m_current = -1;
 
+	// How many plugins load_order.txt placed by hand, for lua_list.
+	int m_ordered = 0;
+
 	// True from the moment plugin_unload starts firing until the state is
 	// gone, so a handler that triggers another shutdown cannot make it fire
 	// twice.
@@ -118,6 +129,10 @@ private:
 };
 
 extern LuaEngine g_lua;
+
+// Forgets which errors have already been printed. Called when the state is
+// rebuilt: after lua_reload the repeat counters describe code that is gone.
+void cslua_errors_clear();
 
 // Marks whose code is running while a handler or timer callback executes.
 class PluginScope

@@ -122,7 +122,7 @@ static Timer *find_named(int plugin, const char *name)
 	return NULL;
 }
 
-// timer.create(name, seconds, fn [, { once = , persist = }])
+// timer.create(name, seconds, fn [, { once = true, persist = false }])
 //
 // The named counterpart of every(): registering the same name twice replaces
 // the timer instead of stacking a second one, so running a plugin's load code
