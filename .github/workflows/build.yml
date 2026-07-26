@@ -8,7 +8,23 @@ on:
   workflow_dispatch:
 
 jobs:
+  # Юниты на core/ и include/. Игры не нужно: движковые пространства имён
+  # подменяются стабами, поэтому job секундный и стоит первым - падать на
+  # разрешении прав дешевле до сборки, чем после.
+  tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install LuaJIT
+        run: sudo apt-get update && sudo apt-get install -y luajit
+
+      - name: Run
+        run: luajit tests/run.lua
+
   windows:
+    needs: tests
     runs-on: windows-latest
 
     steps:
@@ -39,6 +55,7 @@ jobs:
           if-no-files-found: error
 
   linux:
+    needs: tests
     runs-on: ubuntu-latest
 
     # Deliberately an old distro. A module linked against a current glibc asks
