@@ -261,6 +261,15 @@ int cslua_timers_count()
 	return n;
 }
 
+int cslua_timers_count_for_plugin(int plugin_index)
+{
+	int n = 0;
+	for (size_t i = 0; i < s_timers.size(); i++)
+		if (!s_timers[i].dead && s_timers[i].plugin == plugin_index)
+			n++;
+	return n;
+}
+
 static const char *timer_owner(int plugin_index)
 {
 	const std::vector<LuaPlugin> &plugins = g_lua.plugins();

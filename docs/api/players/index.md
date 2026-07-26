@@ -93,6 +93,7 @@ p:health(p:health() + 25)
 | [`p:center`](center.md) | Показывает текст по центру экрана |
 | [`p:hud`](hud.md) | Рисует текст на HUD с позицией, цветом и таймингами |
 | [`p:dhud`](dhud.md) | То же через `SVC_DIRECTOR` — directed HUD |
+| [`p:motd`](motd.md) | Открывает игроку панель MOTD с текстом |
 | [`p:play_sound`](play_sound.md) | Проигрывает игроку звук |
 
 ## Админские действия

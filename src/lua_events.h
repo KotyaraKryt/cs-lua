@@ -77,6 +77,24 @@ public:
 	void remove_plugin(int plugin_index);
 	int count(CsLuaEvent ev) const;
 
+	// How many handlers one plugin holds across every event, engine and its
+	// own. lua_list breaks its totals down by plugin with this.
+	int count_for_plugin(int plugin_index) const;
+
+	// Accumulated time per handler, for lua_profile. Filled only while the
+	// cslua_profile cvar is on.
+	struct ProfileRow
+	{
+		std::string plugin;
+		std::string event;
+		std::string id;
+		double seconds;
+		int calls;
+	};
+
+	void profile_snapshot(std::vector<ProfileRow> &out) const;
+	void profile_reset();
+
 	// True when any script listens for the given event; lets the API skip
 	// installing a hookchain nobody uses.
 	bool any(CsLuaEvent ev) const;
@@ -154,6 +172,11 @@ private:
 		int ref;			// registry ref to the Lua function
 		int plugin;			// index into LuaEngine::plugins()
 		std::string id;		// unique within one plugin, for replace/remove
+
+		// Only touched while profiling is on, so an idle server pays nothing
+		// for them beyond the two words.
+		double spent;
+		int calls;
 
 		// A plugin can be shut down from inside its own handler - blowing the
 		// precache budget does exactly that - and erasing from the list being

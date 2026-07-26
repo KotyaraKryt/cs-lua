@@ -51,4 +51,9 @@ void cslua_send_console(int id, const char *text);
 void cslua_send_chat(int id, const char *text, int from);
 void cslua_send_center(int id, const char *text);
 void cslua_send_hud(int id, const char *text, const HudParams &p);
+
+// The MOTD window - the panel the client already opens on connect. It is the
+// only multi-line surface the game has: menus are nine keys and the HUD is one
+// string, so a shop catalogue or a top-10 belongs here.
+void cslua_send_motd(int id, const char *text);
 void cslua_send_dhud(int id, const char *text, const HudParams &p);

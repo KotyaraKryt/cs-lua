@@ -11,6 +11,11 @@
 #define SVC_DIRECTOR		51
 #define DRC_CMD_MESSAGE		6
 
+// Same reason, from dlls/gamerules.h. The client stitches the panel back
+// together from pieces this size and stops at this total.
+#define MAX_MOTD_CHUNK		60
+#define MAX_MOTD_LENGTH		1536
+
 // SayText is a game DLL user message, so it only exists once the game DLL has
 // registered it. Resolved on first use and cached.
 static int msg_saytext()
@@ -323,6 +328,62 @@ static void opt_color(lua_State *L, int table, const char *key,
 	}
 
 	lua_pop(L, 1);
+}
+
+// The game DLL registers this one; without it the client has no MOTD panel.
+static int msg_motd()
+{
+	static int id = -1;
+	if (id < 0) {
+		id = GET_USER_MSG_ID(PLID, "MOTD", NULL);
+		if (!id)
+			cslua_error("user message 'MOTD' is not registered, p:motd() does nothing");
+	}
+	return id;
+}
+
+// The panel takes the text in fixed-size pieces with a "this was the last one"
+// flag; the client stitches them back together. Sizes are the game's own
+// (gamerules.h), not ours to pick.
+void cslua_send_motd(int id, const char *text)
+{
+	int msg = msg_motd();
+	if (!msg)
+		return;
+
+	// Encode before splitting: the conversion changes byte lengths, so
+	// chunking the UTF-8 could cut a character in half.
+	std::string encoded = cslua_text_for_client(text);
+	if (encoded.size() > MAX_MOTD_LENGTH)
+		encoded.resize(MAX_MOTD_LENGTH);
+
+	for (int slot = 1; slot < CSLUA_MAXPLAYERS; slot++) {
+		if (id != 0 && slot != id)
+			continue;
+		if (!g_players.is_connected(slot))
+			continue;
+
+		edict_t *e = g_engfuncs.pfnPEntityOfEntIndex(slot);
+		if (!e || e->free)
+			continue;
+
+		size_t sent = 0;
+		do {
+			size_t chunk = encoded.size() - sent;
+			bool last = chunk <= MAX_MOTD_CHUNK;
+			if (!last)
+				chunk = MAX_MOTD_CHUNK;
+
+			std::string part(encoded, sent, chunk);
+
+			MESSAGE_BEGIN(MSG_ONE, msg, NULL, e);
+			WRITE_BYTE(last ? 1 : 0);
+			WRITE_STRING(part.c_str());
+			MESSAGE_END();
+
+			sent += chunk;
+		} while (sent < encoded.size());
+	}
 }
 
 // ui.palette = { green = { 0, 255, 0 }, ... } - the one source of truth for

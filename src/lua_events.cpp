@@ -184,6 +184,8 @@ int LuaEvents::l_add(lua_State *L)
 	h.ref = luaL_ref(L, LUA_REGISTRYINDEX);
 	h.plugin = plugin;
 	h.id = id;
+	h.spent = 0.0;
+	h.calls = 0;
 	h.dead = false;
 	list->push_back(h);
 	return 0;
@@ -358,6 +360,74 @@ bool LuaEvents::any(CsLuaEvent ev) const
 	return count(ev) > 0;
 }
 
+int LuaEvents::count_for_plugin(int plugin_index) const
+{
+	int n = 0;
+
+	for (int i = 0; i < CSLUA_EVENT_COUNT; i++)
+		for (size_t j = 0; j < m_handlers[i].size(); j++)
+			n += (!m_handlers[i][j].dead && m_handlers[i][j].plugin == plugin_index) ? 1 : 0;
+
+	std::map<std::string, HandlerList>::const_iterator it;
+	for (it = m_custom.begin(); it != m_custom.end(); ++it)
+		for (size_t j = 0; j < it->second.size(); j++)
+			n += (!it->second[j].dead && it->second[j].plugin == plugin_index) ? 1 : 0;
+
+	return n;
+}
+
+void LuaEvents::profile_snapshot(std::vector<ProfileRow> &out) const
+{
+	for (int i = 0; i < CSLUA_EVENT_COUNT; i++) {
+		for (size_t j = 0; j < m_handlers[i].size(); j++) {
+			const Handler &h = m_handlers[i][j];
+			if (h.dead || h.calls == 0)
+				continue;
+
+			ProfileRow row;
+			row.plugin = plugin_id(h.plugin);
+			row.event = s_event_names[i];
+			row.id = h.id;
+			row.seconds = h.spent;
+			row.calls = h.calls;
+			out.push_back(row);
+		}
+	}
+
+	std::map<std::string, HandlerList>::const_iterator it;
+	for (it = m_custom.begin(); it != m_custom.end(); ++it) {
+		for (size_t j = 0; j < it->second.size(); j++) {
+			const Handler &h = it->second[j];
+			if (h.dead || h.calls == 0)
+				continue;
+
+			ProfileRow row;
+			row.plugin = plugin_id(h.plugin);
+			row.event = it->first;
+			row.id = h.id;
+			row.seconds = h.spent;
+			row.calls = h.calls;
+			out.push_back(row);
+		}
+	}
+}
+
+void LuaEvents::profile_reset()
+{
+	for (int i = 0; i < CSLUA_EVENT_COUNT; i++)
+		for (size_t j = 0; j < m_handlers[i].size(); j++) {
+			m_handlers[i][j].spent = 0.0;
+			m_handlers[i][j].calls = 0;
+		}
+
+	std::map<std::string, HandlerList>::iterator it;
+	for (it = m_custom.begin(); it != m_custom.end(); ++it)
+		for (size_t j = 0; j < it->second.size(); j++) {
+			it->second[j].spent = 0.0;
+			it->second[j].calls = 0;
+		}
+}
+
 // Marks a plugin's handlers dead and drops their refs. Safe to call from
 // inside a handler: nothing is erased until the walk unwinds.
 void LuaEvents::remove_plugin(int plugin_index)
@@ -437,6 +507,8 @@ const char *LuaEvents::plugin_id(int plugin_index) const
 
 void LuaEvents::dispatch_list(lua_State *L, HandlerList &list, int event_index)
 {
+	bool profiling = cslua_profiling();
+
 	for (size_t i = 0; i < list.size(); i++) {
 		if (list[i].dead)
 			continue;
@@ -447,7 +519,18 @@ void LuaEvents::dispatch_list(lua_State *L, HandlerList &list, int event_index)
 		lua_rawgeti(L, LUA_REGISTRYINDEX, list[i].ref);
 		lua_pushvalue(L, event_index);
 
-		if (lua_pcall(L, 1, 0, errfunc) != 0) {
+		// Reading the clock costs more than a trivial handler does, so it only
+		// happens when somebody asked to measure.
+		double started = profiling ? cslua_now_seconds() : 0.0;
+
+		int rc = lua_pcall(L, 1, 0, errfunc);
+
+		if (profiling) {
+			list[i].spent += cslua_now_seconds() - started;
+			list[i].calls++;
+		}
+
+		if (rc != 0) {
 			// Naming the handler, not just the plugin: with ids there is
 			// finally something more precise to point at.
 			std::string where = plugin_id(list[i].plugin);

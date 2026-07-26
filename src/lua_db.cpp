@@ -879,6 +879,15 @@ void cslua_db_remove_plugin(int plugin_index)
 	}
 }
 
+int cslua_db_count_for_plugin(int plugin_index)
+{
+	int n = 0;
+	for (size_t i = 1; i < s_dbs.size(); i++)
+		if (s_dbs[i].handle && s_dbs[i].plugin == plugin_index)
+			n++;
+	return n;
+}
+
 int cslua_db_open_count()
 {
 	int n = 0;

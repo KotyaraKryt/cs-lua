@@ -262,6 +262,136 @@ static int l_find_in_sphere(lua_State *L)
 	return 1;
 }
 
+// e:keyvalue("targetname", "door1") - the same channel the map file uses, so
+// anything a level designer can set on an entity is reachable here. Has to
+// happen before e:spawn(): Spawn is what reads the values.
+static int l_keyvalue(lua_State *L)
+{
+	edict_t *e = self_edict(L);
+	const char *key = luaL_checkstring(L, 2);
+	const char *value = luaL_checkstring(L, 3);
+
+	// DispatchKeyValue keeps the pointers only for the length of the call, but
+	// the game copies what it needs out of them, so locals are fine.
+	KeyValueData kvd;
+	kvd.szClassName = (char *)STRING(e->v.classname);
+	kvd.szKeyName = (char *)key;
+	kvd.szValue = (char *)value;
+	kvd.fHandled = FALSE;
+
+	MDLL_KeyValue(e, &kvd);
+
+	lua_pushboolean(L, kvd.fHandled != FALSE);
+	return 1;
+}
+
+// e:solid() - how the world collides with this entity.
+//   0 not solid   1 trigger   2 bounding box   3 slide box   4 brush model
+static int l_solid(lua_State *L)
+{
+	edict_t *e = self_edict(L);
+
+	if (lua_isnoneornil(L, 2)) {
+		lua_pushinteger(L, e->v.solid);
+		return 1;
+	}
+
+	e->v.solid = (int)luaL_checkinteger(L, 2);
+	return 0;
+}
+
+// e:movetype() - how the engine moves it.
+//   0 none   4 fly   5 toss   6 push   8 bounce   10 follow
+static int l_movetype(lua_State *L)
+{
+	edict_t *e = self_edict(L);
+
+	if (lua_isnoneornil(L, 2)) {
+		lua_pushinteger(L, e->v.movetype);
+		return 1;
+	}
+
+	e->v.movetype = (int)luaL_checkinteger(L, 2);
+	return 0;
+}
+
+// e:size(minx, miny, minz, maxx, maxy, maxz) - the bounding box, which is what
+// a trigger volume actually is. Goes through the engine so the entity is
+// relinked; writing pev->mins directly leaves it colliding at its old size.
+static int l_size(lua_State *L)
+{
+	edict_t *e = self_edict(L);
+
+	if (lua_isnoneornil(L, 2)) {
+		lua_pushnumber(L, e->v.mins.x); lua_pushnumber(L, e->v.mins.y);
+		lua_pushnumber(L, e->v.mins.z); lua_pushnumber(L, e->v.maxs.x);
+		lua_pushnumber(L, e->v.maxs.y); lua_pushnumber(L, e->v.maxs.z);
+		return 6;
+	}
+
+	Vector mins((float)luaL_checknumber(L, 2), (float)luaL_checknumber(L, 3),
+		(float)luaL_checknumber(L, 4));
+	Vector maxs((float)luaL_checknumber(L, 5), (float)luaL_checknumber(L, 6),
+		(float)luaL_checknumber(L, 7));
+
+	SET_SIZE(e, mins, maxs);
+	return 0;
+}
+
+// e:render{ mode =, amount =, color =, fx = } - transparency and glow.
+// An options table rather than five positional numbers: nobody remembers which
+// of them was renderfx.
+static int l_render(lua_State *L)
+{
+	edict_t *e = self_edict(L);
+
+	if (lua_isnoneornil(L, 2)) {
+		lua_newtable(L);
+		lua_pushinteger(L, e->v.rendermode);  lua_setfield(L, -2, "mode");
+		lua_pushnumber(L, e->v.renderamt);    lua_setfield(L, -2, "amount");
+		lua_pushinteger(L, e->v.renderfx);    lua_setfield(L, -2, "fx");
+
+		lua_newtable(L);
+		lua_pushnumber(L, e->v.rendercolor.x); lua_rawseti(L, -2, 1);
+		lua_pushnumber(L, e->v.rendercolor.y); lua_rawseti(L, -2, 2);
+		lua_pushnumber(L, e->v.rendercolor.z); lua_rawseti(L, -2, 3);
+		lua_setfield(L, -2, "color");
+		return 1;
+	}
+
+	luaL_checktype(L, 2, LUA_TTABLE);
+
+	lua_getfield(L, 2, "mode");
+	if (lua_isnumber(L, -1))
+		e->v.rendermode = (int)lua_tointeger(L, -1);
+	lua_pop(L, 1);
+
+	lua_getfield(L, 2, "amount");
+	if (lua_isnumber(L, -1))
+		e->v.renderamt = (float)lua_tonumber(L, -1);
+	lua_pop(L, 1);
+
+	lua_getfield(L, 2, "fx");
+	if (lua_isnumber(L, -1))
+		e->v.renderfx = (int)lua_tointeger(L, -1);
+	lua_pop(L, 1);
+
+	lua_getfield(L, 2, "color");
+	if (lua_istable(L, -1)) {
+		float rgb[3] = { 0.0f, 0.0f, 0.0f };
+		for (int i = 0; i < 3; i++) {
+			lua_rawgeti(L, -1, i + 1);
+			if (lua_isnumber(L, -1))
+				rgb[i] = (float)lua_tonumber(L, -1);
+			lua_pop(L, 1);
+		}
+		e->v.rendercolor = Vector(rgb[0], rgb[1], rgb[2]);
+	}
+	lua_pop(L, 1);
+
+	return 0;
+}
+
 static const luaL_Reg s_methods[] =
 {
 	{ "origin",    l_origin },
@@ -271,6 +401,11 @@ static const luaL_Reg s_methods[] =
 	{ "valid",     l_valid },
 	{ "spawn",     l_spawn },
 	{ "remove",    l_remove },
+	{ "keyvalue",  l_keyvalue },
+	{ "solid",     l_solid },
+	{ "movetype",  l_movetype },
+	{ "size",      l_size },
+	{ "render",    l_render },
 	{ NULL, NULL }
 };
 

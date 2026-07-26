@@ -10,6 +10,8 @@
 #include "rehlds.h"
 #include "players.h"
 
+#include <algorithm>
+
 // Server commands run between frames, never from inside a hook, so tearing
 // the Lua state down here is safe.
 //
@@ -59,14 +61,22 @@ static void cmd_lua_list()
 
 	for (size_t i = 0; i < plugins.size(); i++) {
 		const LuaPlugin &p = plugins[i];
-		cslua_print("  [%d] %-16s %-24s v%-8s %s%s",
+
+		// Per plugin, not just server-wide: the totals below say something is
+		// leaking handlers, this column says which plugin.
+		cslua_print("  [%d] %-16s %-22s v%-6s h:%-3d t:%-2d db:%-2d %s%s",
 			(int)i + 1,
 			p.id.c_str(),
 			p.name.c_str(),
 			p.version.empty() ? "?" : p.version.c_str(),
+			g_events.count_for_plugin((int)i),
+			cslua_timers_count_for_plugin((int)i),
+			cslua_db_count_for_plugin((int)i),
 			p.author.empty() ? "?" : p.author.c_str(),
 			p.failed ? "   [FAILED]" : (p.dir.empty() ? "   (single file)" : ""));
 	}
+
+	cslua_print("  (h = handlers, t = timers, db = open databases)");
 
 	cslua_print("client: connect=%d disconnect=%d ready=%d chat=%d menu=%d, timers=%d",
 		g_events.count(CSLUA_EVENT_CLIENT_CONNECT),
@@ -97,6 +107,64 @@ static void cmd_lua_list()
 		g_events.count(CSLUA_EVENT_BOMB_PLANTED),
 		g_events.count(CSLUA_EVENT_BOMB_DEFUSED),
 		g_events.count(CSLUA_EVENT_BOMB_EXPLODED));
+}
+
+// Which handler is eating the frame. The question every server owner asks when
+// it starts stuttering, and the one AMXX cannot answer at all.
+//
+// Off by default (cslua_profile 0): the clock read per handler is cheap but not
+// free. Turn it on, play a round, read this, turn it back off.
+static void cmd_lua_profile()
+{
+	if (!g_lua.ready()) {
+		cslua_print("Lua state is not running");
+		return;
+	}
+
+	if (CMD_ARGC() > 1 && !strcmp(CMD_ARGV(1), "reset")) {
+		g_events.profile_reset();
+		cslua_print("profile counters cleared");
+		return;
+	}
+
+	if (!cslua_profiling()) {
+		cslua_print("profiling is off - set cslua_profile 1, play a bit, then run this again");
+		return;
+	}
+
+	std::vector<LuaEvents::ProfileRow> rows;
+	g_events.profile_snapshot(rows);
+
+	if (rows.empty()) {
+		cslua_print("nothing measured yet: no handler has run since profiling was turned on");
+		return;
+	}
+
+	// Heaviest first: the answer is almost always the top line.
+	std::sort(rows.begin(), rows.end(),
+		[](const LuaEvents::ProfileRow &a, const LuaEvents::ProfileRow &b) {
+			return a.seconds > b.seconds;
+		});
+
+	double total = 0.0;
+	for (size_t i = 0; i < rows.size(); i++)
+		total += rows[i].seconds;
+
+	cslua_print("%d handler(s) measured, %.1f ms total:", (int)rows.size(), total * 1000.0);
+
+	for (size_t i = 0; i < rows.size() && i < 20; i++) {
+		const LuaEvents::ProfileRow &r = rows[i];
+
+		// Per call is what tells a heavy handler apart from a busy one: a
+		// weapon_fire hook runs thousands of times and should still be cheap.
+		cslua_print("  %8.2f ms  %6d calls  %7.3f ms/call  %s:%s (%s)",
+			r.seconds * 1000.0, r.calls,
+			r.calls ? (r.seconds * 1000.0 / r.calls) : 0.0,
+			r.plugin.c_str(), r.id.c_str(), r.event.c_str());
+	}
+
+	if (rows.size() > 20)
+		cslua_print("  ... and %d more", (int)rows.size() - 20);
 }
 
 // Joins the command's arguments back into one string.
@@ -244,6 +312,7 @@ void cslua_register_commands()
 {
 	REG_SVR_COMMAND("lua_reload", cmd_lua_reload);
 	REG_SVR_COMMAND("lua_list", cmd_lua_list);
+	REG_SVR_COMMAND("lua_profile", cmd_lua_profile);
 	REG_SVR_COMMAND("lua_debug", cmd_lua_debug);
 	REG_SVR_COMMAND("lua_precache", cmd_lua_precache);
 	REG_SVR_COMMAND("lua_chat", cmd_lua_chat);

@@ -1,4 +1,6 @@
 #include "cslua.h"
+
+#include <time.h>
 #include "lua_engine.h"
 #include "commands.h"
 #include "regamedll.h"
@@ -55,6 +57,27 @@ static void cslua_vprint(bool is_error, const char *fmt, va_list ap)
 		LOG_ERROR(PLID, "%s", msg);
 }
 
+// Profiling is off by default: the clock read per handler is cheap but not
+// free, and a server that is not being investigated should not pay for it.
+static cvar_t s_cvar_profile = { "cslua_profile", "0", 0, 0.0f, nullptr };
+static cvar_t *s_profile = nullptr;
+
+void cslua_profile_init()
+{
+	CVAR_REGISTER(&s_cvar_profile);
+	s_profile = CVAR_GET_POINTER("cslua_profile");
+}
+
+bool cslua_profiling()
+{
+	return s_profile && s_profile->value != 0.0f;
+}
+
+double cslua_now_seconds()
+{
+	return (double)clock() / (double)CLOCKS_PER_SEC;
+}
+
 void cslua_print(const char *fmt, ...)
 {
 	va_list ap;
@@ -109,6 +132,7 @@ C_DLLEXPORT int Meta_Attach(PLUG_LOADTIME now, META_FUNCTIONS *pFunctionTable, m
 	cslua_print("%s v%s loading, scripts in %s", CSLUA_NAME, CSLUA_VERSION, cslua_base_dir().c_str());
 
 	cslua_message_init();
+	cslua_profile_init();
 	cslua_regamedll_init();
 
 	// Engine-level accounting: with ReHLDS we can watch every precache on the

@@ -21,3 +21,6 @@ void cslua_db_remove_plugin(int plugin_index);
 
 // For lua_list.
 int cslua_db_open_count();
+
+// How many databases one plugin has open, for the lua_list breakdown.
+int cslua_db_count_for_plugin(int plugin_index);

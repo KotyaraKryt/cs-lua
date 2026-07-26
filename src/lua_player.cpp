@@ -1033,8 +1033,18 @@ static int l_readonly(lua_State *L)
 	return luaL_error(L, "player objects are shared and read-only, keep your own state in a table");
 }
 
+// p:motd(text) - the client's own MOTD panel. The one multi-line surface the
+// game has: a menu is nine keys and the HUD is a single string, so a shop
+// catalogue, a top-10 or the server rules go here.
+static int l_motd(lua_State *L)
+{
+	cslua_send_motd(self_player_id(L), luaL_checkstring(L, 2));
+	return 0;
+}
+
 static const luaL_Reg s_messaging[] =
 {
+	{ "motd",       l_motd },
 	{ "console",    l_console },
 	{ "chat",       l_chat },
 	{ "center",     l_center },

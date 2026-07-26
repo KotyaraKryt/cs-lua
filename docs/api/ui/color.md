@@ -5,7 +5,7 @@ description: "Разбирает цвет в `{ r, g, b }`"
 
 # ui.color
 
-Разбирает цвет в `{ r, g, b }`.
+Разбирает цвет в `\{ r, g, b \}`.
 
 ```lua
 ui.color(value)

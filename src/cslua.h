@@ -38,6 +38,17 @@ void cslua_error(const char *fmt, ...);
 // <gamedir>/addons/lua, resolved from metamod's GINFO_GAMEDIR.
 const std::string &cslua_base_dir();
 
+// Monotonic seconds, independent of the server clock: gpGlobals->time restarts
+// on every map, which would make any measurement spanning one meaningless.
+double cslua_now_seconds();
+
+// Whether the cslua_profile cvar is on. Checked once per dispatch rather than
+// per handler: reading a cvar costs more than a small handler does.
+bool cslua_profiling();
+
+// Registers the cslua_profile cvar. Called once at startup.
+void cslua_profile_init();
+
 // True once the map's entities exist and until the map ends. Anything that
 // reaches into the engine's edict table has to ask first: plugins load during
 // Meta_Attach, long before there is a world, and the engine does not check -
