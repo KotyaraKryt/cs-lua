@@ -1033,12 +1033,19 @@ static int l_readonly(lua_State *L)
 	return luaL_error(L, "player objects are shared and read-only, keep your own state in a table");
 }
 
-// p:motd(text) - the client's own MOTD panel. The one multi-line surface the
-// game has: a menu is nine keys and the HUD is a single string, so a shop
-// catalogue, a top-10 or the server rules go here.
+// p:motd(text[, { raw = true }]) - the client's own MOTD panel. The one
+// multi-line surface the game has: a menu is nine keys and the HUD is a single
+// string, so a shop catalogue, a top-10 or the server rules go here.
+//
+// The panel renders HTML, which the caller should not have to care about: by
+// default the text is wrapped so newlines break lines and Cyrillic arrives
+// readable. raw = true sends it untouched, for markup written on purpose.
 static int l_motd(lua_State *L)
 {
-	cslua_send_motd(self_player_id(L), luaL_checkstring(L, 2));
+	const char *text = luaL_checkstring(L, 2);
+	bool raw = opt_flag(L, 3, "raw", "motd");
+
+	cslua_send_motd(self_player_id(L), text, raw);
 	return 0;
 }
 

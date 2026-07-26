@@ -113,7 +113,7 @@ description: "Плоский список всех функций и метод�
 | [`e:model`](ents/model.md) | ents | Читает или задаёт модель сущности |
 | [`res.model`](res/model.md) | res | Регистрирует модель для прекеша |
 | [`p:money`](players/money.md) | players | Читает или задаёт деньги игрока |
-| [`p:motd`](players/motd.md) | players | Открывает игроку панель MOTD с текстом |
+| [`p:motd`](players/motd.md) | players | Открывает игроку панель MOTD |
 | [`e:movetype`](ents/movetype.md) | ents | Читает или задаёт, как движок двигает сущность |
 | [`c:name`](sv/name.md) | sv | Имя переменной |
 | [`p:name`](players/name.md) | players | Ник игрока |

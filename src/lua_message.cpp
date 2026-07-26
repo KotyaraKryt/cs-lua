@@ -345,7 +345,41 @@ static int msg_motd()
 // The panel takes the text in fixed-size pieces with a "this was the last one"
 // flag; the client stitches them back together. Sizes are the game's own
 // (gamerules.h), not ours to pick.
-void cslua_send_motd(int id, const char *text)
+// Turns plain text into what the panel actually renders.
+//
+// The charset comes first so the renderer knows what the bytes are before it
+// reads any of them; with cslua_cp1251 on they are CP1251, otherwise UTF-8.
+// Then newlines become <br>, because in HTML they are ordinary whitespace and
+// a whole message collapses into one paragraph without this.
+static std::string as_html(const std::string &text)
+{
+	std::string out = cp1251_enabled()
+		? "<meta charset=\"windows-1251\">"
+		: "<meta charset=\"utf-8\">";
+
+	// Monospace: this panel shows tables of numbers - a shop price list, a
+	// top-10 - and a proportional font pulls the columns apart.
+	out += "<body style=\"font-family:monospace;white-space:pre-wrap\">";
+
+	for (size_t i = 0; i < text.size(); i++) {
+		char c = text[i];
+
+		switch (c) {
+		case '\n': out += "<br>";   break;
+		case '\r': break;
+		// Escaped so a nickname with an angle bracket in it cannot become
+		// markup - the same reason a query takes ? instead of concatenation.
+		case '<':  out += "&lt;";   break;
+		case '>':  out += "&gt;";   break;
+		case '&':  out += "&amp;";  break;
+		default:   out += c;        break;
+		}
+	}
+
+	return out;
+}
+
+void cslua_send_motd(int id, const char *text, bool raw)
 {
 	int msg = msg_motd();
 	if (!msg)
@@ -354,6 +388,9 @@ void cslua_send_motd(int id, const char *text)
 	// Encode before splitting: the conversion changes byte lengths, so
 	// chunking the UTF-8 could cut a character in half.
 	std::string encoded = cslua_text_for_client(text);
+	if (!raw)
+		encoded = as_html(encoded);
+
 	if (encoded.size() > MAX_MOTD_LENGTH)
 		encoded.resize(MAX_MOTD_LENGTH);
 

@@ -55,5 +55,12 @@ void cslua_send_hud(int id, const char *text, const HudParams &p);
 // The MOTD window - the panel the client already opens on connect. It is the
 // only multi-line surface the game has: menus are nine keys and the HUD is one
 // string, so a shop catalogue or a top-10 belongs here.
-void cslua_send_motd(int id, const char *text);
+//
+// The panel is an HTML view on every client anyone still runs, which decides
+// two things a caller should not have to know: a newline is whitespace, not a
+// line break, and without a declared charset the renderer reads UTF-8 as the
+// system codepage and shows mojibake. With raw = false the text is wrapped so
+// it arrives looking like it was written; with raw = true it is sent untouched,
+// for a caller who wants real markup.
+void cslua_send_motd(int id, const char *text, bool raw);
 void cslua_send_dhud(int id, const char *text, const HudParams &p);
