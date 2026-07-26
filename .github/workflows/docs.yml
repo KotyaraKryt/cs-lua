@@ -1,0 +1,88 @@
+name: docs
+
+on:
+  push:
+    branches: [main]
+    # Сборка сайта нужна только когда меняется сайт или тексты - коммиты в src/
+    # её не трогают.
+    paths:
+      - 'docs/**'
+      - 'website/**'
+      - '.github/workflows/docs.yml'
+  pull_request:
+    paths:
+      - 'docs/**'
+      - 'website/**'
+      - '.github/workflows/docs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# В очереди держим одну сборку: промежуточные версии сайта никому не нужны,
+# но текущий деплой добиваем, чтобы Pages не осталась в полусостоянии.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # showLastUpdateTime читает даты из истории git.
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # Страницы справочника генерируются из scripts/docs/api/*.py и лежат в
+      # git. Пересобираем и сверяем: расхождение значит, что кто-то правил
+      # docs/api/ руками или забыл прогнать генератор.
+      - name: Check the generated reference
+        run: |
+          python scripts/docs/gen.py
+          if ! git diff --quiet -- docs/api; then
+            echo "docs/api is out of date, run: python scripts/docs/gen.py"
+            git --no-pager diff --stat -- docs/api
+            exit 1
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+
+      - name: Install
+        working-directory: website
+        run: npm ci
+
+      # onBrokenLinks: 'throw' - битая ссылка валит сборку здесь, а не тихо
+      # уезжает на сайт.
+      - name: Build
+        working-directory: website
+        run: npm run build
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: website/build
+
+  # Только с main: в PR сборка выше уже проверила, что сайт собирается.
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

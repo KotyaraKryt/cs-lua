@@ -27,3 +27,7 @@ third_party/luajit/src/host/minilua*
 *.suo
 *.sdf
 *.opendb
+
+# Генератор справочника.
+__pycache__/
+*.pyc

@@ -1,0 +1,278 @@
+/* Палитра от оранжевого CS-шного HUD'а, но приглушённая: доки читают долго. */
+:root {
+  --ifm-color-primary: #b45309;
+  --ifm-color-primary-dark: #a24b08;
+  --ifm-color-primary-darker: #994708;
+  --ifm-color-primary-darkest: #7e3a06;
+  --ifm-color-primary-light: #c65b0a;
+  --ifm-color-primary-lighter: #cf5f0a;
+  --ifm-color-primary-lightest: #e56c0d;
+
+  --ifm-code-font-size: 92%;
+  --ifm-font-family-monospace: ui-monospace, "SFMono-Regular", "JetBrains Mono",
+    "Cascadia Code", Consolas, monospace;
+  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.08);
+
+  --ifm-global-radius: 0.5rem;
+  --ifm-line-height-base: 1.7;
+  --ifm-heading-line-height: 1.3;
+  --ifm-transition-fast: 160ms;
+  --ifm-transition-slow: 260ms;
+
+  --cslua-line: color-mix(in srgb, var(--ifm-color-emphasis-300) 60%, transparent);
+  --cslua-surface: color-mix(in srgb, var(--ifm-color-emphasis-100) 55%, transparent);
+}
+
+[data-theme='dark'] {
+  --ifm-color-primary: #f59e0b;
+  --ifm-color-primary-dark: #e08f08;
+  --ifm-color-primary-darker: #d48708;
+  --ifm-color-primary-darkest: #ae6f06;
+  --ifm-color-primary-lightest: #fbbf24;
+  --ifm-color-primary-lighter: #f7ac2b;
+  --ifm-color-primary-light: #f6a71e;
+
+  --ifm-background-color: #12131a;
+  --ifm-background-surface-color: #191b24;
+  --docusaurus-highlighted-code-line-bg: rgba(255, 255, 255, 0.08);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  * {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+a {
+  transition: color var(--ifm-transition-fast) ease;
+}
+
+/* ── Доки ────────────────────────────────────────────────────────────── */
+
+.markdown {
+  --ifm-h2-vertical-rhythm-top: 2.6;
+  --ifm-h3-vertical-rhythm-top: 1.8;
+}
+
+/* Раздел отделяется воздухом и тонкой линией, а не жирной чертой. */
+.markdown > h2 {
+  padding-top: 1.6rem;
+  border-top: 1px solid var(--cslua-line);
+  font-size: 1.65rem;
+  letter-spacing: -0.01em;
+}
+
+.markdown > h2:first-of-type {
+  border-top: none;
+}
+
+/* h3 — это обычно сигнатура функции: помечаем цветом, без рамок. */
+.markdown > h3 {
+  font-size: 1.15rem;
+  color: var(--ifm-color-primary);
+  font-family: var(--ifm-font-family-monospace);
+  letter-spacing: -0.01em;
+}
+
+.markdown > h3 > code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: inherit;
+  color: inherit;
+}
+
+/* Якорь появляется мягко, а не выпрыгивает. */
+.hash-link {
+  transition: opacity var(--ifm-transition-fast) ease;
+}
+
+/* Таблицы — основной формат справочника: без жирных рамок, с подсветкой строки. */
+.markdown table {
+  display: table;
+  width: 100%;
+  border-collapse: collapse;
+  border: none;
+  font-size: 0.94rem;
+}
+
+.markdown table thead {
+  background: none;
+  border-bottom: 1px solid var(--cslua-line);
+}
+
+.markdown table thead tr {
+  border: none;
+}
+
+.markdown table th {
+  border: none;
+  padding: 0.55rem 0.8rem;
+  font-weight: 600;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ifm-color-emphasis-600);
+  background: none;
+}
+
+.markdown table td {
+  border: none;
+  border-top: 1px solid var(--cslua-line);
+  padding: 0.55rem 0.8rem;
+  background: none;
+}
+
+.markdown table tbody tr {
+  background: none;
+  transition: background-color var(--ifm-transition-fast) ease;
+}
+
+.markdown table tbody tr:hover {
+  background: var(--cslua-surface);
+}
+
+.markdown table td:first-child,
+.markdown table code {
+  white-space: nowrap;
+}
+
+.markdown table td:last-child {
+  white-space: normal;
+}
+
+/* Длинная таблица скроллится сама, а не тянет страницу вбок. */
+.markdown > table,
+.markdown .table-wrapper {
+  overflow-x: auto;
+}
+
+.markdown blockquote {
+  border-left-color: var(--ifm-color-primary);
+}
+
+/* Admonition: мягче фон, тоньше рамка. */
+.theme-admonition {
+  border-radius: var(--ifm-global-radius);
+  border-width: 1px;
+  box-shadow: none;
+}
+
+.theme-code-block {
+  border-radius: var(--ifm-global-radius);
+  box-shadow: none !important;
+  border: 1px solid var(--cslua-line);
+}
+
+.menu__link,
+.table-of-contents__link {
+  transition: color var(--ifm-transition-fast) ease,
+    background-color var(--ifm-transition-fast) ease;
+}
+
+.pagination-nav__link {
+  border-color: var(--cslua-line);
+  transition: border-color var(--ifm-transition-fast) ease,
+    background-color var(--ifm-transition-fast) ease;
+}
+
+.pagination-nav__link:hover {
+  background: var(--cslua-surface);
+}
+
+.navbar {
+  box-shadow: none;
+  border-bottom: 1px solid var(--cslua-line);
+}
+
+/* ── Лендинг ─────────────────────────────────────────────────────────── */
+
+.hero--home {
+  padding: 5.5rem 0 4rem;
+  background: radial-gradient(
+    ellipse 80% 60% at 50% 0%,
+    color-mix(in srgb, var(--ifm-color-primary) 14%, transparent),
+    transparent
+  );
+}
+
+.hero--home .hero__title {
+  font-size: clamp(2.6rem, 7vw, 4rem);
+  letter-spacing: -0.03em;
+}
+
+.hero--home .hero__subtitle {
+  max-width: 44rem;
+  margin: 1rem auto 0;
+  font-size: clamp(1.05rem, 2.4vw, 1.3rem);
+  color: var(--ifm-color-emphasis-700);
+}
+
+.heroButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: center;
+  margin-top: 2rem;
+}
+
+.heroButtons .button {
+  transition: transform var(--ifm-transition-fast) ease,
+    background-color var(--ifm-transition-fast) ease,
+    color var(--ifm-transition-fast) ease;
+}
+
+.heroButtons .button:hover {
+  transform: translateY(-1px);
+}
+
+.heroSnippet {
+  max-width: 46rem;
+  margin: 2.5rem auto 0;
+  text-align: left;
+}
+
+.heroSnippet pre {
+  font-size: 0.88rem;
+}
+
+.featureGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+  gap: 1.25rem;
+  padding: 3.5rem 0 4.5rem;
+}
+
+.featureCard {
+  padding: 1.5rem;
+  border: 1px solid var(--cslua-line);
+  border-radius: var(--ifm-global-radius);
+  background: var(--ifm-background-surface-color);
+  transition: border-color var(--ifm-transition-slow) ease,
+    transform var(--ifm-transition-slow) ease;
+}
+
+.featureCard:hover {
+  border-color: color-mix(in srgb, var(--ifm-color-primary) 45%, transparent);
+  transform: translateY(-2px);
+}
+
+.featureCard h3 {
+  margin-bottom: 0.5rem;
+  font-size: 1.05rem;
+}
+
+.featureCard p {
+  margin: 0;
+  color: var(--ifm-color-emphasis-700);
+  font-size: 0.95rem;
+}
