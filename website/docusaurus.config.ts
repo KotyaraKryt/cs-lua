@@ -1,3 +1,4 @@
+import path from 'path';
 import type {Config} from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
 import {themes as prismThemes} from 'prism-react-renderer';
@@ -42,8 +43,8 @@ const config: Config = {
         docs: {
           // Docs живут в docs/ у корня репозитория: их читают и с GitHub,
           // и с сайта, поэтому копии здесь нет.
-          path: '../docs',
-          routeBasePath: 'docs',
+          path: path.resolve(__dirname, '../docs'),
+          routeBasePath: '/',
           sidebarPath: './sidebars.ts',
           // До штатных плагинов: он отдаёт containerDirective, который дальше
           // разбирает admonition-плагин Docusaurus.
