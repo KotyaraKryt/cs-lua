@@ -1,6 +1,7 @@
 #include "cslua.h"
 #include "lua_sound.h"
 #include "lua_engine.h"
+#include "lua_natives.h"
 #include "lua_events.h"
 #include "lua_timers.h"
 #include "rehlds.h"
@@ -190,7 +191,7 @@ static int add_resource(lua_State *L, std::vector<Entry> &list, bool models)
 		// this is the normal path and needs no warning.
 		if (s_map_seen)
 			cslua_print("%s('%s') arrived mid-map; it will be precached on the next map",
-				models ? "precache_model" : "precache_sound", name);
+				models ? "res.model" : "res.sound", name);
 		return 0;
 	}
 
@@ -241,11 +242,17 @@ void cslua_play_sound(int id, const char *sample, int channel, float volume,
 	}
 }
 
+// res - map resources. Declared once at the top of a plugin; the engine
+// replays the registry on every map, so there is no precache timing to get
+// wrong.
+static const luaL_Reg s_res[] =
+{
+	{ "sound", l_precache_sound },
+	{ "model", l_precache_model },
+	{ NULL, NULL }
+};
+
 void cslua_register_sound(lua_State *L)
 {
-	lua_pushcfunction(L, l_precache_sound);
-	lua_setglobal(L, "precache_sound");
-
-	lua_pushcfunction(L, l_precache_model);
-	lua_setglobal(L, "precache_model");
+	cslua_register_namespace(L, "res", s_res);
 }

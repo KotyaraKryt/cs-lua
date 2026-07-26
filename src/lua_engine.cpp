@@ -8,6 +8,9 @@
 #include "lua_command.h"
 #include "lua_sound.h"
 #include "lua_menu.h"
+#include "lua_message.h"
+#include "lua_entity.h"
+#include "lua_db.h"
 #include "regamedll.h"
 #include "platform.h"
 
@@ -189,11 +192,16 @@ void LuaEngine::init()
 
 	luaL_openlibs(m_L);
 	cslua_register_natives(m_L);
+	cslua_register_hooks(m_L);
+	cslua_register_timers(m_L);
 	cslua_player_init(m_L);
 	cslua_register_cvar(m_L);
 	cslua_register_command_api(m_L);
 	cslua_register_sound(m_L);
+	cslua_register_ui(m_L);
 	cslua_register_menu(m_L);
+	cslua_register_entity(m_L);
+	cslua_register_db(m_L);
 
 	// Only for code that reaches for the stock require; plugins get their own.
 	const std::string &base = cslua_base_dir();
@@ -229,6 +237,18 @@ void LuaEngine::init()
 
 void LuaEngine::shutdown()
 {
+	// Plugins get told first, while everything they might need still works:
+	// this is where they undo whatever they did to the world. After this line
+	// the state is being taken apart and nothing Lua-side is safe to call.
+	//
+	// Guarded because a handler is free to do something that shuts us down
+	// again - blowing the precache budget does exactly that - and the second
+	// pass would run every handler a second time against a half-dead state.
+	if (m_L && !m_unloading) {
+		m_unloading = true;
+		g_events.fire_plugin_unload();
+	}
+
 	// Detach from the game DLL before the lua_State dies, or a spawn/kill hook
 	// could fire into freed handler refs.
 	cslua_regamedll_remove_hooks();
@@ -239,6 +259,10 @@ void LuaEngine::shutdown()
 	cslua_cvar_shutdown();
 	cslua_sound_clear();
 	cslua_player_shutdown();
+	cslua_entity_shutdown();
+	// Last of the API modules, and the only one holding an OS resource: the
+	// files have to be closed for real, not left for lua_close to forget.
+	cslua_db_shutdown();
 	m_plugins.clear();
 	m_loading = -1;
 	m_current = -1;
@@ -247,12 +271,110 @@ void LuaEngine::shutdown()
 		lua_close(m_L);
 		m_L = nullptr;
 	}
+
+	m_unloading = false;
 }
 
 void LuaEngine::reload()
 {
 	shutdown();
 	init();
+}
+
+void LuaEngine::add_unload_handler(int plugin_index, int ref)
+{
+	if (plugin_index < 0 || plugin_index >= (int)m_plugins.size()) {
+		luaL_unref(m_L, LUA_REGISTRYINDEX, ref);
+		return;
+	}
+
+	m_plugins[plugin_index].unload_refs.push_back(ref);
+}
+
+// Everything a plugin leaves behind, in the order that keeps it safe: its own
+// cleanup code runs first, while its handlers, timers and databases still
+// work, and only then does any of that go away.
+void LuaEngine::unload_plugin(int index, bool run_handlers)
+{
+	LuaPlugin &plugin = m_plugins[index];
+
+	if (run_handlers && m_L) {
+		// Last in, first out: a plugin undoes its setup in reverse, the same
+		// way it would if this were one function.
+		for (size_t i = plugin.unload_refs.size(); i-- > 0; ) {
+			PluginScope scope(index);
+			int errfunc = push_errfunc();
+
+			lua_rawgeti(m_L, LUA_REGISTRYINDEX, plugin.unload_refs[i]);
+			if (lua_pcall(m_L, 0, 0, errfunc) != 0)
+				report_error(plugin.id.c_str());
+
+			lua_remove(m_L, errfunc);
+		}
+	}
+
+	if (m_L) {
+		for (size_t i = 0; i < plugin.unload_refs.size(); i++)
+			luaL_unref(m_L, LUA_REGISTRYINDEX, plugin.unload_refs[i]);
+	}
+	plugin.unload_refs.clear();
+
+	// Now tell everyone else, while this plugin's registrations are still in
+	// place: the core export registry drops its entries here, and a plugin
+	// with a soft dependency on it gets to fall back.
+	if (run_handlers)
+		g_events.fire_plugin_unload(plugin.id.c_str());
+
+	g_events.remove_plugin(index);
+	cslua_timers_remove_plugin(index);
+	cslua_command_remove_plugin(index);
+	cslua_db_remove_plugin(index);
+}
+
+// One plugin, torn down and started again, with everyone else left alone.
+//
+// The precached resources are deliberately not released: the engine has no way
+// to take a model back out of the map's table mid-round, and re-running the
+// plugin's precache calls simply resolves to the slots it already owns.
+bool LuaEngine::reload_plugin(const char *id)
+{
+	if (!m_L)
+		return false;
+
+	int index = -1;
+	for (size_t i = 0; i < m_plugins.size(); i++) {
+		if (m_plugins[i].id == id) {
+			index = (int)i;
+			break;
+		}
+	}
+
+	if (index < 0)
+		return false;
+
+	unload_plugin(index, true);
+
+	LuaPlugin &plugin = m_plugins[index];
+
+	// A fresh environment and a fresh module cache: reloading has to pick up
+	// edits to the plugin's lib/ files too, and the old cache would hand back
+	// the versions from last time.
+	luaL_unref(m_L, LUA_REGISTRYINDEX, plugin.env_ref);
+	luaL_unref(m_L, LUA_REGISTRYINDEX, plugin.modules_ref);
+	plugin.env_ref = LUA_NOREF;
+	plugin.modules_ref = LUA_NOREF;
+	plugin.declared = false;
+	plugin.failed = false;
+	plugin.required_modules.clear();
+
+	load_plugin(index);
+
+	// Gameplay hookchains are installed once for the whole state based on what
+	// is listened for. A reloaded plugin may listen for something new, so ask
+	// again - installing an already-installed hook is a no-op.
+	cslua_regamedll_install_hooks();
+
+	return true;
 }
 
 void LuaEngine::load_core()
@@ -370,10 +492,10 @@ void LuaEngine::load_plugin(int index)
 
 	if (!ok) {
 		// Drop whatever it registered before blowing up, so we never run
-		// half-initialized code.
+		// half-initialized code. Its own on_unload handlers do not run: the
+		// plugin never finished starting, so there is nothing it undid.
 		plugin.failed = true;
-		g_events.remove_plugin(index);
-		cslua_timers_remove_plugin(index);
+		unload_plugin(index, false);
 		return;
 	}
 

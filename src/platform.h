@@ -34,6 +34,10 @@ struct CsLuaDirEntry
 // True only for a regular file; a directory is not a file here.
 bool cslua_file_exists(const std::string &path);
 
+// Creates one directory level. A directory that already exists counts as
+// success - the callers here want the path to be there, not to have made it.
+bool cslua_make_dir(const std::string &path);
+
 // Every entry of a directory, "." and ".." left out. False when the directory
 // cannot be opened - which is not an error in itself, an optional folder that
 // is simply absent looks exactly the same.

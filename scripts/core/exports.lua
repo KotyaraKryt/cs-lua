@@ -1,33 +1,30 @@
--- Core: plugins talking to each other.
+-- Core: plugins calling into each other.
 --
--- Two independent mechanisms, answering different questions.
+--   -- in admin_manager
+--   export("open", function(p) ui.root(p) end)
 --
---   export/import  "call something that plugin owns"
+--   -- anywhere else
+--   local admin = import("admin_manager")    -- errors if it is not loaded
+--   local admin = optional("admin_manager")  -- nil instead, for a soft dep
+--   admin.open(p)
 --
---     -- in admin_manager
---     export("open", function(p) ui.root(p) end)
+-- This is the "call something that plugin owns" half. The other half - "tell
+-- whoever cares that something happened" - is hook.run/hook.add, the same pair
+-- engine events use. There is no separate plugin-event system:
 --
---     -- anywhere else
---     local admin = import("admin_manager")    -- errors if it is not loaded
---     local admin = optional("admin_manager")  -- nil instead, for a soft dep
---     admin.open(p)
+--   hook.run("admin.rights_changed", { target = p, what = "give" })
+--   hook.add("admin.rights_changed", "bans.sync", function(e) ... end)
 --
---   emit/on_export  "tell whoever cares that something happened"
---
---     emit("admin.rights_changed", target, "give", actor)
---     on_export("admin.rights_changed", "Bans.Sync", function(target, what) end)
---
--- Ownership is not guessed from the call stack: plugin_id() comes from the
+-- Ownership is not guessed from the call stack: plugin.id() comes from the
 -- engine and names the plugin whose code is running right now, so a bare
 -- single-file plugin is identified exactly like a folder one.
 
 local exports_registry = {}		-- [plugin] = { [name] = { fn, version } }
-local event_listeners  = {}		-- [event]  = list of listeners
 
 -- The core layer has no plugin id of its own. Nothing stops it from exporting,
 -- so give it a name rather than let it collide with a plugin called nil.
 local function owner()
-	return plugin_id() or "core"
+	return plugin.id() or "core"
 end
 
 -- 5.1 has no table.pack, and an export may legitimately return nils in the
@@ -36,22 +33,18 @@ local function pack(...)
 	return { n = select("#", ...), ... }
 end
 
---------------------------------------------------------------------------
--- export / import
---------------------------------------------------------------------------
-
 -- export("open", fn) or export("open", fn, { version = 2, override = true })
 function export(name, fn, opts)
 	opts = opts or {}
 	assert(type(name) == "string", "export: name must be a string")
 	assert(type(fn) == "function", "export: value must be a function")
 
-	local plugin = owner()
-	local list = exports_registry[plugin] or {}
-	exports_registry[plugin] = list
+	local id = owner()
+	local list = exports_registry[id] or {}
+	exports_registry[id] = list
 
 	if list[name] and not opts.override then
-		error(("export '%s.%s' is already registered"):format(plugin, name), 2)
+		error(("export '%s.%s' is already registered"):format(id, name), 2)
 	end
 
 	list[name] = { fn = fn, version = opts.version or 1 }
@@ -60,30 +53,30 @@ end
 -- The table import() hands back. Every lookup goes through the registry, so a
 -- caller can never end up holding a function from a plugin that has since been
 -- unloaded - it gets a clear error instead.
-local function make_proxy(plugin)
-	if not exports_registry[plugin] then
+local function make_proxy(id)
+	if not exports_registry[id] then
 		return nil
 	end
 
 	return setmetatable({}, {
 		__index = function(_, key)
-			local list = exports_registry[plugin]
+			local list = exports_registry[id]
 			if not list or not list[key] then
 				return nil
 			end
 
 			return function(...)
-				local current = exports_registry[plugin]
+				local current = exports_registry[id]
 				local entry = current and current[key]
 				if not entry then
-					error(("export '%s.%s' is no longer available"):format(plugin, key), 2)
+					error(("export '%s.%s' is no longer available"):format(id, key), 2)
 				end
 
 				-- pcall so a broken export cannot take the caller down with it,
 				-- but the message names whose fault it was.
 				local r = pack(pcall(entry.fn, ...))
 				if not r[1] then
-					error(("[export %s.%s] %s"):format(plugin, key, tostring(r[2])), 2)
+					error(("[export %s.%s] %s"):format(id, key, tostring(r[2])), 2)
 				end
 				return unpack(r, 2, r.n)
 			end
@@ -94,70 +87,37 @@ local function make_proxy(plugin)
 		end,
 
 		__tostring = function()
-			return "exports<" .. plugin .. ">"
+			return "exports<" .. id .. ">"
 		end,
 	})
 end
 
 -- A hard dependency: the plugin must be there. Failing at load time beats a nil
 -- call somewhere deep in a handler an hour later.
-function import(plugin)
-	local proxy = make_proxy(plugin)
+function import(id)
+	local proxy = make_proxy(id)
 	if not proxy then
-		error(("plugin '%s' has no exports (or is not loaded)"):format(plugin), 2)
+		error(("plugin '%s' has no exports (or is not loaded)"):format(id), 2)
 	end
 	return proxy
 end
 
 -- A soft dependency: nil when the plugin is absent, so the caller can degrade.
-function optional(plugin)
-	return make_proxy(plugin)
+function optional(id)
+	return make_proxy(id)
 end
 
---------------------------------------------------------------------------
--- events
---------------------------------------------------------------------------
-
-function emit(event, ...)
-	local list = event_listeners[event]
-	if not list then
-		return
+-- A reloaded plugin re-runs its export() calls, and the second one would hit
+-- the "already registered" guard. Dropping its entries as it goes is what
+-- makes `lua_reload <plugin>` work without every plugin passing override.
+--
+-- e.plugin is nil when the whole state is going away; there is nothing to
+-- clean up in that case, the registry dies with it.
+hook.add("plugin_unload", "core.exports_cleanup", function(e)
+	if e.plugin then
+		exports_registry[e.plugin] = nil
 	end
-
-	-- Copied first: a listener is allowed to add or drop listeners for the very
-	-- event it is handling.
-	local snapshot = {}
-	for i = 1, #list do
-		snapshot[i] = list[i]
-	end
-
-	for _, listener in ipairs(snapshot) do
-		local ok, err = pcall(listener.fn, ...)
-		if not ok then
-			print(("[event %s] listener '%s' error: %s")
-				:format(event, listener.id, tostring(err)))
-		end
-	end
-end
-
--- on_export(event, id, fn). The id makes registration idempotent: running a
--- plugin's load code again replaces its listener instead of stacking a second.
-function on_export(event, id, fn)
-	assert(type(event) == "string", "on_export: event must be a string")
-	assert(type(id) == "string", "on_export: listener id must be a string")
-	assert(type(fn) == "function", "on_export: listener must be a function")
-
-	local list = event_listeners[event] or {}
-	event_listeners[event] = list
-
-	for i = #list, 1, -1 do
-		if list[i].id == id then
-			table.remove(list, i)
-		end
-	end
-
-	list[#list + 1] = { id = id, fn = fn, plugin = owner() }
-end
+end)
 
 --------------------------------------------------------------------------
 -- debugging
@@ -172,25 +132,20 @@ local function sorted_keys(t)
 	return keys
 end
 
--- `exports_debug` in the server console: who publishes what, who listens to
--- what. The first thing to run when import() says a plugin has no exports.
-command("exports_debug", function(ctx)
-	ctx.reply("exports:")
-	for _, plugin in ipairs(sorted_keys(exports_registry)) do
-		local names = {}
-		for _, name in ipairs(sorted_keys(exports_registry[plugin])) do
-			names[#names + 1] = ("%s (v%d)")
-				:format(name, exports_registry[plugin][name].version)
-		end
-		ctx.reply(("  %-20s %s"):format(plugin, table.concat(names, ", ")))
+-- `lua_exports` in the server console: who publishes what. The first thing to
+-- run when import() says a plugin has no exports.
+cmd.add("lua_exports", function(ctx)
+	local plugins = sorted_keys(exports_registry)
+	if #plugins == 0 then
+		return ctx.reply("nothing exported")
 	end
 
-	ctx.reply("listeners:")
-	for _, event in ipairs(sorted_keys(event_listeners)) do
-		local ids = {}
-		for _, listener in ipairs(event_listeners[event]) do
-			ids[#ids + 1] = listener.id
+	for _, id in ipairs(plugins) do
+		local names = {}
+		for _, name in ipairs(sorted_keys(exports_registry[id])) do
+			names[#names + 1] = ("%s (v%d)")
+				:format(name, exports_registry[id][name].version)
 		end
-		ctx.reply(("  %-28s %s"):format(event, table.concat(ids, ", ")))
+		ctx.reply(("  %-20s %s"):format(id, table.concat(names, ", ")))
 	end
 end, { source = "console" })

@@ -52,7 +52,7 @@ function subcommands.list(ctx)
 	local perms = access.permissions()
 	local names = sorted_names(perms)
 	if #names == 0 then
-		return ctx.reply("no permissions declared - plugins can use permission{} to show up here")
+		return ctx.reply("no permissions declared - plugins can use access.declare() to show up here")
 	end
 	for _, node in ipairs(names) do
 		local spec = perms[node]
@@ -77,7 +77,7 @@ function subcommands.users(ctx)
 end
 
 function subcommands.who(ctx)
-	local p, err = find_player(ctx.args[2])
+	local p, err = players.find(ctx.args[2])
 	if not p then
 		return ctx.reply(err)
 	end
@@ -101,7 +101,7 @@ function subcommands.who(ctx)
 end
 
 function subcommands.check(ctx)
-	local p, err = find_player(ctx.args[2])
+	local p, err = players.find(ctx.args[2])
 	if not p then
 		return ctx.reply(err)
 	end
@@ -170,7 +170,7 @@ function subcommands.reload(ctx)
 	ctx.reply("reloaded data/groups.lua and data/users.lua")
 end
 
-command("lua_perms", function(ctx)
+cmd.add("lua_perms", function(ctx)
 	local sub = subcommands[(ctx.args[1] or ""):lower()]
 	if not sub then
 		return ctx.reply("lua_perms: groups | list | users | who | check | grant | revoke | save | reload")

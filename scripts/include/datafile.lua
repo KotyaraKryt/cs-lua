@@ -1,17 +1,28 @@
--- Reading and writing the access data files. Nothing here knows what a
--- permission means: it loads a Lua table from addons/lua/data/, and writes one
--- back. Kept separate from core/access.lua so the format can change without
--- touching the rules, and so it can be tested on its own.
+-- Reading and writing Lua data files. Nothing here knows what the data means:
+-- it loads a table from a directory, and writes one back, atomically.
 --
--- Data files are plain Lua that returns a table - same idea as the prefix
--- table in chat_manager - so there is no parser and no second config syntax.
+-- A data file is plain Lua that returns a table - same idea as the prefix table
+-- in chat_manager - so there is no parser and no second config syntax. That
+-- makes it right for things a human edits: the access list, a shop stock list,
+-- a set of chat prefixes. Hand edits survive, comments do not.
+--
+-- For anything counted in thousands of rows, or written on every frag, use
+-- require("store") instead - it is a key-value store on SQLite and does not
+-- rewrite the whole file to change one number.
+--
+-- The module's own load/save work on addons/lua/data/, which is where the
+-- access list lives. A plugin wants its own corner instead:
+--
+--   local files = require("datafile").at(plugin.data_dir())
+--
+-- so its files cannot collide with another plugin's by name.
 
-local store = {}
+local datafile = {}
 
-local DIR = (_CSLUA_DIR or ".") .. "/data"
+local DIR = (sv and sv.dir or ".") .. "/data"
 
-local function path(name)
-	return DIR .. "/" .. name .. ".lua"
+local function path(dir, name)
+	return dir .. "/" .. name .. ".lua"
 end
 
 local function exists(file)
@@ -44,11 +55,11 @@ local function load_file(file)
 	return result
 end
 
--- Loads data/<name>.lua. A missing file is not an error - a fresh server has
+-- Loads <dir>/<name>.lua. A missing file is not an error - a fresh server has
 -- no users yet - and gives back `fallback`. A broken one is: the caller has to
 -- decide loudly, never silently run with half the rights.
-function store.load(name, fallback)
-	local file = path(name)
+local function load_from(dir, name, fallback)
+	local file = path(dir, name)
 	if not exists(file) then
 		return fallback, nil
 	end
@@ -94,8 +105,8 @@ local function serialize_value(value, indent)
 		return serialize(value, indent)
 	end
 	-- Functions and userdata have no textual form; dropping them silently
-	-- would lose rights without a word, so refuse.
-	error("access: cannot save a " .. t .. " to a data file")
+	-- would lose data without a word, so refuse.
+	error("datafile: cannot save a " .. t .. " to a data file")
 end
 
 serialize = function(t, indent)
@@ -126,13 +137,13 @@ serialize = function(t, indent)
 	return table.concat(out, "\n")
 end
 
-store.serialize = serialize
+datafile.serialize = serialize
 
--- Writes data/<name>.lua. Never writes over the live file directly: a crash
+-- Writes <dir>/<name>.lua. Never writes over the live file directly: a crash
 -- mid-write would take the whole admin list with it. New content goes to .tmp,
 -- the previous file becomes .bak, and only then does .tmp take its place.
-function store.save(name, t, header)
-	local file = path(name)
+local function save_to(dir, name, t, header)
+	local file = path(dir, name)
 	local tmp, bak = file .. ".tmp", file .. ".bak"
 
 	local ok, body = pcall(serialize, t, "")
@@ -166,8 +177,28 @@ function store.save(name, t, header)
 	return true
 end
 
-function store.dir()
+-- datafile.at(dir) -> the same three calls, rooted somewhere else. The
+-- directory has to exist already; plugin.data_dir() creates its own, so the
+-- usual call needs nothing extra.
+function datafile.at(dir)
+	return {
+		dir = function() return dir end,
+		serialize = serialize,
+		load = function(name, fallback) return load_from(dir, name, fallback) end,
+		save = function(name, t, header) return save_to(dir, name, t, header) end,
+	}
+end
+
+function datafile.load(name, fallback)
+	return load_from(DIR, name, fallback)
+end
+
+function datafile.save(name, t, header)
+	return save_to(DIR, name, t, header)
+end
+
+function datafile.dir()
 	return DIR
 end
 
-return store
+return datafile

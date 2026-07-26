@@ -2,7 +2,7 @@
 -- it needs without coordinating with anyone.
 --
 --   p:can("shop.vip.buy")                       -- checked anywhere
---   command("kick", fn, { perm = "admin.kick" }) -- checked for you
+--   cmd.add("kick", fn, { perm = "admin.kick" }) -- checked for you
 --
 -- A node is a dotted name: "admin.kick", "shop.vip.buy". Grants may use a
 -- wildcard tail ("shop.vip.*", "*") and a leading "-" for an explicit denial
@@ -21,7 +21,7 @@
 -- Console and rcon have no player object and are never checked: whoever holds
 -- the server console already owns the machine.
 
-local store = require("access_store")
+local datafile = require("datafile")
 
 access = {}
 
@@ -46,7 +46,7 @@ access.config = {
 	-- Answer when the target outranks the caller.
 	immune = "{green}[Access]{default} %s outranks you",
 	-- Warn in the console when code checks a node nobody declared. Catches
-	-- typos; turn it off if you do not use permission{}.
+	-- typos; turn it off if you do not use access.declare().
 	warn_unknown = true,
 }
 
@@ -125,7 +125,7 @@ local function expired(entry)
 		return false
 	end
 	if at == "map" then
-		return entry.map ~= nil and entry.map ~= map()
+		return entry.map ~= nil and entry.map ~= sv.map()
 	end
 	return type(at) == "number" and at <= os.time()
 end
@@ -135,7 +135,7 @@ local function in_context(where)
 	if not where then
 		return true
 	end
-	local here = map()
+	local here = sv.map()
 	if where.map and where.map ~= here then
 		return false
 	end
@@ -188,8 +188,8 @@ local DEFAULT_GROUPS = {
 }
 
 function access.reload()
-	local raw_groups, gerr = store.load("groups", DEFAULT_GROUPS)
-	local raw_users, uerr = store.load("users", {})
+	local raw_groups, gerr = datafile.load("groups", DEFAULT_GROUPS)
+	local raw_users, uerr = datafile.load("users", {})
 
 	-- A broken file drops that half of the data instead of half-loading it:
 	-- running with a partial admin list is worse than running with none.
@@ -257,7 +257,7 @@ function access.save()
 		}
 	end
 
-	local ok, err = store.save("users", out, "Access rights, keyed by steamid or name:<nick>.")
+	local ok, err = datafile.save("users", out, "Access rights, keyed by steamid or name:<nick>.")
 	if not ok then
 		print("[access] could not save users.lua: " .. tostring(err))
 	end
@@ -268,22 +268,22 @@ end
 -- declaring permissions
 --------------------------------------------------------------------------
 
--- permission { "shop.vip.buy", desc = "...", default = "vip" }
+-- access.declare("shop.vip.buy", { desc = "...", default = "vip" })
 --
 -- Optional, but worth it: lua_perms list then shows every right on the server
 -- with its owner, and a typo in p:can() gets a console warning instead of a
 -- silent no.
-function permission(spec)
-	assert(type(spec) == "table", "permission: expects a table")
+function access.declare(node, opts)
+	assert(type(node) == "string", "access.declare: node must be a string")
+	assert(not node:find("%*"), "access.declare: declare concrete nodes, not wildcards")
 
-	local node = spec[1] or spec.node
-	assert(type(node) == "string", "permission: needs a node name")
-	assert(not node:find("%*"), "permission: declare concrete nodes, not wildcards")
+	opts = opts or {}
+	assert(type(opts) == "table", "access.declare: options must be a table")
 
 	perms[node] = {
-		desc    = spec.desc,
-		default = spec.default,		-- group name, or true for everyone
-		plugin  = spec.plugin,
+		desc    = opts.desc,
+		default = opts.default,		-- group name, or true for everyone
+		plugin  = opts.plugin,
 	}
 
 	generation = generation + 1		-- a new default can widen existing rights
@@ -406,7 +406,7 @@ local function build(p)
 
 	return {
 		generation = generation,
-		map        = map(),
+		map        = sv.map(),
 		key        = key,
 		entry      = entry,
 		grants     = list,
@@ -422,7 +422,7 @@ local function rights(p)
 	local slot = p.id
 	local c = cache[slot]
 
-	if c and (c.generation ~= generation or c.map ~= map()
+	if c and (c.generation ~= generation or c.map ~= sv.map()
 		or (c.expires and c.expires <= os.time())) then
 		c = nil
 	end
@@ -457,7 +457,7 @@ local warned = {}
 local function check(p, node)
 	if access.config.warn_unknown and not perms[node] and not warned[node] then
 		warned[node] = true
-		print(("[access] nobody declared '%s' - typo, or a missing permission{}?"):format(node))
+		print(("[access] nobody declared '%s' - typo, or a missing access.declare()?"):format(node))
 	end
 
 	local r = rights(p)
@@ -476,7 +476,7 @@ local function check(p, node)
 	-- Nothing had an opinion: a dynamic rule gets the last word.
 	local rule = rules[node]
 	if rule then
-		return rule(p, { node = node, map = map() }) and true or false
+		return rule(p, { node = node, map = sv.map() }) and true or false
 	end
 
 	return false
@@ -584,7 +584,7 @@ function access.grant(key, spec)
 	end
 	if spec.until_ ~= nil then
 		e.until_ = access.expand(spec.until_)
-		e.map = e.until_ == "map" and map() or nil
+		e.map = e.until_ == "map" and sv.map() or nil
 	end
 
 	generation = generation + 1
@@ -639,16 +639,16 @@ end
 -- player object
 --------------------------------------------------------------------------
 
-player_method("can", function(self, node)
+players.method("can", function(self, node)
 	return access.can(self, node)
 end)
 
-player_method("groups", function(self)
+players.method("groups", function(self)
 	return access.groups(self)
 end)
 
 -- p:group("vip") - true if the player is in it, inheritance included.
-player_method("group", function(self, name)
+players.method("group", function(self, name)
 	name = tostring(name):lower()
 	for _, held in ipairs(access.groups(self)) do
 		if held == name then
@@ -658,11 +658,11 @@ player_method("group", function(self, name)
 	return false
 end)
 
-player_method("weight", function(self)
+players.method("weight", function(self)
 	return access.weight(self)
 end)
 
-player_method("outranks", function(self, other)
+players.method("outranks", function(self, other)
 	return access.outranks(self, other)
 end)
 
@@ -673,12 +673,12 @@ end)
 -- The steamid is worthless at connect time (Steam answers a moment later), so
 -- rights are built from player_authorized onward. Anything before that sees
 -- the default group only.
-on("player_authorized", function(p, steamid)
-	access.invalidate(p)
+hook.add("player_authorized", "core.access_refresh", function(e)
+	access.invalidate(e.player)
 end)
 
-on("client_disconnect", function(p)
-	cache[p.id] = nil
+hook.add("client_disconnect", "core.access_cleanup", function(e)
+	cache[e.player.id] = nil
 end)
 
 access.reload()

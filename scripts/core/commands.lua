@@ -1,29 +1,37 @@
--- Core: the command system. One command() covers three sources - the server
+-- Core: the command system. One cmd.add() covers three sources - the server
 -- console/rcon, chat (!name), and team chat (say_team) - and a command may
 -- listen on any combination of them.
 --
---   command("heal", function(ctx)
+--   cmd.add("heal", function(ctx)
 --       local p = ctx.player          -- player object, or nil from the console
 --       local n = tonumber(ctx.args[1]) or 25
 --       if p then p:health(p:health() + n) end
 --       ctx.reply("healed +" .. n)    -- answers back where the command came from
 --   end)
 --
---   command("plant", fn, { source = "chat_team" })          -- team chat only
---   command("kick",  fn, { source = { "console", "chat" } }) -- both of these
+--   cmd.add("plant", fn, { source = "chat_team" })          -- team chat only
+--   cmd.add("kick",  fn, { source = { "console", "chat" } }) -- both of these
 --
 -- Sources: "console", "chat", "chat_team". Omitting source means all three.
 --
 -- Rights come from core/access.lua and are declared right here, so a handler
 -- never starts running for someone who may not use it:
 --
---   command("slay", fn, { perm = "admin.slay", target = 1 })
+--   cmd.add("slay", fn, { perm = "admin.slay", target = 1 })
 --
 -- `perm` is a permission node checked before the handler runs. `target = N`
 -- says the Nth argument names a player: the router looks them up into
 -- ctx.target and refuses when they outrank the caller. The console has no
 -- player object and passes both checks - it is already the highest authority
 -- on the box.
+--
+-- The ctx table is the same shape an event handler gets: one table in, fields
+-- out. There is no second calling convention to remember.
+
+-- The raw engine registration, taken into a local and then cleared: a plugin
+-- has no business reaching past cmd.add() to the console primitive.
+local register_console = cmd._register
+cmd._register = nil
 
 local prefixes = { "!", "/" }
 local VALID = { console = true, chat = true, chat_team = true }
@@ -36,23 +44,23 @@ local function parse_sources(source)
 	if source == nil then
 		set.console, set.chat, set.chat_team = true, true, true
 	elseif type(source) == "string" then
-		assert(VALID[source], "command: unknown source '" .. source .. "'")
+		assert(VALID[source], "cmd.add: unknown source '" .. source .. "'")
 		set[source] = true
 	elseif type(source) == "table" then
 		for _, s in ipairs(source) do
-			assert(VALID[s], "command: unknown source '" .. tostring(s) .. "'")
+			assert(VALID[s], "cmd.add: unknown source '" .. tostring(s) .. "'")
 			set[s] = true
 		end
 	else
-		error("command: source must be a string or a list of strings")
+		error("cmd.add: source must be a string or a list of strings")
 	end
 	return set
 end
 
--- find_player("#12" | "kotyarakryt" | "3") -> the player, or nil plus why not.
+-- players.find("#12" | "kotyarakryt" | "3") -> the player, or nil plus why not.
 -- #N is a userid, a bare number is a slot, anything else is matched against
 -- names case-insensitively and has to be unambiguous.
-function find_player(token)
+function players.find(token)
 	if type(token) ~= "string" or token == "" then
 		return nil, "no player given"
 	end
@@ -60,7 +68,7 @@ function find_player(token)
 	local userid = token:match("^#(%d+)$")
 	if userid then
 		userid = tonumber(userid)
-		for _, p in ipairs(players()) do
+		for _, p in ipairs(players.list()) do
 			if p:userid() == userid then
 				return p
 			end
@@ -70,12 +78,12 @@ function find_player(token)
 
 	local slot = tonumber(token)
 	if slot then
-		local p = player(slot)
+		local p = players.get(slot)
 		return p, p and nil or ("nobody in slot " .. slot)
 	end
 
 	local needle, found = token:lower(), nil
-	for _, p in ipairs(players()) do
+	for _, p in ipairs(players.list()) do
 		if p:name():lower():find(needle, 1, true) then
 			if found then
 				return nil, ("'%s' matches more than one player"):format(token)
@@ -109,7 +117,7 @@ local function run(entry, ctx)
 	end
 
 	if entry.target then
-		local target, err = find_player(ctx.args[entry.target])
+		local target, err = players.find(ctx.args[entry.target])
 		if not target then
 			return ctx.reply(err)
 		end
@@ -125,9 +133,9 @@ local function run(entry, ctx)
 	entry.fn(ctx)
 end
 
-function command(name, fn, opts)
-	assert(type(name) == "string", "command: name must be a string")
-	assert(type(fn) == "function", "command: handler must be a function")
+function cmd.add(name, fn, opts)
+	assert(type(name) == "string", "cmd.add: name must be a string")
+	assert(type(fn) == "function", "cmd.add: handler must be a function")
 	name = name:lower()
 
 	local sources = parse_sources(opts and opts.source)
@@ -141,13 +149,13 @@ function command(name, fn, opts)
 		chat_team = sources.chat_team or false,
 	}
 	assert(entry.perm == nil or type(entry.perm) == "string",
-		"command: perm must be a permission node")
+		"cmd.add: perm must be a permission node")
 	registry[name] = entry
 
 	-- The console side needs an engine registration; do it once, only if this
 	-- command actually listens there.
 	if sources.console then
-		_server_command(name, function(args)
+		register_console(name, function(args)
 			-- No player: rights are skipped, but a `target` still gets looked
 			-- up so console and chat handlers can share one body.
 			run(registry[name] or entry, {
@@ -161,6 +169,26 @@ function command(name, fn, opts)
 	end
 end
 
+-- cmd.remove(name) - drop a command. The console registration stays (the
+-- engine keeps our name pointer forever) but stops resolving to anything.
+function cmd.remove(name)
+	assert(type(name) == "string", "cmd.remove: name must be a string")
+	local existed = registry[name:lower()] ~= nil
+	registry[name:lower()] = nil
+	return existed
+end
+
+-- cmd.list() -> sorted array of registered names, for `lua_cmds` and for a
+-- plugin that wants to print a help screen.
+function cmd.list()
+	local names = {}
+	for name in pairs(registry) do
+		names[#names + 1] = name
+	end
+	table.sort(names)
+	return names
+end
+
 local function strip_prefix(text)
 	for _, prefix in ipairs(prefixes) do
 		if text:sub(1, #prefix) == prefix then
@@ -170,8 +198,8 @@ local function strip_prefix(text)
 	return nil
 end
 
-on("player_chat", function(p, text, team)
-	local body = strip_prefix(text)
+hook.add("player_chat", "core.command_router", function(e)
+	local body = strip_prefix(e.text)
 	if not body then
 		return
 	end
@@ -187,10 +215,12 @@ on("player_chat", function(p, text, team)
 	end
 
 	-- Same prefix, two channels: honour which ones this command opted into.
-	local source = team and "chat_team" or "chat"
+	local source = e.team and "chat_team" or "chat"
 	if not entry[source] then
 		return
 	end
+
+	local p = e.player
 
 	run(entry, {
 		name   = name:lower(),
@@ -199,5 +229,7 @@ on("player_chat", function(p, text, team)
 		args   = split_args(rest),
 		reply  = function(text) p:chat(text) end,
 	})
-	return false        -- swallow: a recognised command never shows in chat
+
+	-- A recognised command never shows up in chat.
+	e:cancel()
 end)

@@ -5,16 +5,40 @@
 #include "lua_message.h"
 #include "lua_timers.h"
 #include "lua_sound.h"
+#include "lua_db.h"
 #include "regamedll.h"
 #include "rehlds.h"
 #include "players.h"
 
 // Server commands run between frames, never from inside a hook, so tearing
 // the Lua state down here is safe.
+//
+//   lua_reload            everything: the whole Lua state comes back fresh
+//   lua_reload <plugin>   just that one, leaving the others running
+//
+// The single-plugin form is the edit-test loop. The full one is still what you
+// want after touching core/ or include/, which every plugin shares.
 static void cmd_lua_reload()
 {
-	cslua_print("reloading plugins...");
-	g_lua.reload();
+	const char *who = CMD_ARGC() > 1 ? CMD_ARGV(1) : NULL;
+
+	if (!who) {
+		cslua_print("reloading plugins...");
+		g_lua.reload();
+		return;
+	}
+
+	if (!g_lua.ready()) {
+		cslua_print("Lua state is not running");
+		return;
+	}
+
+	if (!g_lua.reload_plugin(who)) {
+		cslua_print("no plugin named '%s' - run lua_list to see them", who);
+		return;
+	}
+
+	cslua_print("reloaded '%s'", who);
 }
 
 static void cmd_lua_list()
@@ -46,11 +70,18 @@ static void cmd_lua_list()
 		g_events.count(CSLUA_EVENT_MENU_SELECT),
 		cslua_timers_count());
 
-	cslua_print("gameplay: spawn=%d hurt=%d/%d death=%d round=%d/%d/%d (ReGameDLL %s)",
+	cslua_print("lifetime: map_change=%d plugin_unload=%d, databases open=%d",
+		g_events.count(CSLUA_EVENT_MAP_CHANGE),
+		g_events.count(CSLUA_EVENT_PLUGIN_UNLOAD),
+		cslua_db_open_count());
+
+	cslua_print("gameplay: spawn=%d hurt=%d/%d death=%d team=%d fire=%d round=%d/%d/%d (ReGameDLL %s)",
 		g_events.count(CSLUA_EVENT_PLAYER_SPAWN),
 		g_events.count(CSLUA_EVENT_PLAYER_HURT),
 		g_events.count(CSLUA_EVENT_PLAYER_HURT_POST),
 		g_events.count(CSLUA_EVENT_PLAYER_DEATH),
+		g_events.count(CSLUA_EVENT_PLAYER_TEAM_CHANGE),
+		g_events.count(CSLUA_EVENT_WEAPON_FIRE),
 		g_events.count(CSLUA_EVENT_ROUND_START),
 		g_events.count(CSLUA_EVENT_ROUND_END),
 		g_events.count(CSLUA_EVENT_ROUND_FREEZE_END),

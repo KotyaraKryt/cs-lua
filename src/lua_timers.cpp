@@ -1,7 +1,9 @@
 #include "cslua.h"
 #include "lua_timers.h"
 #include "lua_engine.h"
+#include "lua_natives.h"
 
+#include <string>
 #include <vector>
 
 struct Timer
@@ -12,6 +14,17 @@ struct Timer
 	float next;			// server time of the next run
 	float interval;		// 0 for a one-shot
 	bool dead;
+
+	// Set by timer.create(). Empty for the anonymous after/every ones, which
+	// are identified by their id instead.
+	std::string name;
+
+	// Survives a changelevel. On by default: a timer set up in the body of a
+	// plugin - a stats flush, an ad rotation - is infrastructure, and dropping
+	// it on the first map change would break the plugin silently for the rest
+	// of the server's life. Turn it off for anything tied to the map that is
+	// running right now.
+	bool persist;
 };
 
 static std::vector<Timer> s_timers;
@@ -26,7 +39,7 @@ static bool s_running = false;
 // "the server clock went backwards" apart from "time passed".
 static float s_last_now = 0.0f;
 
-static int add_timer(lua_State *L, float delay, float interval)
+static int add_timer(lua_State *L, float delay, float interval, bool persist)
 {
 	if (delay < 0.0f)
 		delay = 0.0f;
@@ -40,33 +53,50 @@ static int add_timer(lua_State *L, float delay, float interval)
 	t.next = gpGlobals->time + delay;
 	t.interval = interval;
 	t.dead = false;
+	t.persist = persist;
 
 	s_timers.push_back(t);
 	return t.id;
 }
 
-int cslua_l_after(lua_State *L)
+// persist defaults to true; an explicit `persist = false` drops the timer at
+// the next changelevel.
+static bool opt_persist(lua_State *L, int index)
+{
+	if (!lua_istable(L, index))
+		return true;
+
+	lua_getfield(L, index, "persist");
+	bool value = lua_isnil(L, -1) ? true : lua_toboolean(L, -1) != 0;
+	lua_pop(L, 1);
+	return value;
+}
+
+// timer.after(seconds, fn[, opts]) -> id
+static int l_after(lua_State *L)
 {
 	float delay = (float)luaL_checknumber(L, 1);
 	luaL_checktype(L, 2, LUA_TFUNCTION);
 
-	lua_pushinteger(L, add_timer(L, delay, 0.0f));
+	lua_pushinteger(L, add_timer(L, delay, 0.0f, opt_persist(L, 3)));
 	return 1;
 }
 
-int cslua_l_every(lua_State *L)
+// timer.every(seconds, fn[, opts]) -> id
+static int l_every(lua_State *L)
 {
 	float interval = (float)luaL_checknumber(L, 1);
 	luaL_checktype(L, 2, LUA_TFUNCTION);
 
 	if (interval <= 0.0f)
-		return luaL_error(L, "every() needs a positive interval, got %f", interval);
+		return luaL_error(L, "timer.every needs a positive interval, got %f", interval);
 
-	lua_pushinteger(L, add_timer(L, interval, interval));
+	lua_pushinteger(L, add_timer(L, interval, interval, opt_persist(L, 3)));
 	return 1;
 }
 
-int cslua_l_cancel(lua_State *L)
+// timer.cancel(id) -> was it still running
+static int l_cancel(lua_State *L)
 {
 	int id = (int)luaL_checkinteger(L, 1);
 
@@ -82,6 +112,96 @@ int cslua_l_cancel(lua_State *L)
 	return 1;
 }
 
+static Timer *find_named(int plugin, const char *name)
+{
+	for (size_t i = 0; i < s_timers.size(); i++) {
+		Timer &t = s_timers[i];
+		if (!t.dead && t.plugin == plugin && t.name == name)
+			return &t;
+	}
+	return NULL;
+}
+
+// timer.create(name, seconds, fn [, { once = , persist = }])
+//
+// The named counterpart of every(): registering the same name twice replaces
+// the timer instead of stacking a second one, so running a plugin's load code
+// again - which is what `lua_reload <plugin>` does - leaves one timer ticking,
+// not two. The name only has to be unique within the plugin.
+static int l_create(lua_State *L)
+{
+	const char *name = luaL_checkstring(L, 1);
+	float seconds = (float)luaL_checknumber(L, 2);
+	luaL_checktype(L, 3, LUA_TFUNCTION);
+
+	bool once = false;
+	if (lua_istable(L, 4)) {
+		lua_getfield(L, 4, "once");
+		once = lua_toboolean(L, -1) != 0;
+		lua_pop(L, 1);
+	}
+	bool persist = opt_persist(L, 4);
+
+	if (seconds <= 0.0f)
+		return luaL_error(L, "timer.create('%s') needs a positive interval, got %f",
+			name, seconds);
+
+	int plugin = g_lua.current_index();
+
+	if (Timer *existing = find_named(plugin, name)) {
+		luaL_unref(L, LUA_REGISTRYINDEX, existing->ref);
+		lua_pushvalue(L, 3);
+		existing->ref = luaL_ref(L, LUA_REGISTRYINDEX);
+		existing->next = gpGlobals->time + seconds;
+		existing->interval = once ? 0.0f : seconds;
+		existing->persist = persist;
+		return 0;
+	}
+
+	// add_timer reads the callback from stack slot 2, the way after/every
+	// hand it over.
+	lua_pushvalue(L, 3);
+	lua_replace(L, 2);
+	int id = add_timer(L, seconds, once ? 0.0f : seconds, persist);
+
+	for (size_t i = 0; i < s_timers.size(); i++) {
+		if (s_timers[i].id == id) {
+			s_timers[i].name = name;
+			break;
+		}
+	}
+
+	return 0;
+}
+
+// timer.destroy(name) -> was it running. Only your own plugin's.
+static int l_destroy(lua_State *L)
+{
+	const char *name = luaL_checkstring(L, 1);
+
+	Timer *t = find_named(g_lua.current_index(), name);
+	if (t)
+		t->dead = true;
+
+	lua_pushboolean(L, t != NULL);
+	return 1;
+}
+
+static const luaL_Reg s_timer[] =
+{
+	{ "after",   l_after },
+	{ "every",   l_every },
+	{ "cancel",  l_cancel },
+	{ "create",  l_create },
+	{ "destroy", l_destroy },
+	{ NULL, NULL }
+};
+
+void cslua_register_timers(lua_State *L)
+{
+	cslua_register_namespace(L, "timer", s_timer);
+}
+
 void cslua_timers_clear()
 {
 	// The refs die with the state; just forget them.
@@ -94,11 +214,23 @@ void cslua_timers_clear()
 // with a deadline far in the future's past - they would all fire at once on the
 // first frame. Carry the remaining wait over to the new clock instead, so
 // after(600, ...) still means "ten minutes from when it was set".
+//
+// A timer created with `persist = false` does not make the trip: it was tied to
+// the map that just ended, and firing it on the next one would run against a
+// world that no longer matches what it was scheduled for.
 void cslua_timers_rebase()
 {
+	lua_State *L = g_lua.state();
 	float now = gpGlobals->time;
 
-	for (size_t i = 0; i < s_timers.size(); i++) {
+	for (size_t i = s_timers.size(); i-- > 0; ) {
+		if (!s_timers[i].persist) {
+			if (L)
+				luaL_unref(L, LUA_REGISTRYINDEX, s_timers[i].ref);
+			s_timers.erase(s_timers.begin() + i);
+			continue;
+		}
+
 		float left = s_timers[i].next - s_last_now;
 		if (left < 0.0f)
 			left = 0.0f;

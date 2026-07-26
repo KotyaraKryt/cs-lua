@@ -1,6 +1,7 @@
 #include "cslua.h"
 #include "lua_menu.h"
 #include "lua_events.h"
+#include "lua_natives.h"
 #include "lua_message.h"
 #include "players.h"
 
@@ -79,7 +80,7 @@ static void send_menu(int id, int keys, int time, const char *raw)
 	} while (sent < len);
 }
 
-// _show_menu(playerId, keys, time, text)
+// menu._show(playerId, keys, time, text)
 //   keys: bitmask of allowed slots, bit 0 = key "1"
 //   time: seconds to keep it up, -1 for until answered
 static int l_show_menu(lua_State *L)
@@ -105,7 +106,7 @@ static int l_show_menu(lua_State *L)
 	return 0;
 }
 
-// _close_menu(playerId) - an empty panel with no keys dismisses it.
+// menu._close(playerId) - an empty panel with no keys dismisses it.
 static int l_close_menu(lua_State *L)
 {
 	int id = (int)luaL_checkinteger(L, 1);
@@ -165,9 +166,15 @@ void cslua_register_menu(lua_State *L)
 	for (int i = 0; i < CSLUA_MAXPLAYERS; i++)
 		forget_menu(i);
 
-	lua_pushcfunction(L, l_show_menu);
-	lua_setglobal(L, "_show_menu");
+	// Raw panel drawing, not the menu API. core/ui.lua picks these up into
+	// locals and clears them before any plugin runs, so what a plugin sees on
+	// `menu` is menu.new() and nothing else.
+	static const luaL_Reg s_internal[] =
+	{
+		{ "_show",  l_show_menu },
+		{ "_close", l_close_menu },
+		{ NULL, NULL }
+	};
 
-	lua_pushcfunction(L, l_close_menu);
-	lua_setglobal(L, "_close_menu");
+	cslua_register_namespace(L, "menu", s_internal);
 }

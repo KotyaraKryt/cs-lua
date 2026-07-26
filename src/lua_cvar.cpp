@@ -1,5 +1,6 @@
 #include "cslua.h"
 #include "lua_cvar.h"
+#include "lua_natives.h"
 
 #include <string.h>
 #include <string>
@@ -176,11 +177,16 @@ void cslua_register_cvar(lua_State *L)
 	lua_setfield(L, -2, "__metatable");
 	s_cvar_mt_ref = luaL_ref(L, LUA_REGISTRYINDEX);
 
-	lua_pushcfunction(L, l_cvar);
-	lua_setglobal(L, "cvar");
+	// Cvars belong to the server, so they hang off `sv` next to sv.map and
+	// sv.cmd rather than claiming two more globals of their own.
+	static const luaL_Reg s_api[] =
+	{
+		{ "cvar",          l_cvar },
+		{ "cvar_register", l_cvar_register },
+		{ NULL, NULL }
+	};
 
-	lua_pushcfunction(L, l_cvar_register);
-	lua_setglobal(L, "cvar_register");
+	cslua_register_namespace(L, "sv", s_api);
 }
 
 void cslua_cvar_shutdown()

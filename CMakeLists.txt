@@ -6,12 +6,16 @@ cmake_minimum_required(VERSION 3.20)
 # Hence the _INIT variables and CMAKE_HOST_UNIX - the plain UNIX variable does
 # not exist yet at this point.
 if(CMAKE_HOST_UNIX)
+	set(CMAKE_C_FLAGS_INIT "-m32")
 	set(CMAKE_CXX_FLAGS_INIT "-m32")
 	set(CMAKE_SHARED_LINKER_FLAGS_INIT "-m32")
 	set(CMAKE_EXE_LINKER_FLAGS_INIT "-m32")
 endif()
 
-project(cslua CXX)
+# C as well as C++: the vendored SQLite amalgamation is C, and without the
+# language enabled its -m32 would never be set - the build would only fail at
+# link time, with a message about nothing in particular.
+project(cslua C CXX)
 
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -33,9 +37,14 @@ set(MM_ROOT     "${CMAKE_SOURCE_DIR}/third_party/metamod-r/metamod")
 # for where this copy comes from and why that particular one.
 set(HLSDK_ROOT  "${CMAKE_SOURCE_DIR}/third_party/regamedll/cssdk")
 set(LUAJIT_ROOT "${CMAKE_SOURCE_DIR}/third_party/luajit/src")
+set(SQLITE_ROOT "${CMAKE_SOURCE_DIR}/third_party/sqlite")
 
 if(NOT EXISTS "${HLSDK_ROOT}/dlls/regamedll_api.h")
 	message(FATAL_ERROR "ReGameDLL SDK not found at ${HLSDK_ROOT}. See third_party/regamedll/README.md.")
+endif()
+
+if(NOT EXISTS "${SQLITE_ROOT}/sqlite3.c")
+	message(FATAL_ERROR "SQLite amalgamation not found at ${SQLITE_ROOT}. See third_party/sqlite/README.md.")
 endif()
 
 if(WIN32)
@@ -50,6 +59,42 @@ endif()
 
 if(NOT EXISTS "${LUAJIT_LIB}")
 	message(FATAL_ERROR "LuaJIT not built: ${LUAJIT_LIB} is missing. Build it first: ${LUAJIT_HINT}")
+endif()
+
+# SQLite gets its own target rather than joining the source list below, for two
+# reasons. The Linux branch of lua_mm defines _strdup=strdup and friends for the
+# whole target (see further down) - those must not land on 250k lines of foreign
+# C that defines the same names itself. And -Wall on a file we never fix is just
+# a wall of noise hiding our own warnings.
+add_library(sqlite3 STATIC "${SQLITE_ROOT}/sqlite3.c")
+target_include_directories(sqlite3 PUBLIC "${SQLITE_ROOT}")
+
+target_compile_definitions(sqlite3 PRIVATE
+	# The module is single-threaded and the database is only ever touched from
+	# the frame thread. This drops every mutex, and with it the pthread
+	# dependency that -Wl,--no-undefined would otherwise refuse to leave open.
+	SQLITE_THREADSAFE=0
+
+	# SELECT load_extension('...') must not be a way to pull an arbitrary shared
+	# library into the game server. Also removes the need for dlopen.
+	SQLITE_OMIT_LOAD_EXTENSION=1
+
+	# "x" is an identifier, not a string. SQLite's default is to fall back to a
+	# string literal when the identifier does not resolve, which turns a typo in
+	# a column name into a query that silently returns the wrong thing.
+	SQLITE_DQS=0
+
+	SQLITE_DEFAULT_MEMSTATUS=0
+	SQLITE_OMIT_DEPRECATED
+	SQLITE_OMIT_AUTOINIT
+)
+
+if(WIN32)
+	# Must match lua_mm's own runtime, set further down; mixing a static and a
+	# dynamic CRT in one module does not link.
+	set_target_properties(sqlite3 PROPERTIES MSVC_RUNTIME_LIBRARY "MultiThreaded")
+else()
+	set_target_properties(sqlite3 PROPERTIES POSITION_INDEPENDENT_CODE ON)
 endif()
 
 add_library(lua_mm SHARED
@@ -69,6 +114,8 @@ add_library(lua_mm SHARED
 	src/lua_command.cpp
 	src/lua_sound.cpp
 	src/lua_menu.cpp
+	src/lua_entity.cpp
+	src/lua_db.cpp
 	src/regamedll.cpp
 	src/rehlds.cpp
 )
@@ -87,7 +134,7 @@ target_include_directories(lua_mm PRIVATE
 	"${LUAJIT_ROOT}"
 )
 
-target_link_libraries(lua_mm PRIVATE "${LUAJIT_LIB}")
+target_link_libraries(lua_mm PRIVATE "${LUAJIT_LIB}" sqlite3)
 
 if(WIN32)
 	# lua_mm.dll next to metamod's own plugins.

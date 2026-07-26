@@ -24,6 +24,11 @@ struct LuaPlugin
 	int env_ref = LUA_NOREF;		// the plugin's globals table
 	int modules_ref = LUA_NOREF;	// require() cache for this plugin
 
+	// plugin.on_unload(fn) handlers, in registration order. Kept here rather
+	// than in the event table because they are per plugin by definition: a
+	// single-plugin reload runs only its own.
+	std::vector<int> unload_refs;
+
 	// Kept in the list even when it blows up during load, so lua_list can
 	// show it as broken instead of silently hiding it.
 	bool failed = false;
@@ -38,6 +43,14 @@ public:
 	void init();
 	void shutdown();
 	void reload();
+
+	// Tears one plugin down and runs its entry file again, leaving every other
+	// plugin untouched. Returns false when nothing is named `id`. Behind
+	// `lua_reload <plugin>`, which is the whole edit-test loop for one plugin.
+	bool reload_plugin(const char *id);
+
+	// Registered by plugin.on_unload(). The engine owns the ref from here on.
+	void add_unload_handler(int plugin_index, int ref);
 
 	lua_State *state() const { return m_L; }
 	bool ready() const { return m_L != nullptr; }
@@ -88,10 +101,20 @@ private:
 	bool run_file(const std::string &path, int env_ref, const char *where);
 	int module_paths(int plugin_index, const char *modname, std::string out[4]) const;
 
+	// Runs the plugin's own on_unload handlers, then drops everything it
+	// registered: handlers, timers, commands, databases, resources. Shared by
+	// a single-plugin reload and by the failed-load path.
+	void unload_plugin(int index, bool run_handlers);
+
 	lua_State *m_L = nullptr;
 	std::vector<LuaPlugin> m_plugins;
 	int m_loading = -1;
 	int m_current = -1;
+
+	// True from the moment plugin_unload starts firing until the state is
+	// gone, so a handler that triggers another shutdown cannot make it fire
+	// twice.
+	bool m_unloading = false;
 };
 
 extern LuaEngine g_lua;

@@ -1,6 +1,7 @@
--- Core: menus.
+-- Core: what the player sees - menus, and the colour helper every channel
+-- shares.
 --
---   local m = menu("Choose a weapon")
+--   local m = menu.new("Choose a weapon")
 --   m:add("AK-47",  function(p) p:give("weapon_ak47") end)
 --   m:add("AWP",    function(p) p:give("weapon_awp") end)
 --   m:add("Nothing", nil, { disabled = true })   -- greyed out, key does nothing
@@ -12,61 +13,57 @@
 -- The handler gets (player, item) - `item` is what add() returned, so you can
 -- hang your own fields on it.
 --
--- Colours: the panel understands four codes, and every part of a menu takes
--- one, by name ("red") or as the raw code ("\\r"):
+-- Colours are written the same way here as in p:hud() and p:chat(): a palette
+-- name, "#rrggbb" or { r, g, b }. A panel can only draw four of them, so it
+-- picks the nearest one it has.
 --
---   menu("Title", { color = { title = "yellow", number = "red" } })
+--   menu.new("Title", { color = { title = "yellow", number = "red" } })
 --   m:add("Boss room", fn, { color = "red" })
 --   m:add("Locked",    nil, { disabled = true })   -- uses colors.disabled
 --
 -- Nothing is coloured by default, which looks exactly like an uncoloured
--- panel did before - so old menus keep their look.
+-- panel did before.
+
+local color = require("color")
+
+-- Raw panel drawing, taken into locals and cleared: a plugin sees menu.new()
+-- and nothing else on this table.
+local show_panel  = menu._show
+local close_panel = menu._close
+menu._show, menu._close = nil, nil
+
+-- ui.color(v) -> { r, g, b }. The one place a colour is turned into numbers,
+-- for a plugin that wants to compute one rather than name it.
+function ui.color(v)
+	local rgb, err = color.parse(v)
+	if not rgb then
+		error("ui.color: " .. err, 2)
+	end
+	return rgb
+end
 
 local ITEMS_PER_PAGE = 8
 
 -- Slots the engine gives us: bit 0 is key "1" ... bit 9 is key "0".
-local KEY_9    = 9
-local KEY_0    = 10
+local KEY_9 = 9
+local KEY_0 = 10
 
--- The four colours the client can draw, and the friendly names for them.
 -- Yellow is what the panel paints with when no code was sent at all, so it
 -- doubles as the "back to normal" colour.
 local DEFAULT_COLOR = "\\y"
 
-local COLORS = {
-	white  = "\\w", w = "\\w",
-	red    = "\\r", r = "\\r",
-	yellow = "\\y", y = "\\y",
-	grey   = "\\d", gray = "\\d", d = "\\d", dim = "\\d",
-}
-
--- Accepts a name, a raw code, or nil. Anything else is a typo worth shouting
--- about: a bad colour silently prints as literal text otherwise.
--- `level` is where to point the blame: 4 is the script that called menu() or
+-- `level` is where to point the blame: the script that called menu.new() or
 -- add(), which is the line worth showing.
-local function color_code(v, what, level)
+local function code_for(v, what, level)
 	if v == nil then
 		return nil
 	end
 
-	level = level or 4
-
-	if type(v) ~= "string" then
-		error(("menu: %s color must be a string, got %s"):format(what, type(v)), level)
+	local code, err = color.menu(v)
+	if not code then
+		error(("menu: %s colour: %s"):format(what, err), level or 4)
 	end
-
-	if #v == 2 and v:sub(1, 1) == "\\" then
-		if v == "\\w" or v == "\\r" or v == "\\y" or v == "\\d" then
-			return v
-		end
-	else
-		local code = COLORS[v:lower()]
-		if code then
-			return code
-		end
-	end
-
-	error(("menu: unknown %s color '%s' (white, red, yellow, grey)"):format(what, v), level)
+	return code
 end
 
 -- color = "red"                  -> paints the item text
@@ -76,30 +73,31 @@ local function item_colors(v)
 		return nil
 	end
 
-	if type(v) == "table" then
+	if type(v) == "table" and (v.number ~= nil or v.text ~= nil) then
 		return {
-			number = color_code(v.number, "number"),
-			text   = color_code(v.text, "text"),
+			number = code_for(v.number, "number"),
+			text   = code_for(v.text, "text"),
 		}
 	end
 
-	return { text = color_code(v, "item") }
+	return { text = code_for(v, "item") }
 end
 
 local function menu_colors(v)
 	v = v or {}
 
-	if type(v) == "string" then
+	-- A bare colour (a name, or an { r, g, b } triple) paints the item text.
+	if type(v) ~= "table" or v[1] ~= nil then
 		v = { text = v }
 	end
 
 	return {
-		title    = color_code(v.title, "title"),
-		number   = color_code(v.number, "number"),
-		text     = color_code(v.text, "text"),
-		nav      = color_code(v.nav, "nav"),
+		title    = code_for(v.title, "title"),
+		number   = code_for(v.number, "number"),
+		text     = code_for(v.text, "text"),
+		nav      = code_for(v.nav, "nav"),
 		-- Disabled items were always greyed out; that stays the default.
-		disabled = color_code(v.disabled, "disabled") or "\\d",
+		disabled = code_for(v.disabled, "disabled") or "\\d",
 	}
 end
 
@@ -109,7 +107,7 @@ Menu.__index = Menu
 -- Who is looking at what, so a reply lands on the right menu and page.
 local open = {}
 
-function menu(title, opts)
+function menu.new(title, opts)
 	opts = opts or {}
 	return setmetatable({
 		title    = title or "",
@@ -117,7 +115,7 @@ function menu(title, opts)
 		exit     = opts.exit ~= false,      -- key 0 closes, unless exit = false
 		time     = opts.time or -1,         -- seconds on screen, -1 = until answered
 		on_exit  = opts.on_exit,            -- called when the player closes it
-		colors   = menu_colors(opts.color), -- see color_code() above
+		colors   = menu_colors(opts.color),
 	}, Menu)
 end
 
@@ -142,13 +140,13 @@ end
 -- Recolour after the fact, e.g. when a state change should grey an item out.
 -- Both take the same spec as the constructor and merge into what is there.
 function Menu:color(spec)
-	if type(spec) == "string" then
+	if type(spec) ~= "table" or spec[1] ~= nil then
 		spec = { text = spec }
 	end
 
 	for _, k in ipairs({ "title", "number", "text", "nav", "disabled" }) do
 		if spec[k] ~= nil then
-			self.colors[k] = color_code(spec[k], k, 3)
+			self.colors[k] = code_for(spec[k], k, 3)
 		end
 	end
 	return self
@@ -244,21 +242,23 @@ function Menu:show(p, page)
 		has_back = has_back,
 	}
 
-	_show_menu(p.id, keys, self.time, text)
+	show_panel(p.id, keys, self.time, text)
 end
 
 function Menu:close(p)
 	open[p.id] = nil
-	_close_menu(p.id)
+	close_panel(p.id)
 end
 
-on("menu_select", function(p, key)
+hook.add("menu_select", "core.menu_select", function(e)
+	local p = e.player
 	local state = open[p.id]
 	if not state then
 		return
 	end
 
 	local m = state.menu
+	local key = e.key
 
 	if key == KEY_9 and state.has_next then
 		return m:show(p, state.page + 1)
@@ -292,6 +292,6 @@ on("menu_select", function(p, key)
 end)
 
 -- A player who leaves takes their menu state with them.
-on("client_disconnect", function(p)
-	open[p.id] = nil
+hook.add("client_disconnect", "core.menu_cleanup", function(e)
+	open[e.player.id] = nil
 end)

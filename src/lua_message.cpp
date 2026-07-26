@@ -219,12 +219,95 @@ static float opt_number(lua_State *L, int table, const char *key, float def)
 	return value;
 }
 
-// color = {r, g, b} or {r, g, b, a}
+// The shared colour palette.
+//
+// Named colours are what make one `color = "green"` work in every channel.
+// Each one renders it as closely as it can: the HUD takes the RGB as it is, a
+// menu has four codes and chat has three, so most names collapse there. The
+// alternative - a different colour type per channel - is what made "colour"
+// mean three unrelated things in v1.
+//
+// include/color.lua reads this same table out of ui.palette, so the degrading
+// rules live in one place and never disagree with these values.
+struct NamedColor
+{
+	const char *name;
+	unsigned char r, g, b;
+};
+
+static const NamedColor s_palette[] =
+{
+	{ "white",  255, 255, 255 },
+	{ "black",  0,   0,   0   },
+	{ "red",    255, 64,  64  },
+	{ "green",  0,   255, 0   },
+	{ "blue",   80,  160, 255 },
+	{ "yellow", 255, 208, 0   },
+	{ "orange", 255, 160, 0   },
+	{ "grey",   160, 160, 160 },
+	{ NULL, 0, 0, 0 }
+};
+
+static int hex_digit(char c)
+{
+	if (c >= '0' && c <= '9') return c - '0';
+	if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+	if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+	return -1;
+}
+
+// "green" or "#ffa000" -> rgb. False when it is neither.
+static bool parse_color_name(const char *s, unsigned char &r, unsigned char &g,
+	unsigned char &b)
+{
+	if (!s || !*s)
+		return false;
+
+	if (s[0] == '#') {
+		if (strlen(s) != 7)
+			return false;
+
+		int comps[6];
+		for (int i = 0; i < 6; i++) {
+			comps[i] = hex_digit(s[i + 1]);
+			if (comps[i] < 0)
+				return false;
+		}
+
+		r = (unsigned char)(comps[0] * 16 + comps[1]);
+		g = (unsigned char)(comps[2] * 16 + comps[3]);
+		b = (unsigned char)(comps[4] * 16 + comps[5]);
+		return true;
+	}
+
+	// "gray" is common enough to be worth not making anyone look it up.
+	const char *want = !strcmp(s, "gray") ? "grey" : s;
+
+	for (const NamedColor *c = s_palette; c->name; c++) {
+		if (!strcmp(want, c->name)) {
+			r = c->r; g = c->g; b = c->b;
+			return true;
+		}
+	}
+
+	return false;
+}
+
+// color = "green" | "#ffa000" | {r, g, b} | {r, g, b, a}
 static void opt_color(lua_State *L, int table, const char *key,
 	unsigned char &r, unsigned char &g, unsigned char &b, unsigned char &a)
 {
 	lua_getfield(L, table, key);
-	if (lua_istable(L, -1)) {
+
+	if (lua_isstring(L, -1)) {
+		const char *name = lua_tostring(L, -1);
+		if (!parse_color_name(name, r, g, b)) {
+			lua_pop(L, 1);
+			luaL_error(L, "unknown colour '%s' - use a palette name, "
+				"\"#rrggbb\" or { r, g, b }", name);
+			return;
+		}
+	} else if (lua_istable(L, -1)) {
 		const int comps = 4;
 		unsigned char *out[comps] = { &r, &g, &b, &a };
 		for (int i = 0; i < comps; i++) {
@@ -238,7 +321,27 @@ static void opt_color(lua_State *L, int table, const char *key,
 			lua_pop(L, 1);
 		}
 	}
+
 	lua_pop(L, 1);
+}
+
+// ui.palette = { green = { 0, 255, 0 }, ... } - the one source of truth for
+// what a colour name means, shared with include/color.lua.
+void cslua_register_ui(lua_State *L)
+{
+	lua_newtable(L);				// ui
+
+	lua_newtable(L);				// palette
+	for (const NamedColor *c = s_palette; c->name; c++) {
+		lua_newtable(L);
+		lua_pushinteger(L, c->r); lua_rawseti(L, -2, 1);
+		lua_pushinteger(L, c->g); lua_rawseti(L, -2, 2);
+		lua_pushinteger(L, c->b); lua_rawseti(L, -2, 3);
+		lua_setfield(L, -2, c->name);
+	}
+	lua_setfield(L, -2, "palette");
+
+	lua_setglobal(L, "ui");
 }
 
 void cslua_read_hud_params(lua_State *L, int index, HudParams &out)

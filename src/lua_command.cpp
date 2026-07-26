@@ -1,6 +1,7 @@
 #include "cslua.h"
 #include "lua_command.h"
 #include "lua_engine.h"
+#include "lua_natives.h"
 
 #include <string.h>
 #include <string>
@@ -113,10 +114,31 @@ static int l_command(lua_State *L)
 void cslua_register_command_api(lua_State *L)
 {
 	// Low-level primitive: registers a raw server console command whose handler
-	// gets the argument array. The friendly, unified command() that also covers
-	// chat and builds a ctx lives in core/commands.lua on top of this.
-	lua_pushcfunction(L, l_command);
-	lua_setglobal(L, "_server_command");
+	// gets the argument array. The friendly, unified cmd.add() that also covers
+	// chat and builds a ctx lives in core/commands.lua on top of this, and
+	// clears this entry once it has it - a plugin only ever sees cmd.add.
+	static const luaL_Reg s_internal[] =
+	{
+		{ "_register", l_command },
+		{ NULL, NULL }
+	};
+
+	cslua_register_namespace(L, "cmd", s_internal);
+}
+
+void cslua_command_remove_plugin(int plugin_index)
+{
+	lua_State *L = g_lua.state();
+
+	for (size_t i = 0; i < s_commands.size(); i++) {
+		if (s_commands[i].plugin != plugin_index || !s_commands[i].live)
+			continue;
+
+		if (L)
+			luaL_unref(L, LUA_REGISTRYINDEX, s_commands[i].ref);
+		s_commands[i].ref = LUA_NOREF;
+		s_commands[i].live = false;
+	}
 }
 
 void cslua_command_shutdown()

@@ -164,15 +164,116 @@ static BOOL hook_takedamage(IReGameHook_CBasePlayer_TakeDamage *chain, CBasePlay
 static void hook_killed(IReGameHook_CBasePlayer_Killed *chain, CBasePlayer *victim,
 	entvars_t *pevAttacker, int iGib)
 {
-	chain->callNext(victim, pevAttacker, iGib);
-
-	if (!victim || !victim->IsPlayer())
+	if (!victim || !victim->IsPlayer()) {
+		chain->callNext(victim, pevAttacker, iGib);
 		return;
+	}
 
 	// killer 0 = world / non-player; suicide shows up as attacker == victim.
 	int killer = attacker_slot(pevAttacker);
+
+	// Both of these have to be read before the chain runs: the death drops the
+	// victim's weapons and the impulse throws the body, so afterwards the
+	// weapon is gone and the distance is whatever the corpse flew.
+	const char *weapon = NULL;
+	float distance = -1.0f;
+
+	if (killer > 0) {
+		CBasePlayer *shooter = cslua_player_entity(killer);
+		if (shooter) {
+			if (shooter->m_pActiveItem && shooter->m_pActiveItem->pev)
+				weapon = STRING(shooter->m_pActiveItem->pev->classname);
+			distance = (shooter->pev->origin - victim->pev->origin).Length();
+		}
+	}
+
+	// Copied out: the string points into the game's entity, which the chain
+	// below is free to take apart.
+	char weapon_name[64];
+	if (weapon) {
+		cslua_snprintf(weapon_name, sizeof weapon_name, "%s", weapon);
+		weapon_name[sizeof weapon_name - 1] = '\0';
+		weapon = weapon_name;
+	}
+
+	chain->callNext(victim, pevAttacker, iGib);
+
 	bool headshot = victim->m_bHeadshotKilled;
-	g_events.fire_player_death(victim->entindex(), killer, headshot ? 1 : 0);
+	g_events.fire_player_death(victim->entindex(), killer, headshot ? 1 : 0, weapon, distance);
+}
+
+// A shot left the barrel. There is no one hookchain for "fired": the game
+// spreads it across three bullet calls, and this covers all of them. `this` is
+// whoever pulled the trigger.
+//
+// Firearms only. The knife goes through TraceAttack and grenades through the
+// Throw* chains, neither of which is a bullet - see docs/events.md.
+static int firing_slot(CBaseEntity *shooter)
+{
+	if (!shooter || !shooter->pev)
+		return 0;
+
+	edict_t *e = ENT(shooter->pev);
+	if (!e)
+		return 0;
+
+	int idx = ENTINDEX(e);
+	return (idx >= 1 && idx < CSLUA_MAXPLAYERS) ? idx : 0;
+}
+
+// The clip is read after the shot, so a plugin counting rounds sees what is
+// left rather than what was there.
+static void fire_weapon_event(CBaseEntity *shooter)
+{
+	int slot = firing_slot(shooter);
+	if (!slot)
+		return;
+
+	CBasePlayer *player = cslua_player_entity(slot);
+	if (!player)
+		return;
+
+	CBasePlayerItem *active = player->m_pActiveItem;
+	if (!active || !active->pev)
+		return;
+
+	int clip = -1;
+	if (active->IsWeapon())
+		clip = static_cast<CBasePlayerWeapon *>(active)->m_iClip;
+
+	g_events.fire_weapon_fire(slot, STRING(active->pev->classname), clip);
+}
+
+static void hook_fire_bullets(IReGameHook_CBaseEntity_FireBullets *chain, CBaseEntity *shooter,
+	ULONG cShots, Vector &vecSrc, Vector &vecDirShooting, Vector &vecSpread,
+	float flDistance, int iBulletType, int iTracerFreq, int iDamage, entvars_t *pevAttacker)
+{
+	chain->callNext(shooter, cShots, vecSrc, vecDirShooting, vecSpread, flDistance,
+		iBulletType, iTracerFreq, iDamage, pevAttacker);
+
+	fire_weapon_event(shooter);
+}
+
+static Vector &hook_fire_bullets3(IReGameHook_CBaseEntity_FireBullets3 *chain, CBaseEntity *shooter,
+	Vector &vecSrc, Vector &vecDirShooting, float flSpread, float flDistance, int iPenetration,
+	int iBulletType, int iDamage, float flRangeModifier, entvars_t *pevAttacker,
+	bool bPistol, int shared_rand)
+{
+	Vector &result = chain->callNext(shooter, vecSrc, vecDirShooting, flSpread, flDistance,
+		iPenetration, iBulletType, iDamage, flRangeModifier, pevAttacker, bPistol, shared_rand);
+
+	fire_weapon_event(shooter);
+	return result;
+}
+
+static void hook_fire_buckshots(IReGameHook_CBaseEntity_FireBuckshots *chain, CBaseEntity *shooter,
+	ULONG cShots, Vector &vecSrc, Vector &vecDirShooting, Vector &vecSpread,
+	float flDistance, int iTracerFreq, int iDamage, entvars_t *pevAttacker)
+{
+	chain->callNext(shooter, cShots, vecSrc, vecDirShooting, vecSpread, flDistance,
+		iTracerFreq, iDamage, pevAttacker);
+
+	fire_weapon_event(shooter);
 }
 
 static void hook_round_start(IReGameHook_CSGameRules_RestartRound *chain)
@@ -227,40 +328,89 @@ static void hook_explode_bomb(IReGameHook_CGrenade_ExplodeBomb *chain, CGrenade 
 	g_events.fire_bomb_exploded(where.x, where.y, where.z);
 }
 
+// Which chains we currently hold a hook on.
+//
+// registerHook is fatal when the same handler is added twice - ReGameDLL kills
+// the server outright - and `lua_reload <plugin>` calls this again with the
+// rest of the plugins still loaded. unregisterHook is the forgiving one, so
+// only the install side needs remembering.
+enum HookSlot
+{
+	HOOK_SPAWN,
+	HOOK_TAKEDAMAGE,
+	HOOK_KILLED,
+	HOOK_FIRE_BULLETS,
+	HOOK_FIRE_BULLETS3,
+	HOOK_FIRE_BUCKSHOTS,
+	HOOK_ROUND_START,
+	HOOK_ROUND_END,
+	HOOK_FREEZE_END,
+	HOOK_PLANT,
+	HOOK_DEFUSE,
+	HOOK_EXPLODE,
+	HOOK_COUNT
+};
+
+static bool s_installed[HOOK_COUNT];
+
+// Brings one chain in line with whether anything listens for it. Templated
+// because every chain is its own type; the body is the same for all of them.
+template <typename Chain, typename Handler>
+static void sync_hook(HookSlot slot, Chain *chain, Handler handler, bool want)
+{
+	if (want == s_installed[slot])
+		return;
+
+	if (want)
+		chain->registerHook(handler);
+	else
+		chain->unregisterHook(handler);
+
+	s_installed[slot] = want;
+}
+
+// Called after every load and after every single-plugin reload. Only hooks
+// what someone is listening for - a hookchain has a per-frame cost even when
+// the callback does nothing - and drops one whose last listener just went
+// away with the plugin that owned it.
 void cslua_regamedll_install_hooks()
 {
 	if (!s_hooks)
 		return;
 
-	// Only hook what someone is listening for: a hookchain has a per-frame
-	// cost even when the callback does nothing.
-	if (g_events.any(CSLUA_EVENT_PLAYER_SPAWN))
-		s_hooks->CBasePlayer_Spawn()->registerHook(&hook_spawn);
+	sync_hook(HOOK_SPAWN, s_hooks->CBasePlayer_Spawn(), &hook_spawn,
+		g_events.any(CSLUA_EVENT_PLAYER_SPAWN));
 
 	// One TakeDamage hook feeds both the pre and post events.
-	if (g_events.any(CSLUA_EVENT_PLAYER_HURT) || g_events.any(CSLUA_EVENT_PLAYER_HURT_POST))
-		s_hooks->CBasePlayer_TakeDamage()->registerHook(&hook_takedamage);
+	sync_hook(HOOK_TAKEDAMAGE, s_hooks->CBasePlayer_TakeDamage(), &hook_takedamage,
+		g_events.any(CSLUA_EVENT_PLAYER_HURT) || g_events.any(CSLUA_EVENT_PLAYER_HURT_POST));
 
-	if (g_events.any(CSLUA_EVENT_PLAYER_DEATH))
-		s_hooks->CBasePlayer_Killed()->registerHook(&hook_killed);
+	sync_hook(HOOK_KILLED, s_hooks->CBasePlayer_Killed(), &hook_killed,
+		g_events.any(CSLUA_EVENT_PLAYER_DEATH));
 
-	if (g_events.any(CSLUA_EVENT_ROUND_START))
-		s_hooks->CSGameRules_RestartRound()->registerHook(&hook_round_start);
+	// Three chains for one event: the game splits shooting between them.
+	bool shooting = g_events.any(CSLUA_EVENT_WEAPON_FIRE);
+	sync_hook(HOOK_FIRE_BULLETS, s_hooks->CBaseEntity_FireBullets(), &hook_fire_bullets, shooting);
+	sync_hook(HOOK_FIRE_BULLETS3, s_hooks->CBaseEntity_FireBullets3(), &hook_fire_bullets3, shooting);
+	sync_hook(HOOK_FIRE_BUCKSHOTS, s_hooks->CBaseEntity_FireBuckshots(), &hook_fire_buckshots, shooting);
 
-	if (g_events.any(CSLUA_EVENT_ROUND_END))
-		s_hooks->RoundEnd()->registerHook(&hook_round_end);
+	sync_hook(HOOK_ROUND_START, s_hooks->CSGameRules_RestartRound(), &hook_round_start,
+		g_events.any(CSLUA_EVENT_ROUND_START));
 
-	if (g_events.any(CSLUA_EVENT_ROUND_FREEZE_END))
-		s_hooks->CSGameRules_OnRoundFreezeEnd()->registerHook(&hook_freeze_end);
+	sync_hook(HOOK_ROUND_END, s_hooks->RoundEnd(), &hook_round_end,
+		g_events.any(CSLUA_EVENT_ROUND_END));
 
-	if (g_events.any(CSLUA_EVENT_BOMB_PLANTED))
-		s_hooks->PlantBomb()->registerHook(&hook_plant_bomb);
+	sync_hook(HOOK_FREEZE_END, s_hooks->CSGameRules_OnRoundFreezeEnd(), &hook_freeze_end,
+		g_events.any(CSLUA_EVENT_ROUND_FREEZE_END));
 
-	if (g_events.any(CSLUA_EVENT_BOMB_DEFUSED))
-		s_hooks->CGrenade_DefuseBombEnd()->registerHook(&hook_defuse_end);
+	sync_hook(HOOK_PLANT, s_hooks->PlantBomb(), &hook_plant_bomb,
+		g_events.any(CSLUA_EVENT_BOMB_PLANTED));
 
-	if (g_events.any(CSLUA_EVENT_BOMB_EXPLODED))
-		s_hooks->CGrenade_ExplodeBomb()->registerHook(&hook_explode_bomb);
+	sync_hook(HOOK_DEFUSE, s_hooks->CGrenade_DefuseBombEnd(), &hook_defuse_end,
+		g_events.any(CSLUA_EVENT_BOMB_DEFUSED));
+
+	sync_hook(HOOK_EXPLODE, s_hooks->CGrenade_ExplodeBomb(), &hook_explode_bomb,
+		g_events.any(CSLUA_EVENT_BOMB_EXPLODED));
 }
 
 void cslua_regamedll_remove_hooks()
@@ -273,10 +423,16 @@ void cslua_regamedll_remove_hooks()
 	s_hooks->CBasePlayer_Spawn()->unregisterHook(&hook_spawn);
 	s_hooks->CBasePlayer_TakeDamage()->unregisterHook(&hook_takedamage);
 	s_hooks->CBasePlayer_Killed()->unregisterHook(&hook_killed);
+	s_hooks->CBaseEntity_FireBullets()->unregisterHook(&hook_fire_bullets);
+	s_hooks->CBaseEntity_FireBullets3()->unregisterHook(&hook_fire_bullets3);
+	s_hooks->CBaseEntity_FireBuckshots()->unregisterHook(&hook_fire_buckshots);
 	s_hooks->CSGameRules_RestartRound()->unregisterHook(&hook_round_start);
 	s_hooks->RoundEnd()->unregisterHook(&hook_round_end);
 	s_hooks->CSGameRules_OnRoundFreezeEnd()->unregisterHook(&hook_freeze_end);
 	s_hooks->PlantBomb()->unregisterHook(&hook_plant_bomb);
 	s_hooks->CGrenade_DefuseBombEnd()->unregisterHook(&hook_defuse_end);
 	s_hooks->CGrenade_ExplodeBomb()->unregisterHook(&hook_explode_bomb);
+
+	for (int i = 0; i < HOOK_COUNT; i++)
+		s_installed[i] = false;
 }

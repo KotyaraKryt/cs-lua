@@ -26,6 +26,10 @@ void cslua_read_hud_params(lua_State *L, int index, HudParams &out);
 // Registers the encoding cvar. Call once at startup, before anything is sent.
 void cslua_message_init();
 
+// Registers the `ui` namespace, which for now is the shared colour palette.
+// include/color.lua builds the per-channel degrading on top of it.
+void cslua_register_ui(lua_State *L);
+
 // The same encoding step chat and HUD text go through, for senders that live
 // outside this file (menus). Returns the text as the client wants it: CP1251
 // when cslua_cp1251 is on and the input is UTF-8, unchanged otherwise.

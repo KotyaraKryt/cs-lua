@@ -30,6 +30,15 @@ bool cslua_file_exists(const std::string &path)
 	return attr != INVALID_FILE_ATTRIBUTES && !(attr & FILE_ATTRIBUTE_DIRECTORY);
 }
 
+bool cslua_make_dir(const std::string &path)
+{
+	if (CreateDirectoryA(path.c_str(), NULL))
+		return true;
+
+	// A directory that is already there is the normal case, not a failure.
+	return GetLastError() == ERROR_ALREADY_EXISTS;
+}
+
 bool cslua_list_dir(const std::string &path, std::vector<CsLuaDirEntry> &out)
 {
 	WIN32_FIND_DATAA fd;
@@ -79,6 +88,16 @@ bool cslua_file_exists(const std::string &path)
 {
 	struct stat st;
 	return stat(path.c_str(), &st) == 0 && S_ISREG(st.st_mode);
+}
+
+bool cslua_make_dir(const std::string &path)
+{
+	if (mkdir(path.c_str(), 0755) == 0)
+		return true;
+
+	// A directory that is already there is the normal case, not a failure.
+	struct stat st;
+	return stat(path.c_str(), &st) == 0 && S_ISDIR(st.st_mode);
 }
 
 bool cslua_list_dir(const std::string &path, std::vector<CsLuaDirEntry> &out)

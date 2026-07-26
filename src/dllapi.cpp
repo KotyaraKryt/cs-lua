@@ -4,19 +4,32 @@
 #include "lua_sound.h"
 #include "lua_menu.h"
 #include "players.h"
+#include "regamedll.h"
 
 #include <string.h>
 
-// Defined further down, next to the poll it resets.
+// Defined further down, next to the polls they reset.
 void cslua_reset_auth_poll();
+void cslua_reset_team_cache();
+void cslua_forget_team(int id);
 
 // worldspawn is the map's first entity and the window where the engine still
 // accepts precache calls. This runs *post*, after the game DLL has precached
 // its own resources, so the slot numbers we get back reflect the real usage of
 // the server rather than an empty table.
+// Set from worldspawn until the map ends. See cslua_world_ready() in cslua.h
+// for why anything touching edicts has to consult it.
+static bool s_world_ready = false;
+
+bool cslua_world_ready()
+{
+	return s_world_ready;
+}
+
 static int Spawn_Post(edict_t *pent)
 {
 	if (pent && !strcmp(STRING(pent->v.classname), "worldspawn")) {
+		s_world_ready = true;
 		cslua_sound_set_window(true);
 		cslua_precache_all();
 	}
@@ -32,10 +45,27 @@ static void ServerActivate(edict_t *pEdictList, int edictCount, int clientMax)
 	cslua_sound_set_window(false);
 	cslua_timers_rebase();
 	cslua_reset_auth_poll();
+	cslua_reset_team_cache();
 
 	for (int id = 1; id < CSLUA_MAXPLAYERS; id++)
 		cslua_menu_reset(id);
 
+	RETURN_META(MRES_IGNORED);
+}
+
+// The map is ending - the next one, or the server stopping. Last chance for a
+// plugin to undo what it did to the world and write its data out; everything
+// keyed on the map is about to be wrong.
+//
+// The Lua state itself lives on across a map change, so this is not a shutdown:
+// that is plugin_unload.
+static void ServerDeactivate()
+{
+	g_events.fire_map_change(gpGlobals && gpGlobals->mapname ? STRING(gpGlobals->mapname) : "");
+
+	// After this the edicts go away. Cleared last so a map_change handler can
+	// still remove its own entities.
+	s_world_ready = false;
 	RETURN_META(MRES_IGNORED);
 }
 
@@ -44,8 +74,11 @@ static qboolean ClientConnect(edict_t *pEntity, const char *pszName, const char 
 	int id = g_engfuncs.pfnIndexOfEdict(pEntity);
 	g_players.on_connect(id, pszName, pszAddress, g_engfuncs.pfnGetPlayerAuthId(pEntity));
 
-	// Slots get reused; the new occupant starts with a clean screen.
+	// Slots get reused; the new occupant starts with a clean screen and no
+	// memory of the previous player's team, which would otherwise show up as
+	// a team change if both happen inside one frame.
 	cslua_menu_reset(id);
+	cslua_forget_team(id);
 
 	RejectInfo reject;
 	reject.reason[0] = '\0';
@@ -138,7 +171,7 @@ DLL_FUNCTIONS g_DllFunctionTable =
 	ClientCommand,			// pfnClientCommand
 	NULL,					// pfnClientUserInfoChanged
 	ServerActivate,			// pfnServerActivate
-	NULL,					// pfnServerDeactivate
+	ServerDeactivate,		// pfnServerDeactivate
 	NULL,					// pfnPlayerPreThink
 	NULL,					// pfnPlayerPostThink
 	NULL,					// pfnStartFrame
@@ -193,9 +226,58 @@ static void poll_authorization()
 	}
 }
 
+// Team changes have no hookchain worth using: SwitchTeam is the between-halves
+// side swap, and ChooseTeam fires before a join that may not happen. Polling
+// m_iTeam catches every path instead - the team menu, an autobalance, p:team()
+// from Lua, another mod - at the cost of 32 string compares a frame, which is
+// nothing next to a hookchain on the damage path.
+static const char *s_team[CSLUA_MAXPLAYERS];
+
+void cslua_reset_team_cache()
+{
+	for (int id = 0; id < CSLUA_MAXPLAYERS; id++)
+		s_team[id] = NULL;
+}
+
+void cslua_forget_team(int id)
+{
+	if (id >= 0 && id < CSLUA_MAXPLAYERS)
+		s_team[id] = NULL;
+}
+
+static void poll_team_change()
+{
+	if (!g_events.any(CSLUA_EVENT_PLAYER_TEAM_CHANGE))
+		return;
+
+	for (int id = 1; id < CSLUA_MAXPLAYERS; id++) {
+		if (!g_players.is_connected(id)) {
+			s_team[id] = NULL;
+			continue;
+		}
+
+		// Always one of a handful of literals, so the pointer is safe to keep;
+		// the compare is by content anyway, which is one less thing to be
+		// clever about.
+		const char *now = cslua_player_team_name(id);
+		const char *was = s_team[id];
+
+		if (was && !strcmp(was, now))
+			continue;
+
+		s_team[id] = now;
+
+		// The first reading for a slot is not a change: a joining player goes
+		// from "we had not looked yet" to NONE, which nobody wants an event for.
+		if (was)
+			g_events.fire_player_team_change(id, was, now);
+	}
+}
+
 static void StartFrame()
 {
 	poll_authorization();
+	poll_team_change();
 	cslua_timers_run();
 	RETURN_META(MRES_IGNORED);
 }

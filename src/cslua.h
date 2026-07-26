@@ -13,14 +13,19 @@ class CBaseEntity;
 #include <string>
 
 #define CSLUA_NAME		"cs-lua"
-#define CSLUA_VERSION	"1.0.0"
+#define CSLUA_VERSION	"2.0.0"
 #define CSLUA_TAG		"[cs-lua] "
 
 // The scripting API version. A plain integer that bumps on every breaking
 // change to the Lua-facing API - independent of CSLUA_VERSION, which tracks
 // the whole project. Plugins declare the version they were written against
-// via plugin{ api_version = N }. Starts at 1 with the first public release.
-#define CSLUA_API_VERSION 1
+// via plugin{ api_version = N }.
+//
+// v1 -> v2 renamed the whole Lua surface into namespaces and gave every event
+// handler one table instead of positional arguments. A v1 plugin is refused at
+// its plugin{} line rather than left to die on the first missing global; see
+// docs/migration.md.
+#define CSLUA_API_VERSION 2
 
 // Max players an HLDS server can hold, +1 because edict indices are 1-based.
 #define CSLUA_MAXPLAYERS 33
@@ -32,3 +37,9 @@ void cslua_error(const char *fmt, ...);
 
 // <gamedir>/addons/lua, resolved from metamod's GINFO_GAMEDIR.
 const std::string &cslua_base_dir();
+
+// True once the map's entities exist and until the map ends. Anything that
+// reaches into the engine's edict table has to ask first: plugins load during
+// Meta_Attach, long before there is a world, and the engine does not check -
+// it walks a table that is not there yet and takes the server down.
+bool cslua_world_ready();

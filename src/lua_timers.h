@@ -13,7 +13,5 @@ int cslua_timers_count();
 // so every pending deadline is moved onto the new one.
 void cslua_timers_rebase();
 
-// Lua: after(seconds, fn) / every(seconds, fn) -> id, cancel(id)
-int cslua_l_after(lua_State *L);
-int cslua_l_every(lua_State *L);
-int cslua_l_cancel(lua_State *L);
+// Registers the `timer` namespace: after, every, cancel, create, destroy.
+void cslua_register_timers(lua_State *L);
