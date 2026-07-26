@@ -71,7 +71,7 @@ const config: Config = {
         language: ['ru', 'en'],
         hashed: true,
         indexBlog: false,
-        docsRouteBasePath: '/docs',
+        docsRouteBasePath: '/',
         // Имя вызова живёт в заголовке страницы, поэтому вес заголовков выше
         // обычного: по "p:health" должна находиться его страница, а не десяток
         // упоминаний в примерах.
