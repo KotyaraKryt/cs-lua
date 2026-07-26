@@ -10,6 +10,7 @@ NS = {
             'items': [
                 {
                     'name': 'plugin{}',
+                    'slug': 'manifest',
                     'brief': 'Объявляет метаданные и требования плагина.',
                     'sig': 'plugin { name = , version = , author = , api_version = , requires = }',
                     'args': None,

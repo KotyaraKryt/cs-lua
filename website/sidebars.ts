@@ -191,11 +191,11 @@ const sidebars: SidebarsConfig = {
             {type: 'doc', id: 'api/db/close', label: 'db:close'},
           ]},
           {type: 'category', label: 'Подготовленное выражение', collapsed: true, items: [
-            {type: 'doc', id: 'api/db/run', label: 'st:run'},
-            {type: 'doc', id: 'api/db/query', label: 'st:query'},
-            {type: 'doc', id: 'api/db/first', label: 'st:first'},
-            {type: 'doc', id: 'api/db/sql', label: 'st:sql'},
-            {type: 'doc', id: 'api/db/close', label: 'st:close'},
+            {type: 'doc', id: 'api/db/stmt_run', label: 'st:run'},
+            {type: 'doc', id: 'api/db/stmt_query', label: 'st:query'},
+            {type: 'doc', id: 'api/db/stmt_first', label: 'st:first'},
+            {type: 'doc', id: 'api/db/stmt_sql', label: 'st:sql'},
+            {type: 'doc', id: 'api/db/stmt_close', label: 'st:close'},
           ]},
         ]},
         {type: 'category', label: 'store', collapsed: true, link: {type: 'doc', id: 'api/store/index'}, items: [
@@ -251,7 +251,7 @@ const sidebars: SidebarsConfig = {
           ]},
         ]},
         {type: 'category', label: 'plugin', collapsed: true, link: {type: 'doc', id: 'api/plugin/index'}, items: [
-          {type: 'doc', id: 'api/plugin/plugin', label: 'plugin{}'},
+          {type: 'doc', id: 'api/plugin/manifest', label: 'plugin{}'},
           {type: 'doc', id: 'api/plugin/id', label: 'plugin.id'},
           {type: 'doc', id: 'api/plugin/dir', label: 'plugin.dir'},
           {type: 'doc', id: 'api/plugin/data_dir', label: 'plugin.data_dir'},

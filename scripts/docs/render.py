@@ -103,14 +103,22 @@ def render_index(ns):
         if group.get('note'):
             body += [group['note'].strip(), '']
         body += _table(['', ''],
-                       [('[`%s`](%s.md)' % (f['name'], _slug(f['name'])), f['brief'].rstrip('.'))
+                       [('[`%s`](%s.md)' % (f['name'], _slug(f)), f['brief'].rstrip('.'))
                         for f in group['items']])
 
     return '\n'.join(body).rstrip() + '\n'
 
 
-def _slug(name):
-    """timer.after -> after; p:health -> health; players.broadcast -> broadcast"""
+def _slug(fn):
+    """timer.after -> after; p:health -> health.
+
+    Явный slug в описании перебивает: имя не всегда даёт уникальный хвост -
+    db:query и st:query оба кончаются на query.
+    """
+    if fn.get('slug'):
+        return fn['slug']
+
+    name = fn['name']
     tail = name.split('.')[-1].split(':')[-1]
     return tail.replace('{}', '').strip() or 'index'
 
@@ -123,6 +131,28 @@ def write(root, ns):
     io.open(os.path.join(d, 'index.md'), 'w', encoding='utf-8', newline='').write(
         render_index(ns))
 
+    # Два одинаковых slug молча затирают друг друга: одна страница пропадает,
+    # а обе ссылки в меню ведут на оставшуюся. Docusaurus вдобавок считает
+    # <папка>/<папка>.md вторым индексом папки, так что такой slug тоже
+    # схлопывается с index. Ловим здесь, а не глазами на сайте.
+    seen = {}
+    for group in ns['groups']:
+        for fn in group['items']:
+            slug = _slug(fn)
+
+            if slug == ns['dir']:
+                raise SystemExit(
+                    "%s: slug '%s' совпадает с именем каталога - Docusaurus "
+                    "сделает из страницы второй index. Задай slug явно."
+                    % (fn['name'], slug))
+
+            if slug in seen:
+                raise SystemExit(
+                    "%s и %s дают один slug '%s'. Задай slug явно."
+                    % (seen[slug], fn['name'], slug))
+
+            seen[slug] = fn['name']
+
     items = []
     for group in ns['groups']:
         # Раздел без функций существует только ради текста на обзорной
@@ -132,7 +162,7 @@ def write(root, ns):
 
         entries = []
         for fn in group['items']:
-            slug = _slug(fn['name'])
+            slug = _slug(fn)
             io.open(os.path.join(d, slug + '.md'), 'w', encoding='utf-8', newline='').write(
                 render_function(fn))
             entries.append({'type': 'doc',

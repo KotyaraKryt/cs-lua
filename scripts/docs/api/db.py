@@ -194,6 +194,7 @@ end)
             'items': [
                 {
                     'name': 'st:run',
+                    'slug': 'stmt_run',
                     'brief': 'Выполняет выражение, ничего не возвращающее.',
                     'sig': 'st:run(...)',
                     'args': [('...', 'any', 'значения для `?`')],
@@ -201,6 +202,7 @@ end)
                 },
                 {
                     'name': 'st:query',
+                    'slug': 'stmt_query',
                     'brief': 'Выполняет выражение и возвращает все строки.',
                     'sig': 'st:query(...)',
                     'args': [('...', 'any', 'значения для `?`')],
@@ -208,6 +210,7 @@ end)
                 },
                 {
                     'name': 'st:first',
+                    'slug': 'stmt_first',
                     'brief': 'Выполняет выражение и возвращает первую строку.',
                     'sig': 'st:first(...)',
                     'args': [('...', 'any', 'значения для `?`')],
@@ -215,6 +218,7 @@ end)
                 },
                 {
                     'name': 'st:sql',
+                    'slug': 'stmt_sql',
                     'brief': 'Исходный текст запроса.',
                     'sig': 'st:sql()',
                     'args': [],
@@ -222,6 +226,7 @@ end)
                 },
                 {
                     'name': 'st:close',
+                    'slug': 'stmt_close',
                     'brief': 'Освобождает выражение.',
                     'sig': 'st:close()',
                     'args': [],
