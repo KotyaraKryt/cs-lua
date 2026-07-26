@@ -223,6 +223,12 @@ const sidebars: SidebarsConfig = {
             {type: 'doc', id: 'api/store/dir', label: 'datafile.dir'},
           ]},
         ]},
+        {type: 'category', label: 'http', collapsed: true, link: {type: 'doc', id: 'api/http/index'}, items: [
+          {type: 'doc', id: 'api/http/get', label: 'http.get'},
+          {type: 'doc', id: 'api/http/post', label: 'http.post'},
+          {type: 'doc', id: 'api/http/request', label: 'http.request'},
+          {type: 'doc', id: 'api/http/cancel', label: 'http.cancel'},
+        ]},
         {type: 'category', label: 'menu', collapsed: true, link: {type: 'doc', id: 'api/menu/index'}, items: [
           {type: 'doc', id: 'api/menu/new', label: 'menu.new'},
           {type: 'doc', id: 'api/menu/add', label: 'm:add'},

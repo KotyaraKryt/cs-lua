@@ -92,7 +92,7 @@ end
 --------------------------------------------------------------------------
 
 local SPECS = {
-	"color", "text", "datafile", "access", "commands",
+	"color", "text", "json", "datafile", "access", "commands",
 }
 
 local only = arg[1]

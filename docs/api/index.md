@@ -30,6 +30,7 @@ end)
 | [`sv`](sv/index.md) | сервер: время, карта, cvar'ы, консоль |
 | [`db`](db/index.md) | SQLite |
 | [`store`](store/index.md) | key-value на SQLite и `datafile` |
+| [`http`](http/index.md) | исходящие запросы, не блокирующие кадр |
 | [`menu`](menu/index.md) | меню |
 | [`ui`](ui/index.md) | цвета, лимиты длины строк, кириллица |
 | [`access`](access/index.md) | права, группы, иммунитет |
@@ -44,6 +45,7 @@ end)
 |---|---|
 | [`store`](store/open.md) | key-value на SQLite |
 | [`datafile`](store/at.md) | чтение и запись `data/*.lua` |
+| [`json`](http/index.md) | разбор и сборка JSON |
 | [`color`](ui/color.md) | разбор цвета |
 | [`text`](ui/index.md#длина-строки) | длина строки как её считает клиент |
 | `class` | класс с наследованием |

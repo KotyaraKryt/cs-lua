@@ -31,6 +31,7 @@ description: "Плоский список всех функций и метод�
 | [`players.broadcast`](players/broadcast.md) | players | Приёмник «всем сразу»: только отправка сообщений |
 | [`access.can`](access/can.md) | access | Есть ли у игрока право |
 | [`p:can`](players/can.md) | players | Есть ли у игрока право |
+| [`http.cancel`](http/cancel.md) | http | Отменяет запрос по id |
 | [`timer.cancel`](timer/cancel.md) | timer | Снимает таймер по id |
 | [`p:center`](players/center.md) | players | Показывает текст по центру экрана |
 | [`db:changes`](db/changes.md) | db | Сколько строк изменил последний запрос |
@@ -74,6 +75,7 @@ description: "Плоский список всех функций и метод�
 | [`s:flush`](store/flush.md) | store | Записывает очередь на диск одной транзакцией |
 | [`p:frags`](players/frags.md) | players | Счётчик фрагов |
 | [`p:freeze`](players/freeze.md) | players | Заморозка движения (`FL_FROZEN`) |
+| [`http.get`](http/get.md) | http | Выполняет GET-запрос |
 | [`players.get`](players/get.md) | players | Возвращает игрока по номеру слота |
 | [`s:get`](store/get.md) | store | Читает значение по ключу |
 | [`p:give`](players/give.md) | players | Выдаёт игроку предмет по classname |
@@ -141,6 +143,7 @@ description: "Плоский список всех функций и метод�
 | [`player_team_change`](hook/player_team_change.md) | hook | Игрок сменил сторону |
 | [`plugin_unload`](hook/plugin_unload.md) | hook | Плагин или всё состояние уходит |
 | [`plugin{}`](plugin/manifest.md) | plugin | Объявляет метаданные и требования плагина |
+| [`http.post`](http/post.md) | http | Выполняет POST-запрос с телом |
 | [`db:prepare`](db/prepare.md) | db | Разбирает SQL один раз для многократного выполнения |
 | [`db:query`](db/query.md) | db | Выполняет запрос и возвращает все строки |
 | [`st:query`](db/stmt_query.md) | db | Выполняет выражение и возвращает все строки |
@@ -149,6 +152,7 @@ description: "Плоский список всех функций и метод�
 | [`e:remove`](ents/remove.md) | ents | Убирает сущность из мира |
 | [`hook.remove`](hook/remove.md) | hook | Снимает подписку по имени события и id |
 | [`e:render`](ents/render.md) | ents | Читает или задаёт прозрачность и свечение |
+| [`http.request`](http/request.md) | http | Выполняет запрос произвольным методом |
 | [`access.revoke`](access/revoke.md) | access | Забирает запись, группу или ноду |
 | [`round_end`](hook/round_end.md) | hook | Раунд закончился |
 | [`round_freeze_end`](hook/round_freeze_end.md) | hook | Заморозка кончилась, игроки могут двигаться |
@@ -187,4 +191,4 @@ description: "Плоский список всех функций и метод�
 | [`p:weapons`](players/weapons.md) | players | Массив classname всего, что несёт игрок |
 | [`p:weight`](players/weight.md) | players | Вес игрока для иммунитета |
 
-Всего: 175.
+Всего: 179.

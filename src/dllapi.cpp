@@ -1,6 +1,7 @@
 #include "cslua.h"
 #include "lua_events.h"
 #include "lua_timers.h"
+#include "lua_http.h"
 #include "lua_sound.h"
 #include "lua_menu.h"
 #include "players.h"
@@ -279,6 +280,9 @@ static void StartFrame()
 	poll_authorization();
 	poll_team_change();
 	cslua_timers_run();
+
+	// Replies land on the game thread, next to the timers.
+	cslua_http_run();
 	RETURN_META(MRES_IGNORED);
 }
 

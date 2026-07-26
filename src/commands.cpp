@@ -6,6 +6,7 @@
 #include "lua_timers.h"
 #include "lua_sound.h"
 #include "lua_db.h"
+#include "lua_http.h"
 #include "regamedll.h"
 #include "rehlds.h"
 #include "players.h"
@@ -86,10 +87,11 @@ static void cmd_lua_list()
 		g_events.count(CSLUA_EVENT_MENU_SELECT),
 		cslua_timers_count());
 
-	cslua_print("lifetime: map_change=%d plugin_unload=%d, databases open=%d",
+	cslua_print("lifetime: map_change=%d plugin_unload=%d, databases open=%d, http pending=%d",
 		g_events.count(CSLUA_EVENT_MAP_CHANGE),
 		g_events.count(CSLUA_EVENT_PLUGIN_UNLOAD),
-		cslua_db_open_count());
+		cslua_db_open_count(),
+		cslua_http_pending());
 
 	cslua_print("gameplay: spawn=%d hurt=%d/%d death=%d team=%d fire=%d round=%d/%d/%d (ReGameDLL %s)",
 		g_events.count(CSLUA_EVENT_PLAYER_SPAWN),

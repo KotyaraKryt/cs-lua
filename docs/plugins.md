@@ -89,6 +89,7 @@ plugin {
 |---|---|
 | [`store`](api/store/index.md) | key-value на SQLite |
 | [`datafile`](api/store/at.md) | чтение и запись `data/*.lua` |
+| [`json`](api/http/index.md) | разбор и сборка JSON, для ответов [`http`](api/http/index.md) |
 | [`color`](api/ui/color.md) | разбор цвета |
 | [`text`](api/ui/index.md#длина-строки) | длина строки как её считает клиент |
 | `class` | класс с наследованием |

@@ -116,6 +116,7 @@ add_library(lua_mm SHARED
 	src/lua_menu.cpp
 	src/lua_entity.cpp
 	src/lua_db.cpp
+	src/lua_http.cpp
 	src/regamedll.cpp
 	src/rehlds.cpp
 )
@@ -152,6 +153,10 @@ if(WIN32)
 		WIN32_LEAN_AND_MEAN
 		NOMINMAX
 	)
+
+	# HTTP goes through WinHTTP: it ships with Windows and does TLS through
+	# Schannel, so the module stays one file with no OpenSSL beside it.
+	target_link_libraries(lua_mm PRIVATE winhttp)
 else()
 	# metamod's own convention for a 32-bit Linux module: no "lib" prefix, an
 	# _i386 suffix.
@@ -160,6 +165,12 @@ else()
 		OUTPUT_NAME "lua_mm_i386"
 		POSITION_INDEPENDENT_CODE ON
 	)
+
+	# Workers need pthreads; libcurl is opened at run time, so it is dl that
+	# has to be here and not curl itself - no -dev package to install, and a
+	# server without libcurl still loads the module.
+	find_package(Threads REQUIRED)
+	target_link_libraries(lua_mm PRIVATE Threads::Threads ${CMAKE_DL_LIBS})
 
 	# The vendored SDK headers call a few MSVC names outright - dbg.h uses
 	# _vsnprintf, static_map.h uses _stricmp. The HL codebase maps them exactly

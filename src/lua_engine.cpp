@@ -11,6 +11,7 @@
 #include "lua_message.h"
 #include "lua_entity.h"
 #include "lua_db.h"
+#include "lua_http.h"
 #include "regamedll.h"
 #include "platform.h"
 
@@ -266,6 +267,7 @@ void LuaEngine::init()
 	cslua_register_menu(m_L);
 	cslua_register_entity(m_L);
 	cslua_register_db(m_L);
+	cslua_register_http(m_L);
 
 	// Only for code that reaches for the stock require; plugins get their own.
 	const std::string &base = cslua_base_dir();
@@ -316,6 +318,10 @@ void LuaEngine::shutdown()
 	// Detach from the game DLL before the lua_State dies, or a spawn/kill hook
 	// could fire into freed handler refs.
 	cslua_regamedll_remove_hooks();
+
+	// Disowns replies still on the wire. Not a join: waiting for the slowest
+	// request here would freeze the server for the length of a lua_reload.
+	cslua_http_reset();
 
 	g_events.clear();
 	cslua_errors_clear();
@@ -394,6 +400,7 @@ void LuaEngine::unload_plugin(int index, bool run_handlers)
 	cslua_timers_remove_plugin(index);
 	cslua_command_remove_plugin(index);
 	cslua_db_remove_plugin(index);
+	cslua_http_remove_plugin(index);
 }
 
 // One plugin, torn down and started again, with everyone else left alone.

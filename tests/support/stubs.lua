@@ -97,7 +97,7 @@ function support.reset()
 	                        "plugin", "db", "menu", "timer", "ents", "res" }) do
 		_G[name] = nil
 	end
-	for _, name in ipairs({ "datafile", "color", "text", "store" }) do
+	for _, name in ipairs({ "datafile", "color", "text", "store", "json" }) do
 		package.loaded[name] = nil
 	end
 
