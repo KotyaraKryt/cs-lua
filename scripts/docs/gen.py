@@ -69,13 +69,20 @@ def main():
         io.open(os.path.join(api_dir, name), 'w', encoding='utf-8', newline='').write(text)
 
     entries = []
+    loaded = []
     pages = 0
     for name in NAMESPACES:
         mod = importlib.import_module('api.' + name)
         entry = render.write(api_dir, mod.NS)
         entries.append(entry)
+        loaded.append(mod.NS)
         pages += 1 + sum(len(g['items']) for g in mod.NS['groups'])
 
+    io.open(os.path.join(api_dir, 'all.md'), 'w', encoding='utf-8', newline='').write(
+        render.render_all(loaded))
+    pages += 1
+
+    entries.append({'type': 'doc', 'id': 'api/all', 'label': 'Все вызовы'})
     entries.append({'type': 'doc', 'id': 'api/console', 'label': 'Консольные команды'})
 
     io.open(os.path.join(ROOT, 'website', 'sidebars.ts'), 'w',

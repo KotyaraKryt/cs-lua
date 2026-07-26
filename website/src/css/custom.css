@@ -276,3 +276,96 @@ a {
   color: var(--ifm-color-emphasis-700);
   font-size: 0.95rem;
 }
+
+
+/* ---------------------------------------------------------------------------
+   Справочник API
+   ---------------------------------------------------------------------------
+   190 страниц одной формы: заголовок, сигнатура, таблицы, пример. Правки ниже
+   отвечают на то, как такую страницу читают — глазами прыгают к сигнатуре и к
+   нужной строке таблицы, а не читают сверху вниз. */
+
+/* Сигнатура — первое, за чем сюда пришли, и она идёт сразу под H1. Отбиваем
+   её слева цветом, чтобы взгляд цеплялся за неё, а не за текст вокруг. */
+.markdown > h1 + p + div[class*='codeBlockContainer'] {
+  border-left: 3px solid var(--ifm-color-primary);
+  margin-bottom: 2rem;
+}
+
+/* Таблица аргументов - это данные, а не текст: плотнее строки, моноширинный
+   столбец типа, чтобы "number | nil" и "string" читались как один столбец. */
+.markdown table {
+  display: table;
+  width: 100%;
+  font-size: 0.92rem;
+}
+
+.markdown table td,
+.markdown table th {
+  padding: 0.45rem 0.75rem;
+  vertical-align: top;
+}
+
+.markdown table th {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ifm-color-emphasis-600);
+  font-weight: 600;
+}
+
+/* Второй столбец в таблицах аргументов и полей — всегда тип. */
+.markdown table td:nth-child(2) {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.86rem;
+  color: var(--ifm-color-emphasis-700);
+  white-space: nowrap;
+}
+
+/* Имена вызовов в меню и в таблицах моноширинные: p:health и players.get
+   должны выглядеть кодом, потому что они и есть код. */
+.menu__link {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.87rem;
+}
+
+/* Кроме разделов - они по-русски и моноширинными читаются плохо. */
+.menu__list-item-collapsible > .menu__link,
+.theme-doc-sidebar-item-category > .menu__list-item-collapsible > .menu__link {
+  font-family: var(--ifm-font-family-base);
+  font-size: 0.9rem;
+}
+
+/* Оглавление справа держится на экране: на длинной странице (players/index,
+   hook/index) без этого приходится скроллить наверх за навигацией. */
+.table-of-contents {
+  font-size: 0.84rem;
+}
+
+/* Заголовки разделов страницы - Аргументы, Возвращает, Пример - служебные.
+   Делаем их тише основного текста, чтобы не спорили с сигнатурой. */
+.markdown > h2 {
+  font-size: 1.15rem;
+  margin-top: 2rem;
+  margin-bottom: 0.6rem;
+  padding-bottom: 0.3rem;
+  border-bottom: 1px solid var(--cslua-line);
+  color: var(--ifm-color-emphasis-800);
+}
+
+.markdown > h3 {
+  font-size: 1rem;
+  margin-top: 1.5rem;
+}
+
+/* Поиск: поле в шапке заметно шире стандартного - сюда набирают имя функции,
+   а не одно слово. */
+.navbar__search-input {
+  width: 14rem;
+}
+
+@media (max-width: 996px) {
+  .navbar__search-input {
+    width: 100%;
+  }
+}

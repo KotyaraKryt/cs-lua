@@ -110,6 +110,7 @@ const sidebars: SidebarsConfig = {
             {type: 'doc', id: 'api/players/center', label: 'p:center'},
             {type: 'doc', id: 'api/players/hud', label: 'p:hud'},
             {type: 'doc', id: 'api/players/dhud', label: 'p:dhud'},
+            {type: 'doc', id: 'api/players/motd', label: 'p:motd'},
             {type: 'doc', id: 'api/players/play_sound', label: 'p:play_sound'},
           ]},
           {type: 'category', label: 'Админские действия', collapsed: true, items: [
@@ -153,6 +154,11 @@ const sidebars: SidebarsConfig = {
             {type: 'doc', id: 'api/ents/valid', label: 'e:valid'},
             {type: 'doc', id: 'api/ents/spawn', label: 'e:spawn'},
             {type: 'doc', id: 'api/ents/remove', label: 'e:remove'},
+            {type: 'doc', id: 'api/ents/keyvalue', label: 'e:keyvalue'},
+            {type: 'doc', id: 'api/ents/solid', label: 'e:solid'},
+            {type: 'doc', id: 'api/ents/movetype', label: 'e:movetype'},
+            {type: 'doc', id: 'api/ents/size', label: 'e:size'},
+            {type: 'doc', id: 'api/ents/render', label: 'e:render'},
           ]},
         ]},
         {type: 'category', label: 'res', collapsed: true, link: {type: 'doc', id: 'api/res/index'}, items: [
@@ -262,6 +268,7 @@ const sidebars: SidebarsConfig = {
           {type: 'doc', id: 'api/exports/import', label: 'import'},
           {type: 'doc', id: 'api/exports/optional', label: 'optional'},
         ]},
+        {type: 'doc', id: 'api/all', label: 'Все вызовы'},
         {type: 'doc', id: 'api/console', label: 'Консольные команды'},
       ],
     },

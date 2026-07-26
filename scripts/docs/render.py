@@ -9,6 +9,17 @@ import io
 import os
 
 
+def _mdx(text):
+    """Экранирует то, что MDX иначе съест.
+
+    Фигурные скобки в MDX - это JSX-выражение, поэтому заголовок "plugin{}"
+    отрисовывался как "plugin": пустое выражение подставляет пустоту. В
+    таблицах и ссылках имена обёрнуты в обратные кавычки и попадают в code-span,
+    там экранировать нечего - страдает только голый текст заголовка.
+    """
+    return text.replace('{', '\\{').replace('}', '\\}')
+
+
 def _table(header, rows):
     if not rows:
         return []
@@ -37,9 +48,9 @@ def render_function(fn):
             'description: "%s"' % fn['brief'].replace('"', "'").rstrip('.'),
             '---',
             '',
-            '# %s' % fn['name'],
+            '# %s' % _mdx(fn['name']),
             '',
-            fn['brief'],
+            _mdx(fn['brief']),
             '',
             '```lua',
             fn['sig'],
@@ -121,6 +132,50 @@ def _slug(fn):
     name = fn['name']
     tail = name.split('.')[-1].split(':')[-1]
     return tail.replace('{}', '').strip() or 'index'
+
+
+
+def render_all(namespaces):
+    """Плоский список всего API на одной странице.
+
+    Справочник разложен по пространствам имён, и это правильно для чтения, но
+    мешает, когда помнишь только имя вызова. Здесь всё подряд, отсортировано:
+    поиск находит эту страницу целиком, а Ctrl+F по ней работает без поиска
+    вообще.
+    """
+    rows = []
+    for ns in namespaces:
+        for group in ns['groups']:
+            for fn in group['items']:
+                rows.append((
+                    fn['name'],
+                    'api/%s/%s' % (ns['dir'], _slug(fn)),
+                    ns['label'],
+                    fn['brief'].rstrip('.'),
+                ))
+
+    # По имени без префикса: p:health и players.get стоят под h и g, то есть
+    # там, где их будут искать глазами.
+    rows.sort(key=lambda r: (r[0].split('.')[-1].split(':')[-1].lower(), r[0]))
+
+    body = ['---',
+            'title: Все вызовы',
+            'description: "Плоский список всех функций и методов cs-lua с ссылками на их страницы."',
+            '---',
+            '',
+            '# Все вызовы',
+            '',
+            'Каждая функция и метод API одной таблицей — когда помнишь имя, но не',
+            'помнишь, к какому пространству оно относится. Разложенный по темам',
+            'справочник — в [обзоре](index.md).',
+            '']
+
+    body += _table(['вызов', 'namespace', ''],
+                   [('[`%s`](%s.md)' % (name, link.replace('api/', '', 1)), label, brief)
+                    for name, link, label, brief in rows])
+
+    body.append('Всего: %d.' % len(rows))
+    return '\n'.join(body).rstrip() + '\n'
 
 
 def write(root, ns):

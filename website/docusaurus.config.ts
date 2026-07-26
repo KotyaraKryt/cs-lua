@@ -59,6 +59,28 @@ const config: Config = {
     ],
   ],
 
+  // Поиск локальный, индекс собирается при сборке и лежит рядом с сайтом.
+  // Algolia не берём: справочник по 190 функциям должен искаться и на форке, и
+  // офлайн, без чужого ключа и без похода наружу за каждым запросом.
+  themes: [
+    [
+      '@easyops-cn/docusaurus-search-local',
+      {
+        // Русский нужен со стеммингом: без него "события" не находит "событие".
+        language: ['ru', 'en'],
+        hashed: true,
+        indexBlog: false,
+        docsRouteBasePath: '/docs',
+        // Имя вызова живёт в заголовке страницы, поэтому вес заголовков выше
+        // обычного: по "p:health" должна находиться его страница, а не десяток
+        // упоминаний в примерах.
+        searchResultLimits: 12,
+        searchResultContextMaxLength: 80,
+        highlightSearchTermsOnTargetPage: true,
+      },
+    ],
+  ],
+
   themeConfig: {
     colorMode: {
       defaultMode: 'dark',
