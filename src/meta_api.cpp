@@ -114,7 +114,7 @@ const std::string &cslua_base_dir()
 // e:cancel()) can have that message swallowed before any client sees it -
 // see cslua_corpse.cpp for why blocking has to happen at this level and not
 // after the fact.
-static int GetEngineFunctions(enginefuncs_t *pengfuncsFromEngine, int *interfaceVersion)
+C_DLLEXPORT int GetEngineFunctions(enginefuncs_t *pengfuncsFromEngine, int *interfaceVersion)
 {
 	if (!pengfuncsFromEngine) {
 		ALERT(at_logged, "%s called with null pengfuncsFromEngine", __FUNCTION__);
