@@ -2,6 +2,10 @@
 
 #include <lua.hpp>
 
+#include <string>
+#include <utility>
+#include <vector>
+
 // Outbound HTTP for plugins.
 //
 //   http.get("https://example.com/api", function(res)
@@ -43,3 +47,11 @@ void cslua_http_remove_plugin(int plugin_index);
 
 // How many requests are waiting or running, for lua_list.
 int cslua_http_pending();
+
+// Blocking GET on the calling thread, using the same transport as the async
+// API above. For engine code that runs before any Lua state or worker thread
+// exists - see cslua_bootstrap.cpp. Never call this once plugins are
+// running: there is no queue here, the caller simply waits.
+bool cslua_http_get_sync(const std::string &url,
+	const std::vector<std::pair<std::string, std::string> > &headers,
+	int timeout_ms, std::string &out_body, int &out_status, std::string &out_error);

@@ -1,4 +1,5 @@
 #include "cslua.h"
+#include "cslua_bootstrap.h"
 #include "lua_http.h"
 #include "lua_httpserver.h"
 
@@ -141,6 +142,11 @@ C_DLLEXPORT int Meta_Attach(PLUG_LOADTIME now, META_FUNCTIONS *pFunctionTable, m
 	// server and stop plugins before the 512-slot tables overflow.
 	if (cslua_rehlds_init())
 		cslua_sound_install_hooks();
+
+	// Before anything reads addons/lua/core: a module dropped in on its own,
+	// with no scripts/ copied over by hand, gets the runtime layer fetched
+	// here instead of failing to find a single core function.
+	cslua_bootstrap_if_missing();
 
 	cslua_register_commands();
 	g_lua.init();

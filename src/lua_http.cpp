@@ -422,6 +422,39 @@ static void perform(const Request &req, Response &res)
 #endif
 
 // ---------------------------------------------------------------------------
+// Synchronous entry point, for engine code with no worker thread and no Lua
+// state to come back to yet.
+
+bool cslua_http_get_sync(const std::string &url,
+	const std::vector<std::pair<std::string, std::string> > &headers,
+	int timeout_ms, std::string &out_body, int &out_status, std::string &out_error)
+{
+	Request req;
+	req.id = 0;
+	req.plugin = -1;
+	req.callback = LUA_NOREF;
+	req.generation = 0;
+	req.method = "GET";
+	req.url = url;
+	req.timeout_ms = timeout_ms;
+
+	for (size_t i = 0; i < headers.size(); i++) {
+		Header h;
+		h.name = headers[i].first;
+		h.value = headers[i].second;
+		req.headers.push_back(h);
+	}
+
+	Response res;
+	perform(req, res);
+
+	out_body = res.body;
+	out_status = res.status;
+	out_error = res.error;
+	return res.ok;
+}
+
+// ---------------------------------------------------------------------------
 // Workers
 
 static void worker_loop()
