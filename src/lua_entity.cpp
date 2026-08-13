@@ -3,6 +3,7 @@
 #include "lua_entity.h"
 #include "lua_natives.h"
 #include "lua_sound.h"
+#include "cslua_corpse.h"
 
 #include <string.h>
 #include <vector>
@@ -404,6 +405,87 @@ static int l_size(lua_State *L)
 	return 0;
 }
 
+// e:sequence([n]) - which studio animation the model plays. Numeric only:
+// the engine has no by-name lookup exposed here (LookupSequence is a
+// CBaseAnimating method that parses the compiled .mdl's sequence table
+// directly, not an engfunc), so finding "death1" means trying indices
+// against a model and watching what plays.
+static int l_sequence(lua_State *L)
+{
+	edict_t *e = self_edict(L);
+
+	if (lua_isnoneornil(L, 2)) {
+		lua_pushinteger(L, e->v.sequence);
+		return 1;
+	}
+
+	e->v.sequence = (int)luaL_checkinteger(L, 2);
+	return 0;
+}
+
+// e:frame([n]) - position within the current sequence, 0-255 regardless of
+// how many frames the sequence actually has (GoldSrc transmits it as a
+// normalized byte, not a real frame index). 255 with framerate 0 freezes on
+// the last pose instead of looping - the "corpse" trick: play nothing, just
+// show where the animation would have ended up.
+static int l_frame(lua_State *L)
+{
+	edict_t *e = self_edict(L);
+
+	if (lua_isnoneornil(L, 2)) {
+		lua_pushnumber(L, e->v.frame);
+		return 1;
+	}
+
+	e->v.frame = (float)luaL_checknumber(L, 2);
+	return 0;
+}
+
+// e:framerate([n]) - playback speed, 1.0 normal. 0 stops the animation
+// exactly where e:frame() put it instead of advancing from there.
+static int l_framerate(lua_State *L)
+{
+	edict_t *e = self_edict(L);
+
+	if (lua_isnoneornil(L, 2)) {
+		lua_pushnumber(L, e->v.framerate);
+		return 1;
+	}
+
+	e->v.framerate = (float)luaL_checknumber(L, 2);
+	return 0;
+}
+
+// e:body([n]) / e:skin([n]) - which sub-model and which texture group a
+// multi-body studio model shows. Player models use body to swap gun holsters
+// etc. and skin for the team/camo variant - both purely cosmetic, no physics
+// weight.
+static int l_body(lua_State *L)
+{
+	edict_t *e = self_edict(L);
+
+	if (lua_isnoneornil(L, 2)) {
+		lua_pushinteger(L, e->v.body);
+		return 1;
+	}
+
+	e->v.body = (int)luaL_checkinteger(L, 2);
+	return 0;
+}
+
+static int l_skin(lua_State *L)
+{
+	edict_t *e = self_edict(L);
+
+	if (lua_isnoneornil(L, 2)) {
+		lua_pushinteger(L, e->v.skin);
+		return 1;
+	}
+
+	e->v.skin = (int)luaL_checkinteger(L, 2);
+	return 0;
+}
+
 // e:render{ mode =, amount =, color =, fx = } - transparency and glow.
 // An options table rather than five positional numbers: nobody remembers which
 // of them was renderfx.
@@ -473,14 +555,34 @@ static const luaL_Reg s_methods[] =
 	{ "movetype",  l_movetype },
 	{ "size",      l_size },
 	{ "render",    l_render },
+	{ "sequence",  l_sequence },
+	{ "frame",     l_frame },
+	{ "framerate", l_framerate },
+	{ "body",      l_body },
+	{ "skin",      l_skin },
 	{ NULL, NULL }
 };
 
+// ents.hide_corpses(true) - swallow every player's native death ragdoll
+// (ClCorpse) before it reaches any client; ents.hide_corpses(false) lets it
+// through again. No per-player targeting - see cslua_corpse.cpp for why -
+// so a script that wants some deaths to keep their ragdoll and others not
+// cannot use this for the second half; it can only turn the tap on and off
+// globally. Reference-counted: call it once per corpse tracked, matching
+// pairs, and it stays on for as long as any caller still wants it on.
+static int l_hide_corpses(lua_State *L)
+{
+	luaL_checktype(L, 1, LUA_TBOOLEAN);
+	cslua_corpse_hide_ref(lua_toboolean(L, 1) != 0);
+	return 0;
+}
+
 static const luaL_Reg s_api[] =
 {
-	{ "create",    l_create_entity },
-	{ "find",      l_entities },
-	{ "in_sphere", l_find_in_sphere },
+	{ "create",       l_create_entity },
+	{ "find",         l_entities },
+	{ "in_sphere",    l_find_in_sphere },
+	{ "hide_corpses", l_hide_corpses },
 	{ NULL, NULL }
 };
 

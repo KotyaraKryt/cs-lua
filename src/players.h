@@ -28,6 +28,28 @@ public:
 	// True once the final authid is known and player_authorized has fired.
 	bool is_authorized(int id) const;
 
+	// Whether pfnPlayerPreThink (dllapi.cpp) strips IN_ATTACK/IN_ATTACK2 from
+	// this player's button state before the weapon code ever sees it this
+	// frame - see p:suppress_attack in lua_player.cpp for why blocking here
+	// beats anything after the fact (weapon_fire only fires once the shot,
+	// sound and animation already happened).
+	void set_suppress_attack(int id, bool suppress);
+	bool suppress_attack(int id) const;
+
+	// Same idea, for IN_FORWARD/IN_BACK/IN_MOVELEFT/IN_MOVERIGHT - pinning a
+	// player in place without touching FL_FROZEN, which turned out to zero
+	// pev->button along with movement (see p:suppress_move in lua_player.cpp).
+	void set_suppress_move(int id, bool suppress);
+	bool suppress_move(int id) const;
+
+	// Blocks the "drop" client command outright (dllapi.cpp's ClientCommand,
+	// which runs before the game DLL ever sees it) rather than trying to
+	// undo a drop after the fact - the weapon that hits the ground becomes
+	// its own edict with its own ammo, out of reach of anything read or
+	// written through the player who no longer holds it.
+	void set_suppress_drop(int id, bool suppress);
+	bool suppress_drop(int id) const;
+
 private:
 	static bool valid(int id) { return id >= 1 && id < CSLUA_MAXPLAYERS; }
 
@@ -38,6 +60,9 @@ private:
 		std::string name;
 		std::string ip;
 		std::string authid;
+		bool suppress_attack = false;
+		bool suppress_move = false;
+		bool suppress_drop = false;
 	};
 
 	Info m_players[CSLUA_MAXPLAYERS];

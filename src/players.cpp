@@ -65,6 +65,39 @@ bool Players::is_authorized(int id) const
 	return valid(id) && m_players[id].connected && m_players[id].authorized;
 }
 
+void Players::set_suppress_attack(int id, bool suppress)
+{
+	if (valid(id))
+		m_players[id].suppress_attack = suppress;
+}
+
+bool Players::suppress_attack(int id) const
+{
+	return valid(id) && m_players[id].suppress_attack;
+}
+
+void Players::set_suppress_move(int id, bool suppress)
+{
+	if (valid(id))
+		m_players[id].suppress_move = suppress;
+}
+
+bool Players::suppress_move(int id) const
+{
+	return valid(id) && m_players[id].suppress_move;
+}
+
+void Players::set_suppress_drop(int id, bool suppress)
+{
+	if (valid(id))
+		m_players[id].suppress_drop = suppress;
+}
+
+bool Players::suppress_drop(int id) const
+{
+	return valid(id) && m_players[id].suppress_drop;
+}
+
 bool Players::refresh_authid(int id)
 {
 	if (!authid_pending(id))

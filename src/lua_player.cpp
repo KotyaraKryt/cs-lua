@@ -1,5 +1,6 @@
 #include "cslua.h"
 #include <regamedll_api.h>
+#include <in_buttons.h>
 
 #include "lua_player.h"
 #include "lua_message.h"
@@ -351,6 +352,41 @@ static int l_ducking(lua_State *L)
 	return 1;
 }
 
+// Name -> IN_* bit, for p:button(). Only the ones a script can plausibly want
+// to poll; the rest of usercmd (mouse deltas, impulse) has no bit to check.
+static int button_bit(const char *name)
+{
+	if (!strcmp(name, "attack"))   return IN_ATTACK;
+	if (!strcmp(name, "attack2"))  return IN_ATTACK2;
+	if (!strcmp(name, "jump"))     return IN_JUMP;
+	if (!strcmp(name, "duck"))     return IN_DUCK;
+	if (!strcmp(name, "use"))      return IN_USE;
+	if (!strcmp(name, "reload"))   return IN_RELOAD;
+	if (!strcmp(name, "forward"))  return IN_FORWARD;
+	if (!strcmp(name, "back"))     return IN_BACK;
+	if (!strcmp(name, "moveleft")) return IN_MOVELEFT;
+	if (!strcmp(name, "moveright"))return IN_MOVERIGHT;
+	return 0;
+}
+
+// p:button("use") - true while the player holds that key down, read fresh off
+// pev->button every call. This is the same field AMXX's var_button reads: the
+// engine writes it from the client's usercmd before every PlayerPreThink, live
+// entvars, no hook needed on our side.
+//
+// Read-only: the client owns this field, and writing it would just get
+// overwritten by the next usercmd a frame later.
+static int l_button(lua_State *L)
+{
+	const char *name = luaL_checkstring(L, 2);
+	int bit = button_bit(name);
+	if (!bit)
+		return luaL_error(L, "button: unknown button '%s'", name);
+
+	lua_pushboolean(L, (self_pev(L)->button & bit) != 0);
+	return 1;
+}
+
 // FL_FAKECLIENT marks a server-side bot; FL_PROXY marks an HLTV spectator
 // proxy. Both live in entvars, so they work without ReGameDLL.
 static int l_is_bot(lua_State *L)
@@ -426,6 +462,78 @@ static int l_noclip(lua_State *L)
 	return 0;
 }
 
+// p:noblock([bool]) - true lets other players walk through this one instead
+// of shoving them apart. SOLID_NOT only affects how OTHER entities treat this
+// one (their hull traces skip it); it does not touch this player's own
+// movement against the level, which PM_Move clips against the world
+// directly - so unlike noclip this cannot drop someone through the floor.
+// SOLID_SLIDEBOX is the normal value a live player has.
+static int l_noblock(lua_State *L)
+{
+	entvars_t *pev = self_pev(L);
+
+	if (lua_isnoneornil(L, 2)) {
+		lua_pushboolean(L, pev->solid == SOLID_NOT);
+		return 1;
+	}
+
+	pev->solid = lua_toboolean(L, 2) ? SOLID_NOT : SOLID_SLIDEBOX;
+	return 0;
+}
+
+// p:suppress_attack([bool]) - true drops IN_ATTACK/IN_ATTACK2 from this
+// player's button state every frame (dllapi.cpp's pfnPlayerPreThink),
+// before the weapon code sees it: held-down fire never happens at all,
+// rather than firing and then having its damage or effects undone.
+static int l_suppress_attack(lua_State *L)
+{
+	int id = self_player_id(L);
+
+	if (lua_isnoneornil(L, 2)) {
+		lua_pushboolean(L, g_players.suppress_attack(id));
+		return 1;
+	}
+
+	g_players.set_suppress_attack(id, lua_toboolean(L, 2) != 0);
+	return 0;
+}
+
+// p:suppress_move([bool]) - true drops IN_FORWARD/IN_BACK/IN_MOVELEFT/
+// IN_MOVERIGHT from this player's button state every frame, the same way
+// p:suppress_attack drops the fire buttons. Pins them in place without
+// FL_FROZEN (p:freeze) - that flag turned out to zero pev->button along
+// with movement, which is exactly the field a "hold USE to keep going"
+// mechanic reads every tick to see if the key is still down.
+static int l_suppress_move(lua_State *L)
+{
+	int id = self_player_id(L);
+
+	if (lua_isnoneornil(L, 2)) {
+		lua_pushboolean(L, g_players.suppress_move(id));
+		return 1;
+	}
+
+	g_players.set_suppress_move(id, lua_toboolean(L, 2) != 0);
+	return 0;
+}
+
+// p:suppress_drop([bool]) - true blocks the "drop" console command outright
+// (dllapi.cpp's ClientCommand, before the game DLL sees it), so the current
+// weapon can never become a separate on-the-ground entity with its own ammo
+// in the first place.
+static int l_suppress_drop(lua_State *L)
+{
+	int id = self_player_id(L);
+
+	if (lua_isnoneornil(L, 2)) {
+		lua_pushboolean(L, g_players.suppress_drop(id));
+		return 1;
+	}
+
+	g_players.set_suppress_drop(id, lua_toboolean(L, 2) != 0);
+	return 0;
+}
+
 // The CS-specific methods below need ReGameDLL: they reach into CBasePlayer.
 // On a vanilla mp.dll they raise a clear error instead of reading garbage.
 static CBasePlayer *self_cbase(lua_State *L)
@@ -473,6 +581,23 @@ static const char *team_name(int team)
 	case SPECTATOR: return "SPEC";
 	default:        return "NONE";
 	}
+}
+
+// p:progress_bar(seconds) - the same under-crosshair progress bar the game
+// shows for planting/defusing the bomb, driven by CSPlayer's own
+// SetProgressBarTime (ICSPlayer, CSPlayer.h). The client counts it down on
+// its own once sent - there is nothing to update per frame - so this is a
+// one-shot trigger, not a readable value. 0 clears the bar early, the way
+// letting go of the plant/defuse key does.
+static int l_progress_bar(lua_State *L)
+{
+	CBasePlayer *player = self_cbase(L);
+	int seconds = (int)luaL_checknumber(L, 2);
+	if (seconds < 0)
+		seconds = 0;
+
+	player->CSPlayer()->SetProgressBarTime(seconds);
+	return 0;
 }
 
 // p:team() reads "CT"/"T"/"SPEC"/"NONE".
@@ -1128,6 +1253,7 @@ static const luaL_Reg s_queries[] =
 	{ "trace",     l_trace },
 	{ "trace_to",  l_trace_to },
 	{ "alive",     l_alive },
+	{ "button",    l_button },
 	{ "on_ground", l_on_ground },
 	{ "ducking",   l_ducking },
 	{ "is_bot",    l_is_bot },
@@ -1135,6 +1261,10 @@ static const luaL_Reg s_queries[] =
 	{ "freeze",    l_freeze },
 	{ "godmode",   l_godmode },
 	{ "noclip",    l_noclip },
+	{ "noblock",   l_noblock },
+	{ "suppress_attack", l_suppress_attack },
+	{ "suppress_move",   l_suppress_move },
+	{ "suppress_drop",   l_suppress_drop },
 
 	// Admin actions: kick, ban and exec are pure engine, no ReGameDLL needed.
 	{ "kick",      l_kick },
@@ -1142,7 +1272,8 @@ static const luaL_Reg s_queries[] =
 	{ "exec",      l_exec },
 
 	// ReGameDLL-only: raise an error on a vanilla mp.dll
-	{ "team",      l_team },
+	{ "team",         l_team },
+	{ "progress_bar", l_progress_bar },
 	{ "spawn",     l_spawn },
 	{ "money",     l_money },
 	{ "deaths",    l_deaths },

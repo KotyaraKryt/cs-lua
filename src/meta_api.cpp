@@ -10,6 +10,7 @@
 #include "rehlds.h"
 #include "lua_sound.h"
 #include "lua_message.h"
+#include "cslua_corpse.h"
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -108,6 +109,27 @@ const std::string &cslua_base_dir()
 	return dir;
 }
 
+// pfnMessageBegin and its Write*/pfnMessageEnd siblings, so a script asking
+// to hide a death's native ragdoll (hook.add("player_corpse", ...) +
+// e:cancel()) can have that message swallowed before any client sees it -
+// see cslua_corpse.cpp for why blocking has to happen at this level and not
+// after the fact.
+static int GetEngineFunctions(enginefuncs_t *pengfuncsFromEngine, int *interfaceVersion)
+{
+	if (!pengfuncsFromEngine) {
+		ALERT(at_logged, "%s called with null pengfuncsFromEngine", __FUNCTION__);
+		return FALSE;
+	}
+	if (*interfaceVersion != ENGINE_INTERFACE_VERSION) {
+		ALERT(at_logged, "%s version mismatch; requested=%d ours=%d", __FUNCTION__, *interfaceVersion, ENGINE_INTERFACE_VERSION);
+		*interfaceVersion = ENGINE_INTERFACE_VERSION;
+		return FALSE;
+	}
+
+	memcpy(pengfuncsFromEngine, &g_CsluaCorpseEngineFuncs, sizeof(enginefuncs_t));
+	return TRUE;
+}
+
 META_FUNCTIONS gMetaFunctionTable =
 {
 	NULL,						// pfnGetEntityAPI			HL SDK; called before game DLL
@@ -116,7 +138,7 @@ META_FUNCTIONS gMetaFunctionTable =
 	GetEntityAPI2_Post,			// pfnGetEntityAPI2_Post	META; called after game DLL
 	GetNewDLLFunctions,			// pfnGetNewDLLFunctions	HL SDK2; called before game DLL
 	GetNewDLLFunctions_Post,	// pfnGetNewDLLFunctions_Post	META; called after game DLL
-	NULL,						// pfnGetEngineFunctions	META; called before HL engine
+	GetEngineFunctions,			// pfnGetEngineFunctions	META; called before HL engine
 	NULL,						// pfnGetEngineFunctions_Post	META; called after HL engine
 };
 

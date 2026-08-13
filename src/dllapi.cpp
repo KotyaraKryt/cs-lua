@@ -10,6 +10,7 @@
 #include "players.h"
 #include "regamedll.h"
 
+#include <in_buttons.h>
 #include <string.h>
 
 // Defined further down, next to the polls they reset.
@@ -124,6 +125,14 @@ static void ClientCommand(edict_t *pEntity)
 	if (cslua_menu_handle_select(g_engfuncs.pfnIndexOfEdict(pEntity), cmd))
 		RETURN_META(MRES_SUPERCEDE);
 
+	int id = g_engfuncs.pfnIndexOfEdict(pEntity);
+
+	// Superceded outright: the game DLL's own "drop" handler never runs, so
+	// there is no weapon entity in the world to have lost its ammo in the
+	// first place - see p:suppress_drop in lua_player.cpp.
+	if (!strcmp(cmd, "drop") && g_players.suppress_drop(id))
+		RETURN_META(MRES_SUPERCEDE);
+
 	bool team = !strcmp(cmd, "say_team");
 	if (!team && strcmp(cmd, "say"))
 		RETURN_META(MRES_IGNORED);
@@ -133,7 +142,6 @@ static void ClientCommand(edict_t *pEntity)
 	if (!text || !*text)
 		RETURN_META(MRES_IGNORED);
 
-	int id = g_engfuncs.pfnIndexOfEdict(pEntity);
 	if (g_events.fire_player_chat(id, text, team))
 		RETURN_META(MRES_SUPERCEDE);
 
@@ -147,6 +155,21 @@ static void ClientCommand(edict_t *pEntity)
 static void Touch(edict_t *pentTouched, edict_t *pentOther)
 {
 	cslua_touch_detonate_check(pentTouched);
+	RETURN_META(MRES_IGNORED);
+}
+
+// Runs before the engine (and the weapon code inside it) reads this frame's
+// button state at all, so clearing IN_ATTACK/IN_ATTACK2 here means the shot
+// never happens - no muzzle flash, no sound, no ammo spent - unlike blocking
+// after the fact (FireBullets, weapon_fire), which runs once the gun has
+// already gone off.
+static void PlayerPreThink(edict_t *pEntity)
+{
+	int id = g_engfuncs.pfnIndexOfEdict(pEntity);
+	if (g_players.suppress_attack(id))
+		pEntity->v.button &= ~(IN_ATTACK | IN_ATTACK2);
+	if (g_players.suppress_move(id))
+		pEntity->v.button &= ~(IN_FORWARD | IN_BACK | IN_MOVELEFT | IN_MOVERIGHT);
 	RETURN_META(MRES_IGNORED);
 }
 
@@ -187,7 +210,7 @@ DLL_FUNCTIONS g_DllFunctionTable =
 	NULL,					// pfnClientUserInfoChanged
 	ServerActivate,			// pfnServerActivate
 	ServerDeactivate,		// pfnServerDeactivate
-	NULL,					// pfnPlayerPreThink
+	PlayerPreThink,			// pfnPlayerPreThink
 	NULL,					// pfnPlayerPostThink
 	NULL,					// pfnStartFrame
 	NULL,					// pfnParmsNewLevel

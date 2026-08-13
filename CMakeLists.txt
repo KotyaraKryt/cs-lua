@@ -122,6 +122,7 @@ add_library(lua_mm SHARED
 	src/lua_httpserver.cpp
 	src/regamedll.cpp
 	src/rehlds.cpp
+	src/cslua_corpse.cpp
 )
 
 target_include_directories(lua_mm PRIVATE
