@@ -219,29 +219,11 @@ static int l_aim(lua_State *L)
 	return 3;
 }
 
-// p:trace([distance]) - fire a ray from the player's eyes along their aim and
-// report the first thing it meets. p:aim() gives the direction but nothing to
-// aim at; everything of the "what am I looking at" kind (HP over the crosshair,
-// a laser, zone triggers) needs the ray.
-//
-// The result is a table rather than a row of returns: the fields are of mixed
-// types, and a positional kind, player, classname, x, y, z, distance reads
-// badly and cannot grow later.
-static int l_trace(lua_State *L)
+// Shared by l_trace and l_trace_to: turns a finished TraceResult into the
+// { kind, player, classname, x, y, z, distance, hitgroup } table both hand
+// back. `start` is only needed to compute distance.
+static void push_trace_result(lua_State *L, const TraceResult &tr, const Vector &start)
 {
-	int id = self_player_id(L);
-	entvars_t *pev = self_pev(L);
-	float distance = (float)luaL_optnumber(L, 2, 8192.0);
-
-	// v_angle is the client's view; MAKE_VECTORS turns it into v_forward.
-	MAKE_VECTORS(pev->v_angle);
-
-	Vector start = pev->origin + pev->view_ofs;
-	Vector end = start + gpGlobals->v_forward * distance;
-
-	TraceResult tr;
-	TRACE_LINE(start, end, dont_ignore_monsters, g_engfuncs.pfnPEntityOfEntIndex(id), &tr);
-
 	lua_newtable(L);
 
 	// A trace that ran the whole way hit nothing. The coordinates are still
@@ -283,7 +265,70 @@ static int l_trace(lua_State *L)
 
 	lua_pushinteger(L, tr.iHitgroup);
 	lua_setfield(L, -2, "hitgroup");
+}
 
+// p:trace([distance]) - fire a ray from the player's eyes along their aim and
+// report the first thing it meets. p:aim() gives the direction but nothing to
+// aim at; everything of the "what am I looking at" kind (HP over the crosshair,
+// a laser, zone triggers) needs the ray.
+//
+// The result is a table rather than a row of returns: the fields are of mixed
+// types, and a positional kind, player, classname, x, y, z, distance reads
+// badly and cannot grow later.
+static int l_trace(lua_State *L)
+{
+	int id = self_player_id(L);
+	entvars_t *pev = self_pev(L);
+	float distance = (float)luaL_optnumber(L, 2, 8192.0);
+
+	// v_angle is the client's view; MAKE_VECTORS turns it into v_forward.
+	MAKE_VECTORS(pev->v_angle);
+
+	Vector start = pev->origin + pev->view_ofs;
+	Vector end = start + gpGlobals->v_forward * distance;
+
+	TraceResult tr;
+	TRACE_LINE(start, end, dont_ignore_monsters, g_engfuncs.pfnPEntityOfEntIndex(id), &tr);
+
+	push_trace_result(L, tr, start);
+	return 1;
+}
+
+// p:trace_to(other) - a line from p's eyes straight to other's eyes, not
+// along p's current crosshair. p:trace() answers "what is p looking at
+// right now"; this answers "is there anything solid between p and other" -
+// the question that actually matters for "did p have a clear shot at other",
+// since weapon spread and recoil can point the crosshair somewhere other
+// than where the bullet that hit `other` actually went. Aiming at the real
+// target instead of guessing the shot's direction sidesteps that entirely.
+static int l_trace_to(lua_State *L)
+{
+	int id = self_player_id(L);
+	entvars_t *pev = self_pev(L);
+
+	luaL_checktype(L, 2, LUA_TTABLE);
+	lua_getfield(L, 2, "id");
+	if (!lua_isnumber(L, -1))
+		return luaL_error(L, "trace_to: expected a player object");
+	int other_id = (int)lua_tointeger(L, -1);
+	lua_pop(L, 1);
+
+	if (other_id <= 0 || other_id >= CSLUA_MAXPLAYERS || !g_players.is_connected(other_id))
+		return luaL_error(L, "trace_to: target player is not connected");
+
+	edict_t *other_edict = g_engfuncs.pfnPEntityOfEntIndex(other_id);
+	if (!other_edict || other_edict->free)
+		return luaL_error(L, "trace_to: target player has no valid entity");
+
+	entvars_t *other_pev = &other_edict->v;
+
+	Vector start = pev->origin + pev->view_ofs;
+	Vector end = other_pev->origin + other_pev->view_ofs;
+
+	TraceResult tr;
+	TRACE_LINE(start, end, dont_ignore_monsters, g_engfuncs.pfnPEntityOfEntIndex(id), &tr);
+
+	push_trace_result(L, tr, start);
 	return 1;
 }
 
@@ -1081,6 +1126,7 @@ static const luaL_Reg s_queries[] =
 	{ "velocity",  l_velocity },
 	{ "aim",       l_aim },
 	{ "trace",     l_trace },
+	{ "trace_to",  l_trace_to },
 	{ "alive",     l_alive },
 	{ "on_ground", l_on_ground },
 	{ "ducking",   l_ducking },

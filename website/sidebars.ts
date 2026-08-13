@@ -94,6 +94,7 @@ const sidebars: SidebarsConfig = {
             {type: 'doc', id: 'api/players/godmode', label: 'p:godmode'},
             {type: 'doc', id: 'api/players/noclip', label: 'p:noclip'},
             {type: 'doc', id: 'api/players/trace', label: 'p:trace'},
+            {type: 'doc', id: 'api/players/trace_to', label: 'p:trace_to'},
           ]},
           {type: 'category', label: 'CS-состояние', collapsed: true, items: [
             {type: 'doc', id: 'api/players/team', label: 'p:team'},

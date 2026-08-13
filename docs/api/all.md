@@ -187,6 +187,7 @@ description: "Плоский список всех функций и метод�
 | [`p:team`](players/team.md) | players | Читает или меняет сторону игрока |
 | [`sv.time`](sv/time.md) | sv | Серверные часы в секундах |
 | [`p:trace`](players/trace.md) | players | Пускает луч из глаз игрока туда, куда он смотрит |
+| [`p:trace_to`](players/trace_to.md) | players | Пускает луч из глаз игрока прямо к другому игроку |
 | [`db:transaction`](db/transaction.md) | db | Выполняет блок одной транзакцией |
 | [`access.user`](access/user.md) | access | Одна запись из `users.lua` |
 | [`p:userid`](players/userid.md) | players | Userid движка |
@@ -199,4 +200,4 @@ description: "Плоский список всех функций и метод�
 | [`p:weapons`](players/weapons.md) | players | Массив classname всего, что несёт игрок |
 | [`p:weight`](players/weight.md) | players | Вес игрока для иммунитета |
 
-Всего: 187.
+Всего: 188.

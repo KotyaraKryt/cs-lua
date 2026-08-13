@@ -183,11 +183,57 @@ static int l_sprite_trail(lua_State *L)
 	return 0;
 }
 
+// fx.beam(x1, y1, z1, x2, y2, z2, opts) - a straight line between two exact
+// points, unlike beam_cylinder/sprite_trail which only take one point plus a
+// height. For drawing a line between two known things (a shot's path, a
+// visibility check) rather than an effect radiating from a single origin.
+static int l_beam(lua_State *L)
+{
+	Vector start, endpoint;
+	read_origin(L, 1, start);
+	read_origin(L, 4, endpoint);
+	luaL_checktype(L, 7, LUA_TTABLE);
+
+	int index = model_index(require_sprite(L, 7));
+	int framerate = opt_int(L, 7, "framerate", 0);
+	int life = (int)(opt_float(L, 7, "life", 0.3f) * 10.0f);
+	int width = opt_int(L, 7, "width", 5);
+	int noise = opt_int(L, 7, "noise", 0);
+	int r, g, b;
+	opt_color(L, 7, r, g, b);
+	int brightness = opt_int(L, 7, "brightness", 255);
+	int speed = opt_int(L, 7, "speed", 0);
+
+	MESSAGE_BEGIN(MSG_PVS, SVC_TEMPENTITY, start, (edict_t *)NULL);
+	WRITE_BYTE(TE_BEAMPOINTS);
+	WRITE_COORD(start.x);
+	WRITE_COORD(start.y);
+	WRITE_COORD(start.z);
+	WRITE_COORD(endpoint.x);
+	WRITE_COORD(endpoint.y);
+	WRITE_COORD(endpoint.z);
+	WRITE_SHORT(index);
+	WRITE_BYTE(0);				// start frame
+	WRITE_BYTE(framerate);
+	WRITE_BYTE(life);
+	WRITE_BYTE(width);
+	WRITE_BYTE(noise);
+	WRITE_BYTE(r);
+	WRITE_BYTE(g);
+	WRITE_BYTE(b);
+	WRITE_BYTE(brightness);
+	WRITE_BYTE(speed);
+	MESSAGE_END();
+
+	return 0;
+}
+
 static const luaL_Reg s_fx[] =
 {
 	{ "explosion", l_explosion },
 	{ "beam_cylinder", l_beam_cylinder },
 	{ "sprite_trail", l_sprite_trail },
+	{ "beam", l_beam },
 	{ NULL, NULL }
 };
 
