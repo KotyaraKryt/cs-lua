@@ -59,6 +59,7 @@ description: "Плоский список всех функций и метод�
 | [`access.declare`](access/declare.md) | access | Объявляет ноду прав |
 | [`s:delete`](store/delete.md) | store | Удаляет ключ |
 | [`timer.destroy`](timer/destroy.md) | timer | Снимает именованный таймер этого плагина |
+| [`e:detonate_on_touch`](ents/detonate_on_touch.md) | ents | Следующее касание сразу запускает think сущности |
 | [`p:dhud`](players/dhud.md) | players | То же через `SVC_DIRECTOR` — directed HUD |
 | [`datafile.dir`](store/dir.md) | store | Каталог, к которому привязан модуль |
 | [`plugin.dir`](plugin/dir.md) | plugin | Абсолютный путь к папке плагина |
@@ -84,8 +85,9 @@ description: "Плоский список всех функций и метод�
 | [`p:godmode`](players/godmode.md) | players | Неуязвимость |
 | [`access.grant`](access/grant.md) | access | Выдаёт права по ключу |
 | [`p:gravity`](players/gravity.md) | players | Множитель гравитации |
-| [`grenade_explode`](hook/grenade_explode.md) | hook | Граната HE вот-вот взорвётся |
-| [`grenade_thrown`](hook/grenade_thrown.md) | hook | HE-граната только что покинула руку |
+| [`grenade_explode`](hook/grenade_explode.md) | hook | HE- или дымовая граната вот-вот взорвётся |
+| [`grenade_throw`](hook/grenade_throw.md) | hook | HE- или дымовая граната вот-вот покинёт руку |
+| [`grenade_thrown`](hook/grenade_thrown.md) | hook | HE- или дымовая граната только что покинула руку |
 | [`access.group`](access/group.md) | access | Одна группа по имени |
 | [`p:group`](players/group.md) | players | Состоит ли игрок в группе, с учётом наследования |
 | [`p:groups`](players/groups.md) | players | Массив групп игрока |
@@ -197,4 +199,4 @@ description: "Плоский список всех функций и метод�
 | [`p:weapons`](players/weapons.md) | players | Массив classname всего, что несёт игрок |
 | [`p:weight`](players/weight.md) | players | Вес игрока для иммунитета |
 
-Всего: 185.
+Всего: 187.

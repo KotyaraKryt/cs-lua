@@ -22,6 +22,11 @@ players.broadcast:play_sound("items/9mmclip1.wav")
 [`chat`](chat.md), [`console`](console.md), [`center`](center.md),
 [`hud`](hud.md), [`dhud`](dhud.md), [`play_sound`](play_sound.md).
 
+`play_sound` тут — один `EMIT_SOUND` от первого подключённого игрока, а не
+цикл по всем: `EMIT_SOUND` и так слышен всем, у кого PAS накрывает точку
+излучения, повторять его на каждого — значит дать части слушателей услышать
+один и тот же клип по два-три раза подряд.
+
 > [!WARNING]
 > Состояния у него нет: `players.broadcast:alive()` бросает ошибку
 > с объяснением. Для чтения и записи состояния перебирай

@@ -61,8 +61,9 @@ end)
 | [`player_team_change`](player_team_change.md) | Игрок сменил сторону |
 | [`weapon_fire`](weapon_fire.md) | Из ствола вышел выстрел |
 | [`weapon_deploy`](weapon_deploy.md) | Оружие вот-вот покажет вьюмодель и модель в руках |
-| [`grenade_explode`](grenade_explode.md) | Граната HE вот-вот взорвётся |
-| [`grenade_thrown`](grenade_thrown.md) | HE-граната только что покинула руку |
+| [`grenade_throw`](grenade_throw.md) | HE- или дымовая граната вот-вот покинёт руку |
+| [`grenade_thrown`](grenade_thrown.md) | HE- или дымовая граната только что покинула руку |
+| [`grenade_explode`](grenade_explode.md) | HE- или дымовая граната вот-вот взорвётся |
 
 ## Раунд и бомба
 

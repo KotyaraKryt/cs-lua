@@ -34,8 +34,9 @@ static const char *const s_event_names[CSLUA_EVENT_COUNT] =
 	"bomb_planted",
 	"bomb_defused",
 	"bomb_exploded",
-	"grenade_explode",
+	"grenade_throw",
 	"grenade_thrown",
+	"grenade_explode",
 };
 
 static int find_event(const char *name)
@@ -896,20 +897,47 @@ void LuaEvents::fire_bomb_exploded(float x, float y, float z)
 	});
 }
 
-bool LuaEvents::fire_grenade_explode(int owner, float x, float y, float z)
+void LuaEvents::fire_grenade_throw(int owner, const char *weapon, float &fuse)
 {
-	return run(CSLUA_EVENT_GRENADE_EXPLODE, [=](lua_State *L) {
+	std::string wname = weapon ? weapon : "";
+	float f = fuse;
+
+	run(CSLUA_EVENT_GRENADE_THROW,
+		[=](lua_State *L) {
+			set_player_or_nil(L, owner, "player");
+			set_string(L, wname, "weapon");
+			set_number(L, f, "fuse");
+		},
+		[&](lua_State *L) {
+			lua_getfield(L, -1, "fuse");
+			if (lua_isnumber(L, -1))
+				fuse = (float)lua_tonumber(L, -1);
+			lua_pop(L, 1);
+		});
+}
+
+void LuaEvents::fire_grenade_thrown(int owner, const char *weapon, int entity_index)
+{
+	std::string wname = weapon ? weapon : "";
+
+	notify(CSLUA_EVENT_GRENADE_THROWN, [=](lua_State *L) {
 		set_player_or_nil(L, owner, "player");
-		set_number(L, x, "x");
-		set_number(L, y, "y");
-		set_number(L, z, "z");
+		set_string(L, wname, "weapon");
+		set_entity_or_nil(L, entity_index, "entity");
 	});
 }
 
-void LuaEvents::fire_grenade_thrown(int owner, int entity_index)
+bool LuaEvents::fire_grenade_explode(int owner, const char *weapon, int entity_index,
+	float x, float y, float z)
 {
-	notify(CSLUA_EVENT_GRENADE_THROWN, [=](lua_State *L) {
+	std::string wname = weapon ? weapon : "";
+
+	return run(CSLUA_EVENT_GRENADE_EXPLODE, [=](lua_State *L) {
 		set_player_or_nil(L, owner, "player");
+		set_string(L, wname, "weapon");
 		set_entity_or_nil(L, entity_index, "entity");
+		set_number(L, x, "x");
+		set_number(L, y, "y");
+		set_number(L, z, "z");
 	});
 }

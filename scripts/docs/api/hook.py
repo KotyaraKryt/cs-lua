@@ -256,34 +256,53 @@ end)
                       extra='Оба поля приходят уже заполненными тем, что показал бы движок — меняет их только тот, кто хочет реснуть оружие. Не заменяет модель на земле/в полёте: это `grenade_thrown` про `weapon_hegrenade`.',
                       regamedll=True,
                       see=[('grenade_thrown', 'grenade_thrown.md')]),
-                event('grenade_explode', 'Граната HE вот-вот взорвётся.',
+                event('grenade_throw', 'HE- или дымовая граната вот-вот покинёт руку.',
+                      [('e.player', 'player \\| nil', 'кто бросает'),
+                       ('e.weapon', 'string', '`weapon_hegrenade` или `weapon_smokegrenade`'),
+                       ('e.fuse', 'number', 'секунд до взрыва; запись подменяет таймер')],
+                      example="""
+hook.add("grenade_throw", "healnade.instant", function(e)
+	if e.weapon == "weapon_smokegrenade" then
+		e.fuse = 0.05
+	end
+end)
+""",
+                      extra='Приходит до того, как движок создаст сам снаряд — на этом этапе ещё нет сущности для `e:detonate_on_touch()`, только число. Взрыв по касанию, а не по таймеру — это [`e:detonate_on_touch()`](../ents/detonate_on_touch.md) в `grenade_thrown`, а не подмена `fuse` здесь.',
+                      regamedll=True,
+                      see=[('grenade_thrown', 'grenade_thrown.md')]),
+                event('grenade_thrown', 'HE- или дымовая граната только что покинула руку.',
+                      [('e.player', 'player \\| nil', 'кто бросил'),
+                       ('e.weapon', 'string', '`weapon_hegrenade` или `weapon_smokegrenade`'),
+                       ('e.entity', 'entity \\| nil', 'сама граната; `nil`, если бросок не удался')],
+                      example="""
+hook.add("grenade_thrown", "healnade.reskin", function(e)
+	if e.weapon == "weapon_smokegrenade" and e.entity then
+		e.entity:model("models/reapi_healthnade/w_hegrenade_v1.mdl")
+		e.entity:detonate_on_touch()
+	end
+end)
+""",
+                      extra='`e.entity` — обычный объект сущности, тот же, что даёт `ents.create`: `e:model()`, `e:origin()`, [`e:detonate_on_touch()`](../ents/detonate_on_touch.md) и весь остальной [`ents`](../ents/index.md) работают на нём как на любой другой.',
+                      regamedll=True,
+                      see=[('weapon_deploy', 'weapon_deploy.md'), ('ents', '../ents/index.md')]),
+                event('grenade_explode', 'HE- или дымовая граната вот-вот взорвётся.',
                       [('e.player', 'player \\| nil', 'кто бросил; `nil`, если бросавшего не осталось'),
+                       ('e.weapon', 'string', '`weapon_hegrenade` или `weapon_smokegrenade`'),
+                       ('e.entity', 'entity \\| nil', 'сама граната; `nil`, если уже пропала'),
                        ('e.x, e.y, e.z', 'number', 'точка взрыва')],
-                      cancel='`e:cancel()` забирает взрыв целиком себе: ни урона, ни decal\'ей, ни звука от игры — дальше плагин сам решает, что происходит в этой точке.',
+                      cancel='`e:cancel()` забирает взрыв целиком себе: ни урона (у HE), ни дыма (у smoke), ни звука от игры — дальше плагин сам решает, что происходит в этой точке. Сущность при этом не убирается сама: если она больше не нужна, убирай через `e.entity:remove()`.',
                       example="""
 hook.add("grenade_explode", "healnade.explode", function(e)
-	if not e.player then return end
+	if e.weapon ~= "weapon_smokegrenade" or not e.player then return end
 	e:cancel()
 	for _, p in ipairs(players.list{ alive = true, team = e.player:team() }) do
 		p:health(math.min(100, p:health() + 25))
 	end
+	if e.entity then e.entity:remove() end
 end)
 """,
-                      extra='Только `weapon_hegrenade` — у флешки и дымовой свой взрыв без урона, событие их не трогает. Бомбу тоже не задевает: у неё отдельная цепочка, `bomb_exploded`.',
+                      extra='Бомбу не задевает: у неё отдельная цепочка, `bomb_exploded`. Флешку тоже — у неё свой взрыв без урона и дыма, событие его не трогает.',
                       regamedll=True),
-                event('grenade_thrown', 'HE-граната только что покинула руку.',
-                      [('e.player', 'player \\| nil', 'кто бросил'),
-                       ('e.entity', 'entity \\| nil', 'сама граната; `nil`, если бросок не удался')],
-                      example="""
-hook.add("grenade_thrown", "healnade.reskin", function(e)
-	if e.entity then
-		e.entity:model("models/reapi_healthnade/w_hegrenade_v1.mdl")
-	end
-end)
-""",
-                      extra='`e.entity` — обычный объект сущности, тот же, что даёт `ents.create`: `e:model()`, `e:origin()` и весь остальной [`ents`](../ents/index.md) работают на нём как на любой другой.',
-                      regamedll=True,
-                      see=[('weapon_deploy', 'weapon_deploy.md'), ('ents', '../ents/index.md')]),
             ],
         },
         {

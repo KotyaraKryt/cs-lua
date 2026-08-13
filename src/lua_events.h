@@ -38,8 +38,9 @@ enum CsLuaEvent
 	CSLUA_EVENT_BOMB_PLANTED,
 	CSLUA_EVENT_BOMB_DEFUSED,
 	CSLUA_EVENT_BOMB_EXPLODED,
-	CSLUA_EVENT_GRENADE_EXPLODE,		// HE grenade only; cancel to take over the explosion
-	CSLUA_EVENT_GRENADE_THROWN,		// HE grenade just left the hand; entity for reskinning
+	CSLUA_EVENT_GRENADE_THROW,		// about to leave the hand; fuse time can be changed
+	CSLUA_EVENT_GRENADE_THROWN,		// just left the hand; entity for reskinning
+	CSLUA_EVENT_GRENADE_EXPLODE,		// about to explode; cancel to take over
 
 	CSLUA_EVENT_COUNT
 };
@@ -164,17 +165,25 @@ public:
 	void fire_bomb_defused(int defuser, bool success);
 	void fire_bomb_exploded(float x, float y, float z);
 
-	// An HE grenade is about to explode. owner is 0 when the thrower is gone
-	// or was never a player. Returns true if a handler cancelled: the caller
-	// must then skip the game's own explosion (damage, decals, sound) and
-	// leave the whole effect to Lua.
-	bool fire_grenade_explode(int owner, float x, float y, float z);
+	// weapon is "hegrenade" or "smokegrenade". Fires before the engine creates
+	// the projectile; fuse comes in holding the time the game intended to use
+	// and a handler that changes it gets that value used instead - the only
+	// way to make one explode on (near enough) contact instead of waiting out
+	// a multi-second fuse, since neither grenade type has a touch hook.
+	void fire_grenade_throw(int owner, const char *weapon, float &fuse);
 
-	// A thrown HE grenade, right after the engine creates it. entity_index is
-	// 0 if the throw failed. Scripts get the object through e:model() and the
+	// A thrown grenade, right after the engine creates it. entity_index is 0
+	// if the throw failed. Scripts get the object through e:model() and the
 	// rest of ents rather than a bespoke setter, so reskinning it is exactly
 	// like reskinning anything else made with ents.create.
-	void fire_grenade_thrown(int owner, int entity_index);
+	void fire_grenade_thrown(int owner, const char *weapon, int entity_index);
+
+	// A grenade is about to explode. owner is 0 when the thrower is gone or
+	// was never a player, entity_index is 0 if the entity is already gone.
+	// Returns true if a handler cancelled: the caller must then skip the
+	// game's own explosion (damage, decals, sound) and leave the whole effect
+	// - including removing the entity - to Lua.
+	bool fire_grenade_explode(int owner, const char *weapon, int entity_index, float x, float y, float z);
 
 	// TakeDamage passes damage by reference, so a handler can change it or
 	// zero it out. Returns the final damage the game should apply: whatever

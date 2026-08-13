@@ -231,14 +231,24 @@ void cslua_play_sound(int id, const char *sample, int channel, float volume,
 		return;
 	}
 
-	// id 0: play it on every connected player, each from their own entity, so
-	// everyone hears it wherever they are.
+	// id 0: EMIT_SOUND's recipients are whoever is in PAS of the source
+	// entity, not "the players we name" - there is no per-listener send
+	// through this call. Emitting once from any connected player is enough:
+	// this is always called with attenuation 0 (no distance falloff) by
+	// every caller in the tree, so PAS reach from one live player already
+	// covers everyone else standing anywhere near the map's playable space.
+	// Looping and emitting from every player in turn - the previous
+	// behaviour - does not extend that reach; it just means a listener
+	// within PAS of more than one source hears the same clip stacked once
+	// per source it is in range of.
 	for (int slot = 1; slot < CSLUA_MAXPLAYERS; slot++) {
 		if (!g_players.is_connected(slot))
 			continue;
 		edict_t *e = g_engfuncs.pfnPEntityOfEntIndex(slot);
-		if (e && !e->free)
+		if (e && !e->free) {
 			EMIT_SOUND_DYN2(e, channel, sample, volume, attenuation, 0, pitch);
+			return;
+		}
 	}
 }
 

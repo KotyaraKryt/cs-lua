@@ -6,6 +6,7 @@
 #include "lua_httpserver.h"
 #include "lua_sound.h"
 #include "lua_menu.h"
+#include "lua_entity.h"
 #include "players.h"
 #include "regamedll.h"
 
@@ -69,6 +70,7 @@ static void ServerDeactivate()
 	// After this the edicts go away. Cleared last so a map_change handler can
 	// still remove its own entities.
 	s_world_ready = false;
+	cslua_touch_detonate_clear();
 	RETURN_META(MRES_IGNORED);
 }
 
@@ -138,6 +140,16 @@ static void ClientCommand(edict_t *pEntity)
 	RETURN_META(MRES_IGNORED);
 }
 
+// Every entity-to-entity touch in the game goes through here - triggers,
+// weapons landing on the floor, a grenade bouncing off a wall. Cheap to run
+// unconditionally: cslua_touch_detonate_check's early-out is one size check
+// against a list that is empty unless a script called e:detonate_on_touch().
+static void Touch(edict_t *pentTouched, edict_t *pentOther)
+{
+	cslua_touch_detonate_check(pentTouched);
+	RETURN_META(MRES_IGNORED);
+}
+
 static void ClientDisconnect(edict_t *pEntity)
 {
 	int id = g_engfuncs.pfnIndexOfEdict(pEntity);
@@ -156,7 +168,7 @@ DLL_FUNCTIONS g_DllFunctionTable =
 	NULL,					// pfnSpawn
 	NULL,					// pfnThink
 	NULL,					// pfnUse
-	NULL,					// pfnTouch
+	Touch,					// pfnTouch
 	NULL,					// pfnBlocked
 	NULL,					// pfnKeyValue
 	NULL,					// pfnSave

@@ -331,17 +331,40 @@ static void hook_freeze_end(IReGameHook_CSGameRules_OnRoundFreezeEnd *chain)
 	g_events.fire_round_freeze_end();
 }
 
-// Fires after the engine creates the projectile, so the entity is real and
-// spawned - a script can reskin it with the same ents API it would use on
-// anything from ents.create.
+// fuse is read from grenade_throw before the engine creates the projectile -
+// a script can shorten it there, which is the only way to make a grenade
+// pop on (near enough) contact rather than ride out a multi-second timer,
+// since neither HE nor smoke exposes a touch hook. grenade_thrown fires
+// after, once the entity is real and spawned, so a script can reskin it with
+// the same ents API it would use on anything from ents.create.
 static CGrenade *hook_throw_he_grenade(IReGameHook_ThrowHeGrenade *chain, entvars_t *pevOwner,
 	Vector &vecStart, Vector &vecVelocity, float time, int iTeam, unsigned short usEvent)
 {
-	CGrenade *grenade = chain->callNext(pevOwner, vecStart, vecVelocity, time, iTeam, usEvent);
-
 	int owner = attacker_slot(pevOwner);
+
+	float fuse = time;
+	g_events.fire_grenade_throw(owner, "weapon_hegrenade", fuse);
+
+	CGrenade *grenade = chain->callNext(pevOwner, vecStart, vecVelocity, fuse, iTeam, usEvent);
+
 	int index = (grenade && grenade->pev) ? ENTINDEX(ENT(grenade->pev)) : 0;
-	g_events.fire_grenade_thrown(owner, index);
+	g_events.fire_grenade_thrown(owner, "weapon_hegrenade", index);
+
+	return grenade;
+}
+
+static CGrenade *hook_throw_smoke_grenade(IReGameHook_ThrowSmokeGrenade *chain, entvars_t *pevOwner,
+	Vector &vecStart, Vector &vecVelocity, float time, unsigned short usEvent)
+{
+	int owner = attacker_slot(pevOwner);
+
+	float fuse = time;
+	g_events.fire_grenade_throw(owner, "weapon_smokegrenade", fuse);
+
+	CGrenade *grenade = chain->callNext(pevOwner, vecStart, vecVelocity, fuse, usEvent);
+
+	int index = (grenade && grenade->pev) ? ENTINDEX(ENT(grenade->pev)) : 0;
+	g_events.fire_grenade_thrown(owner, "weapon_smokegrenade", index);
 
 	return grenade;
 }
@@ -376,6 +399,16 @@ static void hook_explode_bomb(IReGameHook_CGrenade_ExplodeBomb *chain, CGrenade 
 	g_events.fire_bomb_exploded(where.x, where.y, where.z);
 }
 
+// Standard HL SDK convention: a thrown grenade's pev->owner is the thrower.
+static int grenade_owner_slot(CGrenade *grenade)
+{
+	if (!grenade || !grenade->pev || !grenade->pev->owner)
+		return 0;
+
+	int idx = ENTINDEX(grenade->pev->owner);
+	return (idx >= 1 && idx < CSLUA_MAXPLAYERS) ? idx : 0;
+}
+
 // This is ExplodeHeGrenade specifically, not FireBullets or TakeDamage: an HE
 // grenade's blast never goes through either, so there was no way for a script
 // to tell "this player's HE just popped" from "the bomb just popped" short of
@@ -385,20 +418,31 @@ static void hook_explode_he_grenade(IReGameHook_CGrenade_ExplodeHeGrenade *chain
 	TraceResult *ptr, int bitsDamageType)
 {
 	Vector where = grenade && grenade->pev ? grenade->pev->origin : Vector(0, 0, 0);
+	int owner = grenade_owner_slot(grenade);
+	int index = (grenade && grenade->pev) ? ENTINDEX(ENT(grenade->pev)) : 0;
 
-	// Standard HL SDK convention: a thrown grenade's pev->owner is the thrower.
-	int owner = 0;
-	if (grenade && grenade->pev && grenade->pev->owner) {
-		int idx = ENTINDEX(grenade->pev->owner);
-		if (idx >= 1 && idx < CSLUA_MAXPLAYERS)
-			owner = idx;
-	}
-
-	bool cancelled = g_events.fire_grenade_explode(owner, where.x, where.y, where.z);
+	bool cancelled = g_events.fire_grenade_explode(owner, "weapon_hegrenade", index, where.x, where.y, where.z);
 	if (cancelled)
-		return;			// a script took the explosion over: no damage, no effects
+		return;			// a script took the explosion over: no damage, no effects, no cleanup
 
 	chain->callNext(grenade, ptr, bitsDamageType);
+}
+
+// Same idea as above, for the smoke grenade's own explode call. Cancelling
+// here does not free anyone from damage - smoke never dealt any - it only
+// stops the stock smoke cloud/sound so a script's own effect isn't fighting
+// the game's.
+static void hook_explode_smoke_grenade(IReGameHook_CGrenade_ExplodeSmokeGrenade *chain, CGrenade *grenade)
+{
+	Vector where = grenade && grenade->pev ? grenade->pev->origin : Vector(0, 0, 0);
+	int owner = grenade_owner_slot(grenade);
+	int index = (grenade && grenade->pev) ? ENTINDEX(ENT(grenade->pev)) : 0;
+
+	bool cancelled = g_events.fire_grenade_explode(owner, "weapon_smokegrenade", index, where.x, where.y, where.z);
+	if (cancelled)
+		return;
+
+	chain->callNext(grenade);
 }
 
 // Which chains we currently hold a hook on.
@@ -423,7 +467,9 @@ enum HookSlot
 	HOOK_DEFUSE,
 	HOOK_EXPLODE,
 	HOOK_EXPLODE_HE,
+	HOOK_EXPLODE_SMOKE,
 	HOOK_THROW_HE,
+	HOOK_THROW_SMOKE,
 	HOOK_COUNT
 };
 
@@ -491,11 +537,13 @@ void cslua_regamedll_install_hooks()
 	sync_hook(HOOK_EXPLODE, s_hooks->CGrenade_ExplodeBomb(), &hook_explode_bomb,
 		g_events.any(CSLUA_EVENT_BOMB_EXPLODED));
 
-	sync_hook(HOOK_EXPLODE_HE, s_hooks->CGrenade_ExplodeHeGrenade(), &hook_explode_he_grenade,
-		g_events.any(CSLUA_EVENT_GRENADE_EXPLODE));
+	bool exploding = g_events.any(CSLUA_EVENT_GRENADE_EXPLODE);
+	sync_hook(HOOK_EXPLODE_HE, s_hooks->CGrenade_ExplodeHeGrenade(), &hook_explode_he_grenade, exploding);
+	sync_hook(HOOK_EXPLODE_SMOKE, s_hooks->CGrenade_ExplodeSmokeGrenade(), &hook_explode_smoke_grenade, exploding);
 
-	sync_hook(HOOK_THROW_HE, s_hooks->ThrowHeGrenade(), &hook_throw_he_grenade,
-		g_events.any(CSLUA_EVENT_GRENADE_THROWN));
+	bool throwing = g_events.any(CSLUA_EVENT_GRENADE_THROW) || g_events.any(CSLUA_EVENT_GRENADE_THROWN);
+	sync_hook(HOOK_THROW_HE, s_hooks->ThrowHeGrenade(), &hook_throw_he_grenade, throwing);
+	sync_hook(HOOK_THROW_SMOKE, s_hooks->ThrowSmokeGrenade(), &hook_throw_smoke_grenade, throwing);
 }
 
 void cslua_regamedll_remove_hooks()
@@ -519,7 +567,9 @@ void cslua_regamedll_remove_hooks()
 	s_hooks->CGrenade_DefuseBombEnd()->unregisterHook(&hook_defuse_end);
 	s_hooks->CGrenade_ExplodeBomb()->unregisterHook(&hook_explode_bomb);
 	s_hooks->CGrenade_ExplodeHeGrenade()->unregisterHook(&hook_explode_he_grenade);
+	s_hooks->CGrenade_ExplodeSmokeGrenade()->unregisterHook(&hook_explode_smoke_grenade);
 	s_hooks->ThrowHeGrenade()->unregisterHook(&hook_throw_he_grenade);
+	s_hooks->ThrowSmokeGrenade()->unregisterHook(&hook_throw_smoke_grenade);
 
 	for (int i = 0; i < HOOK_COUNT; i++)
 		s_installed[i] = false;

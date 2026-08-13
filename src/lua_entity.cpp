@@ -5,6 +5,7 @@
 #include "lua_sound.h"
 
 #include <string.h>
+#include <vector>
 
 // The shared metatable for every entity object; kept as a registry ref so a
 // pushed entity costs one table plus a lookup, not a rebuilt method set.
@@ -178,6 +179,59 @@ static int l_remove(lua_State *L)
 	edict_t *e = self_edict(L, false);
 	if (e)
 		REMOVE_ENTITY(e);
+	return 0;
+}
+
+// ---------------------------------------------------------------------------
+// Touch-triggered think
+//
+// AmxModX's SetTouch/SetThink work by writing into a private member of the
+// game DLL's own CBaseEntity through a pointer-cast, matched to one exact
+// binary layout - that is what makes it fragile, not the idea of a touch
+// callback itself. This module's DLL_FUNCTIONS table already has a proper,
+// metamod-native hook point for the same event: pfnTouch, called for every
+// entity-to-entity touch in the game. Routing through that instead means no
+// layout hacking, at the cost of no direct "run this Lua function on touch" -
+// what we can do cleanly is force an entity's own think to run right away,
+// which for a grenade means "call whatever ExplodeHeGrenade/ExplodeSmokeGrenade
+// would have called anyway, just now instead of after the fuse."
+namespace {
+struct TouchWatch { int index; int serial; };
+std::vector<TouchWatch> s_touch_watch;
+}
+
+void cslua_touch_detonate_watch(int index, int serial)
+{
+	s_touch_watch.push_back({ index, serial });
+}
+
+void cslua_touch_detonate_check(edict_t *touched)
+{
+	if (!touched || s_touch_watch.empty())
+		return;
+
+	int index = ENTINDEX(touched);
+	for (size_t i = 0; i < s_touch_watch.size(); i++) {
+		if (s_touch_watch[i].index == index && s_touch_watch[i].serial == touched->serialnumber) {
+			s_touch_watch.erase(s_touch_watch.begin() + i);
+			touched->v.nextthink = gpGlobals->time;
+			return;
+		}
+	}
+}
+
+void cslua_touch_detonate_clear()
+{
+	s_touch_watch.clear();
+}
+
+// e:detonate_on_touch() - the next time this entity touches anything (wall,
+// floor, player), its nextthink is forced to fire on the following server
+// frame. One-shot: call again after each throw if the behaviour should repeat.
+static int l_detonate_on_touch(lua_State *L)
+{
+	edict_t *e = self_edict(L);
+	cslua_touch_detonate_watch(ENTINDEX(e), e->serialnumber);
 	return 0;
 }
 
@@ -413,6 +467,7 @@ static const luaL_Reg s_methods[] =
 	{ "valid",     l_valid },
 	{ "spawn",     l_spawn },
 	{ "remove",    l_remove },
+	{ "detonate_on_touch", l_detonate_on_touch },
 	{ "keyvalue",  l_keyvalue },
 	{ "solid",     l_solid },
 	{ "movetype",  l_movetype },

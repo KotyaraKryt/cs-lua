@@ -40,8 +40,9 @@ const sidebars: SidebarsConfig = {
             {type: 'doc', id: 'api/hook/player_team_change', label: 'player_team_change'},
             {type: 'doc', id: 'api/hook/weapon_fire', label: 'weapon_fire'},
             {type: 'doc', id: 'api/hook/weapon_deploy', label: 'weapon_deploy'},
-            {type: 'doc', id: 'api/hook/grenade_explode', label: 'grenade_explode'},
+            {type: 'doc', id: 'api/hook/grenade_throw', label: 'grenade_throw'},
             {type: 'doc', id: 'api/hook/grenade_thrown', label: 'grenade_thrown'},
+            {type: 'doc', id: 'api/hook/grenade_explode', label: 'grenade_explode'},
           ]},
           {type: 'category', label: 'Раунд и бомба', collapsed: true, items: [
             {type: 'doc', id: 'api/hook/round_start', label: 'round_start'},
@@ -157,6 +158,7 @@ const sidebars: SidebarsConfig = {
             {type: 'doc', id: 'api/ents/valid', label: 'e:valid'},
             {type: 'doc', id: 'api/ents/spawn', label: 'e:spawn'},
             {type: 'doc', id: 'api/ents/remove', label: 'e:remove'},
+            {type: 'doc', id: 'api/ents/detonate_on_touch', label: 'e:detonate_on_touch'},
             {type: 'doc', id: 'api/ents/keyvalue', label: 'e:keyvalue'},
             {type: 'doc', id: 'api/ents/solid', label: 'e:solid'},
             {type: 'doc', id: 'api/ents/movetype', label: 'e:movetype'},
