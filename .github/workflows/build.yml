@@ -60,9 +60,13 @@ jobs:
 
     # Deliberately an old distro. A module linked against a current glibc asks
     # for symbol versions (GLIBC_2.38 and friends) that the boxes CS servers
-    # actually run on do not have, and it refuses to load there. Debian 11 puts
-    # the floor at glibc 2.31, which covers everything still in service.
-    container: debian:11
+    # actually run on do not have, and it refuses to load there with a dlopen
+    # error, not a build error - so this has to be caught by picking an old
+    # enough floor up front, not by any check here. Debian 11 (glibc 2.31)
+    # was the original floor and it was not old enough: a real host still in
+    # service came back with "libpthread.so.0: version `GLIBC_2.30' not
+    # found". Ubuntu 18.04 puts the floor at glibc 2.27.
+    container: ubuntu:18.04
 
     steps:
       # GoldSrc is 32-bit, so everything down to libstdc++ has to be.
