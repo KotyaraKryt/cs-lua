@@ -12,6 +12,7 @@
 #include "lua_entity.h"
 #include "lua_db.h"
 #include "lua_http.h"
+#include "lua_httpserver.h"
 #include "regamedll.h"
 #include "platform.h"
 
@@ -268,6 +269,7 @@ void LuaEngine::init()
 	cslua_register_entity(m_L);
 	cslua_register_db(m_L);
 	cslua_register_http(m_L);
+	cslua_register_httpserver(m_L);
 
 	// Only for code that reaches for the stock require; plugins get their own.
 	const std::string &base = cslua_base_dir();
@@ -322,6 +324,7 @@ void LuaEngine::shutdown()
 	// Disowns replies still on the wire. Not a join: waiting for the slowest
 	// request here would freeze the server for the length of a lua_reload.
 	cslua_http_reset();
+	cslua_httpserver_reset();
 
 	g_events.clear();
 	cslua_errors_clear();
@@ -350,6 +353,34 @@ void LuaEngine::reload()
 {
 	shutdown();
 	init();
+}
+
+bool LuaEngine::request_plugin_reload(const char *id)
+{
+	for (size_t i = 0; i < m_plugins.size(); i++) {
+		if (m_plugins[i].id == id) {
+			m_pending_plugin_reload = id;
+			m_pending_full_reload = false;
+			return true;
+		}
+	}
+	return false;
+}
+
+void LuaEngine::process_pending_reload()
+{
+	if (m_pending_full_reload) {
+		m_pending_full_reload = false;
+		m_pending_plugin_reload.clear();
+		reload();
+		return;
+	}
+
+	if (!m_pending_plugin_reload.empty()) {
+		std::string id = m_pending_plugin_reload;
+		m_pending_plugin_reload.clear();
+		reload_plugin(id.c_str());
+	}
 }
 
 void LuaEngine::add_unload_handler(int plugin_index, int ref)
@@ -401,6 +432,7 @@ void LuaEngine::unload_plugin(int index, bool run_handlers)
 	cslua_command_remove_plugin(index);
 	cslua_db_remove_plugin(index);
 	cslua_http_remove_plugin(index);
+	cslua_httpserver_remove_plugin(index);
 }
 
 // One plugin, torn down and started again, with everyone else left alone.
@@ -447,6 +479,90 @@ bool LuaEngine::reload_plugin(const char *id)
 	cslua_regamedll_install_hooks();
 
 	return true;
+}
+
+bool LuaEngine::check_plugin(const char *id, std::string &out)
+{
+	if (!m_L) {
+		out = "Lua state is not running";
+		return false;
+	}
+
+	std::string plugin_dir = cslua_base_dir() + "/plugins/" + id;
+	std::string manifest = plugin_dir + "/manifest.lua";
+	std::string init = plugin_dir + "/init.lua";
+
+	if (!cslua_file_exists(manifest)) {
+		out = "no manifest.lua in plugins/" + std::string(id);
+		return false;
+	}
+	if (!cslua_file_exists(init)) {
+		out = "no init.lua in plugins/" + std::string(id) +
+			" - both files are required, manifest.lua was not checked";
+		return false;
+	}
+
+	// Appended past every real plugin, so its index cannot collide with one
+	// require() closures elsewhere already captured by value.
+	int index = (int)m_plugins.size();
+
+	LuaPlugin plugin;
+	plugin.id = id;
+	plugin.dir = plugin_dir;
+	plugin.manifest = manifest;
+	plugin.entry = init;
+	plugin.name = plugin.id;
+	m_plugins.push_back(plugin);
+
+	// Same environment setup as load_plugin(): its own globals table and its
+	// own require() cache, so a check sees exactly what a real load would.
+	lua_newtable(m_L);
+	lua_newtable(m_L);
+	lua_pushvalue(m_L, LUA_GLOBALSINDEX);
+	lua_setfield(m_L, -2, "__index");
+	lua_setmetatable(m_L, -2);
+	lua_pushinteger(m_L, index);
+	lua_pushcclosure(m_L, LuaEngine::l_require, 1);
+	lua_setfield(m_L, -2, "require");
+	m_plugins[index].env_ref = luaL_ref(m_L, LUA_REGISTRYINDEX);
+	lua_newtable(m_L);
+	m_plugins[index].modules_ref = luaL_ref(m_L, LUA_REGISTRYINDEX);
+
+	m_loading = index;
+	bool ok;
+	{
+		PluginScope scope(index);
+		ok = run_file(m_plugins[index].manifest, m_plugins[index].env_ref, id);
+
+		if (ok && !m_plugins[index].declared) {
+			cslua_error("plugin '%s': manifest.lua must call plugin{}", id);
+			ok = false;
+		}
+	}
+	m_loading = -1;
+
+	if (ok) {
+		const LuaPlugin &checked = m_plugins[index];
+		out = "manifest.lua OK: '" + (checked.name.empty() ? checked.id : checked.name) +
+			"' v" + (checked.version.empty() ? "?" : checked.version) +
+			" by " + (checked.author.empty() ? "?" : checked.author);
+		if (!checked.required_modules.empty()) {
+			out += ", requires:";
+			for (size_t i = 0; i < checked.required_modules.size(); i++)
+				out += " " + checked.required_modules[i];
+		}
+	} else {
+		out = "manifest.lua failed - see console";
+	}
+
+	// Nothing it registered is meant to outlive the check: undo it the same
+	// way a failed real load would, whether or not this one succeeded.
+	unload_plugin(index, false);
+	luaL_unref(m_L, LUA_REGISTRYINDEX, m_plugins[index].env_ref);
+	luaL_unref(m_L, LUA_REGISTRYINDEX, m_plugins[index].modules_ref);
+	m_plugins.pop_back();
+
+	return ok;
 }
 
 void LuaEngine::load_core()
@@ -504,27 +620,30 @@ void LuaEngine::discover_plugins()
 		if (entry.empty() || entry[0] == '_' || entry[0] == '.')
 			continue;
 
-		LuaPlugin plugin;
-
-		if (entries[i].is_dir) {
-			std::string init = dir + "/" + entry + "/init.lua";
-			if (!cslua_file_exists(init)) {
-				cslua_error("plugin folder '%s' has no init.lua, skipped", entry.c_str());
-				continue;
-			}
-			plugin.id = entry;
-			plugin.dir = dir + "/" + entry;
-			plugin.entry = init;
-		} else {
-			size_t dot = entry.rfind(".lua");
-			if (dot == std::string::npos || dot != entry.size() - 4)
-				continue;
-			// A bare script has no folder of its own, so require() only sees
-			// the shared include/ directory.
-			plugin.id = entry.substr(0, dot);
-			plugin.entry = dir + "/" + entry;
+		if (!entries[i].is_dir) {
+			cslua_error("plugins/%s is not a folder, skipped - a plugin needs "
+				"its own folder with manifest.lua and init.lua", entry.c_str());
+			continue;
 		}
 
+		std::string plugin_dir = dir + "/" + entry;
+		std::string manifest = plugin_dir + "/manifest.lua";
+		std::string init = plugin_dir + "/init.lua";
+
+		if (!cslua_file_exists(manifest)) {
+			cslua_error("plugin folder '%s' has no manifest.lua, skipped", entry.c_str());
+			continue;
+		}
+		if (!cslua_file_exists(init)) {
+			cslua_error("plugin folder '%s' has no init.lua, skipped", entry.c_str());
+			continue;
+		}
+
+		LuaPlugin plugin;
+		plugin.id = entry;
+		plugin.dir = plugin_dir;
+		plugin.manifest = manifest;
+		plugin.entry = init;
 		plugin.name = plugin.id;
 		m_plugins.push_back(plugin);
 	}
@@ -646,7 +765,22 @@ void LuaEngine::load_plugin(int index)
 	bool ok;
 	{
 		PluginScope scope(index);
-		ok = run_file(plugin.entry, plugin.env_ref, plugin.id.c_str());
+
+		// manifest.lua runs first and has one job: call plugin{}. Its rules
+		// (requires, api_version, ...) are enforced right there, before a
+		// single line of init.lua runs.
+		ok = run_file(plugin.manifest, plugin.env_ref, plugin.id.c_str());
+
+		if (ok && !plugin.declared) {
+			// A very easy typo: `plugin = { ... }` assigns a table instead of
+			// calling plugin{ ... }, silently shadowing the manifest function.
+			cslua_error("plugin '%s': manifest.lua must call plugin{} - "
+				"did you write 'plugin = {' instead of 'plugin {'?", plugin.id.c_str());
+			ok = false;
+		}
+
+		if (ok)
+			ok = run_file(plugin.entry, plugin.env_ref, plugin.id.c_str());
 	}
 	m_loading = -1;
 
@@ -658,13 +792,6 @@ void LuaEngine::load_plugin(int index)
 		unload_plugin(index, false);
 		return;
 	}
-
-	// A very easy typo: `plugin = { ... }` assigns a table instead of calling
-	// plugin{ ... }. The plugin still runs, but its metadata never arrives and
-	// the plugin function itself gets shadowed - worth saying out loud.
-	if (!plugin.declared)
-		cslua_print("note: plugin '%s' never called plugin{} - no metadata. "
-			"Did you write 'plugin = {' instead of 'plugin {'?", plugin.id.c_str());
 }
 
 bool LuaEngine::run_file(const std::string &path, int env_ref, const char *where)

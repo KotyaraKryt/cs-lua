@@ -1,7 +1,9 @@
 #include "cslua.h"
+#include "lua_engine.h"
 #include "lua_events.h"
 #include "lua_timers.h"
 #include "lua_http.h"
+#include "lua_httpserver.h"
 #include "lua_sound.h"
 #include "lua_menu.h"
 #include "players.h"
@@ -277,12 +279,19 @@ static void poll_team_change()
 
 static void StartFrame()
 {
+	// Before anything else touches Lua: a route handler or a hook callback
+	// earlier this frame may have asked for a reload, and this is the first
+	// point since then where the C stack is guaranteed clean - no lua_pcall
+	// of any plugin's code is running. See LuaEngine::process_pending_reload.
+	g_lua.process_pending_reload();
+
 	poll_authorization();
 	poll_team_change();
 	cslua_timers_run();
 
 	// Replies land on the game thread, next to the timers.
 	cslua_http_run();
+	cslua_httpserver_run();
 	RETURN_META(MRES_IGNORED);
 }
 

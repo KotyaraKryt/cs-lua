@@ -1,5 +1,5 @@
 ---
-description: "Консольные команды модуля: lua_reload, lua_list, lua_hooks, lua_perms, lua_precache и диагностика вывода."
+description: "Консольные команды модуля: lua_reload, lua_check, lua_list, lua_hooks, lua_perms, lua_precache и диагностика вывода."
 ---
 
 # Консольные команды
@@ -12,6 +12,7 @@ description: "Консольные команды модуля: lua_reload, lua_
 |---|---|
 | `lua_reload` | пересоздать Lua-состояние и перечитать все плагины |
 | `lua_reload <plugin>` | перезагрузить один плагин, остальных не трогая |
+| `lua_check <plugin>` | прогнать только `manifest.lua` плагина, не запуская его |
 | `lua_list` | плагины, счётчики хендлеров, таймеров и открытых баз |
 | `lua_hooks [событие]` | кто на что подписан, в порядке вызова |
 | `lua_exports` | кто что публикует через `export()` |
@@ -20,12 +21,24 @@ description: "Консольные команды модуля: lua_reload, lua_
 | `lua_perms <что>` | `groups`, `list`, `users`, `who`, `check`, `grant`, `revoke`, `save`, `reload` |
 
 `lua_reload <plugin>` снимает хендлеры, таймеры, команды и базы плагина,
-выполняет [`plugin.on_unload`](plugin/on_unload.md) и запускает `init.lua`
-заново с чистым кешем `require`.
+выполняет [`plugin.on_unload`](plugin/on_unload.md) и запускает `manifest.lua`,
+затем `init.lua` заново с чистым кешем `require`.
 
 > [!NOTE]
 > После правок в `core/` и `include/` нужна полная перезагрузка: их разделяют
 > все плагины.
+
+`lua_check <plugin>` выполняет только `manifest.lua` — `plugin{}`, права,
+конфиг — в отдельном одноразовом слоте, который не попадает в список
+работающих плагинов и убирается сразу после проверки. `init.lua` не
+запускается вовсе. Так ловится битый `plugin{}`, отсутствующий `require` или
+синтаксическая ошибка в `manifest.lua` до того, как `lua_reload` реально
+остановит плагин.
+
+```
+lua_check shop
+manifest.lua OK: 'Shop' v1.0 by kotyarakryt, requires: class
+```
 
 ## Порядок загрузки
 
@@ -34,7 +47,7 @@ description: "Консольные команды модуля: lua_reload, lua_
 кто выигрывает на отменяемом событии.
 
 ```
-# одно имя в строке, папка плагина или файл без .lua
+# одно имя в строке — папка плагина
 godmode
 damager
 stats

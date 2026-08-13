@@ -5,13 +5,17 @@
 #include <string>
 #include <vector>
 
-// One loaded plugin. A plugin is either a folder with init.lua (the normal
-// case) or a bare .lua file dropped into plugins/ (for throwaway scripts).
+// One loaded plugin: a folder under plugins/ with two required files.
+// manifest.lua runs first and does nothing but declare the plugin - name,
+// api_version, requires, permissions, config; init.lua runs after and is the
+// plugin's actual code. There is no single-file shortcut: the split is
+// enforced by load_plugin(), not just a convention.
 struct LuaPlugin
 {
-	std::string id;			// folder name, or file name without .lua
-	std::string dir;		// plugin folder; empty for a bare .lua file
-	std::string entry;		// full path of the file that gets executed
+	std::string id;			// folder name
+	std::string dir;		// plugin folder, full path
+	std::string manifest;	// full path of manifest.lua
+	std::string entry;		// full path of init.lua
 
 	std::string name;		// from plugin{}, defaults to id
 	std::string version;
@@ -19,7 +23,7 @@ struct LuaPlugin
 	// Module names declared in plugin{ requires = {...} }. Not called `requires`
 	// because that is a keyword from C++20 on.
 	std::vector<std::string> required_modules;
-	bool declared = false;				// plugin{} was actually called
+	bool declared = false;				// manifest.lua called plugin{}
 
 	int env_ref = LUA_NOREF;		// the plugin's globals table
 	int modules_ref = LUA_NOREF;	// require() cache for this plugin
@@ -48,6 +52,31 @@ public:
 	// plugin untouched. Returns false when nothing is named `id`. Behind
 	// `lua_reload <plugin>`, which is the whole edit-test loop for one plugin.
 	bool reload_plugin(const char *id);
+
+	// Runs only manifest.lua for plugins/<id>, in a disposable slot appended
+	// past every real plugin so no existing index shifts, then throws the
+	// slot away. Does not run init.lua and never joins the running plugin
+	// list - the point is to catch a bad plugin{} call, a missing require or
+	// a manifest.lua syntax error before `lua_reload` actually starts it.
+	// Behind `lua_check <plugin>`. Returns false on any failure and leaves
+	// the reason in `out`.
+	bool check_plugin(const char *id, std::string &out);
+
+	// The web panel (or any other plugin) wants a reload, but its request
+	// arrives from inside a route handler - itself a lua_pcall running on the
+	// same m_L that reload()/reload_plugin() would tear down out from under
+	// it. So it does not call either directly: it records what it wants here,
+	// and process_pending_reload() carries it out from the top of the next
+	// frame, once that call has fully returned and no Lua frame is on the C
+	// stack. Same mechanism the console command already gets for free by
+	// running outside any pcall to begin with.
+	//
+	// request_plugin_reload validates the name up front so a bad id is
+	// reported to the caller immediately rather than silently doing nothing
+	// a frame later.
+	void request_full_reload() { m_pending_full_reload = true; m_pending_plugin_reload.clear(); }
+	bool request_plugin_reload(const char *id);
+	void process_pending_reload();
 
 	// Registered by plugin.on_unload(). The engine owns the ref from here on.
 	void add_unload_handler(int plugin_index, int ref);
@@ -126,6 +155,9 @@ private:
 	// gone, so a handler that triggers another shutdown cannot make it fire
 	// twice.
 	bool m_unloading = false;
+
+	bool m_pending_full_reload = false;
+	std::string m_pending_plugin_reload;
 };
 
 extern LuaEngine g_lua;

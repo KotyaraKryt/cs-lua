@@ -8,6 +8,8 @@
 #include "players.h"
 #include "platform.h"
 
+#include <cstdio>
+
 // Creates the global table if it is not there yet, then registers into it.
 // Reusing an existing table is the point: `players` is filled from here, from
 // lua_player.cpp and from core/commands.lua, and none of them has to know
@@ -57,6 +59,29 @@ static int l_print(lua_State *L)
 	return 0;
 }
 
+// "X.Y.Z" -> three ints. Missing or non-numeric parts read as 0, so a
+// fat-fingered version string fails safe (compares as the oldest possible
+// build) instead of crashing min_version/max_version below.
+static void cslua_parse_version(const char *v, int out[3])
+{
+	out[0] = out[1] = out[2] = 0;
+	if (v)
+		sscanf(v, "%d.%d.%d", &out[0], &out[1], &out[2]);
+}
+
+static bool cslua_version_less(const char *a, const char *b)
+{
+	int va[3], vb[3];
+	cslua_parse_version(a, va);
+	cslua_parse_version(b, vb);
+
+	for (int i = 0; i < 3; i++) {
+		if (va[i] != vb[i])
+			return va[i] < vb[i];
+	}
+	return false;
+}
+
 // ---------------------------------------------------------------------------
 // plugin
 //
@@ -65,8 +90,9 @@ static int l_print(lua_State *L)
 //   plugin { name = "Shop", api_version = 2 }
 //   plugin.data_dir()
 //
-// The manifest is the first line of every plugin and reads best as a call, so
-// the table carries __call rather than growing a plugin.declare().
+// The call is manifest.lua's only job - the engine runs that file before
+// init.lua and requires it to have made this call - and reads best as a
+// call, so the table carries __call rather than growing a plugin.declare().
 
 // The manifest itself. Called through __call, so the spec table is argument 2.
 static int l_plugin_call(lua_State *L)
@@ -112,6 +138,34 @@ static int l_plugin_call(lua_State *L)
 		lua_pop(L, 1);
 	}
 
+	// min_engine_version / max_engine_version = "2.1.0": pins to a specific
+	// build, not just an API generation. api_version only moves on a breaking
+	// rename - a plugin using a native that shipped later under the same
+	// api_version (http_server, say) has no other way to say "at least this
+	// build". Named "engine", not "version", so it can't be mistaken for
+	// api_version sitting right above it.
+	lua_getfield(L, 2, "min_engine_version");
+	if (lua_isstring(L, -1)) {
+		std::string want = lua_tostring(L, -1);
+		lua_pop(L, 1);
+		if (cslua_version_less(CSLUA_VERSION, want.c_str()))
+			return luaL_error(L, "plugin '%s' needs cs-lua v%s or newer, this build is v%s",
+				plugin->id.c_str(), want.c_str(), CSLUA_VERSION);
+	} else {
+		lua_pop(L, 1);
+	}
+
+	lua_getfield(L, 2, "max_engine_version");
+	if (lua_isstring(L, -1)) {
+		std::string want = lua_tostring(L, -1);
+		lua_pop(L, 1);
+		if (cslua_version_less(want.c_str(), CSLUA_VERSION))
+			return luaL_error(L, "plugin '%s' targets cs-lua up to v%s, this build is v%s - "
+				"it may rely on behavior that changed since", plugin->id.c_str(), want.c_str(), CSLUA_VERSION);
+	} else {
+		lua_pop(L, 1);
+	}
+
 	// requires = { "json", "menu" }: every listed module must resolve now, so
 	// a missing dependency fails loudly on the plugin's first line instead of
 	// erroring deep inside its code later.
@@ -138,9 +192,10 @@ static int l_plugin_call(lua_State *L)
 	return 0;
 }
 
-// plugin.dir() -> absolute path of the running plugin's folder, or nil for a
-// single-file plugin. Lets a plugin load its own data files without guessing
-// the server's working directory (which is not the game directory).
+// plugin.dir() -> absolute path of the running plugin's folder, or nil when
+// no plugin is running (the core layer). Lets a plugin load its own data
+// files without guessing the server's working directory (which is not the
+// game directory).
 static int l_plugin_dir(lua_State *L)
 {
 	const std::vector<LuaPlugin> &plugins = g_lua.plugins();
@@ -155,10 +210,8 @@ static int l_plugin_dir(lua_State *L)
 	return 1;
 }
 
-// plugin.id() -> the folder name (or bare file name) of the plugin whose code
-// is running, or nil for the core layer. Unlike plugin.dir() a single-file
-// plugin has one too, which is what makes it usable as an identity - the
-// export layer keys its registry on it.
+// plugin.id() -> the folder name of the plugin whose code is running, or nil
+// for the core layer. What the export layer keys its registry on.
 static int l_plugin_id(lua_State *L)
 {
 	const std::vector<LuaPlugin> &plugins = g_lua.plugins();
@@ -227,6 +280,59 @@ static int l_plugin_on_unload(lua_State *L)
 
 	lua_pushvalue(L, 1);
 	g_lua.add_unload_handler(index, luaL_ref(L, LUA_REGISTRYINDEX));
+	return 0;
+}
+
+// plugin.list() -> one entry per loaded plugin: id, name, version, author,
+// dir (the plugin's folder), failed. Read-only
+// introspection of what `lua_list` already prints to the console - built for
+// the web panel's resource manager, but not specific to it.
+static int l_plugin_list(lua_State *L)
+{
+	const std::vector<LuaPlugin> &plugins = g_lua.plugins();
+
+	lua_newtable(L);
+	for (size_t i = 0; i < plugins.size(); i++) {
+		const LuaPlugin &p = plugins[i];
+
+		lua_newtable(L);
+
+		lua_pushstring(L, p.id.c_str());
+		lua_setfield(L, -2, "id");
+		lua_pushstring(L, (p.name.empty() ? p.id : p.name).c_str());
+		lua_setfield(L, -2, "name");
+		lua_pushstring(L, p.version.c_str());
+		lua_setfield(L, -2, "version");
+		lua_pushstring(L, p.author.c_str());
+		lua_setfield(L, -2, "author");
+		lua_pushstring(L, p.dir.c_str());
+		lua_setfield(L, -2, "dir");
+		lua_pushboolean(L, p.failed);
+		lua_setfield(L, -2, "failed");
+
+		lua_rawseti(L, -2, (int)i + 1);
+	}
+
+	return 1;
+}
+
+// plugin.reload(id) -> true if `id` names a loaded plugin. Does not reload it
+// on the spot: the request is only recorded, and carried out from the top of
+// the next frame, well after this call - and the route handler it runs
+// in - have returned. See LuaEngine::request_plugin_reload for why: doing it
+// synchronously would tear down the very Lua state this call is running on.
+static int l_plugin_reload(lua_State *L)
+{
+	const char *id = luaL_checkstring(L, 1);
+	lua_pushboolean(L, g_lua.request_plugin_reload(id));
+	return 1;
+}
+
+// plugin.reload_all() - same deferral, for every plugin at once (what the
+// bare `lua_reload` console command does).
+static int l_plugin_reload_all(lua_State *L)
+{
+	g_lua.request_full_reload();
 	return 0;
 }
 
@@ -345,10 +451,13 @@ static int l_players_list(lua_State *L)
 
 static const luaL_Reg s_plugin[] =
 {
-	{ "dir",       l_plugin_dir },
-	{ "id",        l_plugin_id },
-	{ "data_dir",  l_plugin_data_dir },
-	{ "on_unload", l_plugin_on_unload },
+	{ "dir",         l_plugin_dir },
+	{ "id",          l_plugin_id },
+	{ "data_dir",    l_plugin_data_dir },
+	{ "on_unload",   l_plugin_on_unload },
+	{ "list",        l_plugin_list },
+	{ "reload",      l_plugin_reload },
+	{ "reload_all",  l_plugin_reload_all },
 	{ NULL, NULL }
 };
 

@@ -56,7 +56,8 @@ function subcommands.list(ctx)
 	end
 	for _, node in ipairs(names) do
 		local spec = perms[node]
-		ctx.reply(("  %-28s %s%s"):format(node,
+		ctx.reply(("  %-28s %-16s %s%s"):format(node,
+			spec.plugin and ("(" .. spec.plugin .. ")") or "",
 			spec.desc or "",
 			spec.default and (" [default: " .. tostring(spec.default) .. "]") or ""))
 	end

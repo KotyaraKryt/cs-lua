@@ -16,8 +16,7 @@
 --   hook.add("admin.rights_changed", "bans.sync", function(e) ... end)
 --
 -- Ownership is not guessed from the call stack: plugin.id() comes from the
--- engine and names the plugin whose code is running right now, so a bare
--- single-file plugin is identified exactly like a folder one.
+-- engine and names the plugin whose code is running right now.
 
 local exports_registry = {}		-- [plugin] = { [name] = { fn, version } }
 

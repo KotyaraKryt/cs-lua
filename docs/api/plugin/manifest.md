@@ -8,7 +8,7 @@ description: "Объявляет метаданные и требования п
 Объявляет метаданные и требования плагина.
 
 ```lua
-plugin { name = , version = , author = , api_version = , requires = }
+plugin { name = , version = , author = , api_version = , min_engine_version = , max_engine_version = , requires = }
 ```
 
 ## Поля
@@ -19,31 +19,44 @@ plugin { name = , version = , author = , api_version = , requires = }
 | `version` | string | версия плагина |
 | `author` | string | автор |
 | `api_version` | number | версия Lua-API, под которую написан плагин |
+| `min_engine_version` | string | минимальная сборка cs-lua, `"X.Y.Z"` |
+| `max_engine_version` | string | максимальная проверенная сборка cs-lua, `"X.Y.Z"` |
 | `requires` | table | модули, которые должны резолвиться через `require` |
 
 ## Пример
 
 ```lua
 plugin {
-	name        = "Shop",
-	version     = "1.0",
-	author      = "kotyarakryt",
-	api_version = 2,
-	requires    = { "class" },
+	name               = "Shop",
+	version            = "1.0",
+	author             = "kotyarakryt",
+	api_version        = 2,
+	min_engine_version = "2.1.0",
+	requires           = { "class" },
 }
 ```
 
-Вызывается один раз, в начале `init.lua`.
+Вызывается один раз, в `manifest.lua` — это единственная обязанность этого
+файла. Движок грузит `manifest.lua` раньше `init.lua` и требует, чтобы `plugin{}`
+там прозвучал: если нет, плагин не запускается и `init.lua` не выполняется вовсе.
+См. [структуру плагина](../../plugins.md).
 
 `requires` проверяется при загрузке: отсутствующий модуль останавливает плагин на
-первой строке с указанием, чего не хватает.
+первой строке `manifest.lua` с указанием, чего не хватает.
 
 > [!WARNING]
 > `api_version` ниже текущего — отказ загрузки: v2 переименовал
 > весь API, см. [Переход с v1 на v2](../../migration.md). Выше
 > текущего — тоже отказ.
 
+`api_version` меняется только на ломающем изменении API — новый натив
+(например `http_server`) может появиться в сборке, которая всё ещё говорит
+`api_version = 2`. Для этого `min_engine_version`: точнее, чем `api_version`, и не
+требует ждать следующего v3. `max_engine_version` — обратный случай, «плагин
+проверен только по эту сборку», отказ загрузки на более новой. Сравниваются
+как `X.Y.Z`, отсутствующая часть читается как `0`. Текущая сборка — `sv.version`.
+
 > [!NOTE]
 > Лёгкая опечатка: `plugin = { ... }` вместо `plugin { ... }`
-> присваивает таблицу и затирает пространство имён. Модуль пишет
-> об этом в консоль при загрузке.
+> присваивает таблицу и затирает пространство имён — движок решит, что
+> манифест ничего не объявил, и остановит загрузку с ошибкой в консоли.

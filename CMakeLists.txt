@@ -117,6 +117,7 @@ add_library(lua_mm SHARED
 	src/lua_entity.cpp
 	src/lua_db.cpp
 	src/lua_http.cpp
+	src/lua_httpserver.cpp
 	src/regamedll.cpp
 	src/rehlds.cpp
 )
@@ -156,7 +157,9 @@ if(WIN32)
 
 	# HTTP goes through WinHTTP: it ships with Windows and does TLS through
 	# Schannel, so the module stays one file with no OpenSSL beside it.
-	target_link_libraries(lua_mm PRIVATE winhttp)
+	# ws2_32 is the inbound side (http_server): plain sockets, no TLS - an
+	# admin panel is meant to sit behind a tunnel or a LAN, not the open net.
+	target_link_libraries(lua_mm PRIVATE winhttp ws2_32)
 else()
 	# metamod's own convention for a 32-bit Linux module: no "lib" prefix, an
 	# _i386 suffix.

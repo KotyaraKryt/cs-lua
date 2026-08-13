@@ -4,8 +4,9 @@ description: "Раскладка папок плагина, require, окруж�
 
 # Структура плагина
 
-Плагин — папка с `init.lua` внутри `addons/lua/plugins/`. Для кода на два десятка
-строк хватит одиночного `.lua` в той же папке.
+Плагин — папка внутри `addons/lua/plugins/` с двумя обязательными файлами:
+`manifest.lua` и `init.lua`. Одиночный `.lua`-файл плагином не считается —
+структура строгая, папка обязательна.
 
 ```
 addons/lua/
@@ -14,12 +15,42 @@ addons/lua/
   include/            общие библиотеки для require
   plugins/
     greeter/
-      init.lua        точка входа, обязателен
+      manifest.lua    корень: plugin{}, права, конфиг — грузится первым
+      init.lua        код плагина — грузится после manifest.lua
       config.lua
       lib/sessions.lua
-    hello.lua         одиночный файл — тоже плагин
     _wip/             имя с _ или . в начале пропускается
 ```
+
+## manifest.lua
+
+Каждый плагин грузится в два шага, и порядок фиксирован:
+
+1. `manifest.lua` — задаёт правила плагина: вызывает [`plugin{}`](api/plugin/index.md),
+   объявляет права через `access.declare`, поднимает `config.lua`. Ничего
+   игрового тут быть не должно.
+2. `init.lua` — сам плагин: хендлеры, команды, состояние.
+
+Оба файла делят одно окружение и один кеш `require`, так что `require("config")`
+в `init.lua` просто возвращает то, что уже загрузил `manifest.lua`.
+
+```lua
+-- manifest.lua
+plugin {
+	name        = "Shop",
+	version     = "1.0",
+	author      = "kotyarakryt",
+	api_version = 2,
+	requires    = { "class" },
+}
+
+access.declare("shop.buy", { desc = "Доступ к магазину", default = true })
+
+require("config")
+```
+
+Если `manifest.lua` не вызвал `plugin{}` — плагин не грузится: `init.lua` не
+запускается вовсе, ошибка в консоль сразу после первого файла.
 
 ## Окружение
 
@@ -33,7 +64,7 @@ addons/lua/
 ## Порядок загрузки
 
 1. `core/*.lua` — по алфавиту, в общем `_G`;
-2. плагины — по алфавиту имени папки или файла.
+2. плагины — по алфавиту имени папки, для каждого `manifest.lua` перед `init.lua`.
 
 Плагин, которому нужен другой плагин, берёт зависимость через
 [`import`](api/exports/import.md) — лениво, если алфавит неудобен.
@@ -50,20 +81,6 @@ local class   = require("class")        -- addons/lua/include/class.lua
 
 Два плагина могут держать каждый свой `lib/util.lua` и не видеть чужой. Кеш
 модулей у каждого плагина свой и сбрасывается при его перезагрузке.
-
-## Манифест
-
-См. [`plugin{}`](api/plugin/index.md).
-
-```lua
-plugin {
-	name        = "Shop",
-	version     = "1.0",
-	author      = "kotyarakryt",
-	api_version = 2,
-	requires    = { "class" },
-}
-```
 
 ## Core-слой
 

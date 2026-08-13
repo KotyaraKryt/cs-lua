@@ -1,5 +1,6 @@
 #include "cslua.h"
 #include "lua_http.h"
+#include "lua_httpserver.h"
 
 #include <time.h>
 #include "lua_engine.h"
@@ -155,5 +156,6 @@ C_DLLEXPORT int Meta_Detach(PLUG_LOADTIME now, PL_UNLOAD_REASON reason)
 	// Only here, never on a reload: this is the one place where waiting for a
 	// worker costs nothing, because the process is on its way out.
 	cslua_http_shutdown();
+	cslua_httpserver_shutdown();
 	return TRUE;
 }

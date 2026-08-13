@@ -7,14 +7,16 @@ description: "Что такое cs-lua, отличия от AMX Mod X, сост�
 Metamod-модуль для CS 1.6, выполняющий серверные плагины на Lua. Внутри
 LuaJIT 2.1, состояние игроков и события геймплея — из ReHLDS и ReGameDLL.
 
-Плагин — `.lua` файл или папка с `init.lua` в `addons/lua/plugins/`. После
+Плагин — папка с `manifest.lua` и `init.lua` в `addons/lua/plugins/`. После
 `lua_reload` он работает: без компиляции и рестарта сервера.
 
-```lua title="addons/lua/plugins/heal.lua"
+```lua title="addons/lua/plugins/heal/manifest.lua"
 plugin { name = "Heal", api_version = 2 }
 
 access.declare("heal.use", { desc = "Лечить себя", default = "vip" })
+```
 
+```lua title="addons/lua/plugins/heal/init.lua"
 cmd.add("heal", function(ctx)
 	local p = ctx.player
 	if not p or not p:alive() then return end

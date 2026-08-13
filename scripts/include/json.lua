@@ -69,22 +69,27 @@ local function encode_table(t, seen, out)
 	else
 		-- Ключи сортируются: две сборки одних данных дают одинаковый текст,
 		-- что важно и для тестов, и для diff'а в логе.
+		--
+		-- Значение хранится тут же, а не восстанавливается по ключу после
+		-- сортировки: `t[k] ~= nil and t[k] or t[tonumber(k)]` держал ровно
+		-- одно значение - false - которое `and/or` не отличает от отсутствия,
+		-- и превращал его в null.
 		local keys = {}
-		for k in pairs(t) do
+		for k, v in pairs(t) do
 			if type(k) == "string" or type(k) == "number" then
-				keys[#keys + 1] = tostring(k)
+				keys[#keys + 1] = { text = tostring(k), value = v }
 			else
 				error("json.encode: ключ типа " .. type(k), 0)
 			end
 		end
-		table.sort(keys)
+		table.sort(keys, function(a, b) return a.text < b.text end)
 
 		out[#out + 1] = "{"
-		for i, k in ipairs(keys) do
+		for i, entry in ipairs(keys) do
 			if i > 1 then out[#out + 1] = "," end
-			out[#out + 1] = quote(k)
+			out[#out + 1] = quote(entry.text)
 			out[#out + 1] = ":"
-			encode_value(t[k] ~= nil and t[k] or t[tonumber(k)], seen, out)
+			encode_value(entry.value, seen, out)
 		end
 		out[#out + 1] = "}"
 	end

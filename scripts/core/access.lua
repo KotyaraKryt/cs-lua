@@ -280,10 +280,13 @@ function access.declare(node, opts)
 	opts = opts or {}
 	assert(type(opts) == "table", "access.declare: options must be a table")
 
+	-- Every real access.declare now runs from a plugin's manifest.lua, so
+	-- plugin.id() already knows the owner - opts.plugin only overrides it for
+	-- the odd node core.lua declares on nobody's behalf.
 	perms[node] = {
 		desc    = opts.desc,
 		default = opts.default,		-- group name, or true for everyone
-		plugin  = opts.plugin,
+		plugin  = opts.plugin or plugin.id(),
 	}
 
 	generation = generation + 1		-- a new default can widen existing rights

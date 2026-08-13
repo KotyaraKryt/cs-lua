@@ -44,6 +44,26 @@ static void cmd_lua_reload()
 	cslua_print("reloaded '%s'", who);
 }
 
+// lua_check <plugin> - runs plugins/<plugin>/manifest.lua on its own, without
+// touching init.lua or the running plugin list, so a bad plugin{} call or a
+// missing require shows up before `lua_reload` actually starts the thing.
+static void cmd_lua_check()
+{
+	if (CMD_ARGC() < 2) {
+		cslua_print("usage: lua_check <plugin>");
+		return;
+	}
+
+	if (!g_lua.ready()) {
+		cslua_print("Lua state is not running");
+		return;
+	}
+
+	std::string result;
+	g_lua.check_plugin(CMD_ARGV(1), result);
+	cslua_print("%s", result.c_str());
+}
+
 static void cmd_lua_list()
 {
 	if (!g_lua.ready()) {
@@ -74,7 +94,7 @@ static void cmd_lua_list()
 			cslua_timers_count_for_plugin((int)i),
 			cslua_db_count_for_plugin((int)i),
 			p.author.empty() ? "?" : p.author.c_str(),
-			p.failed ? "   [FAILED]" : (p.dir.empty() ? "   (single file)" : ""));
+			p.failed ? "   [FAILED]" : "");
 	}
 
 	cslua_print("  (h = handlers, t = timers, db = open databases)");
@@ -313,6 +333,7 @@ static void cmd_lua_precache()
 void cslua_register_commands()
 {
 	REG_SVR_COMMAND("lua_reload", cmd_lua_reload);
+	REG_SVR_COMMAND("lua_check", cmd_lua_check);
 	REG_SVR_COMMAND("lua_list", cmd_lua_list);
 	REG_SVR_COMMAND("lua_profile", cmd_lua_profile);
 	REG_SVR_COMMAND("lua_debug", cmd_lua_debug);
