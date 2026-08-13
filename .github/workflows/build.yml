@@ -58,49 +58,51 @@ jobs:
     needs: tests
     runs-on: ubuntu-latest
 
-    # Deliberately an old distro. A module linked against a current glibc asks
-    # for symbol versions (GLIBC_2.38 and friends) that the boxes CS servers
-    # actually run on do not have, and it refuses to load there with a dlopen
-    # error, not a build error - so this has to be caught by picking an old
-    # enough floor up front, not by any check here. Debian 11 (glibc 2.31)
-    # was the original floor and it was not old enough: a real host still in
-    # service came back with "libpthread.so.0: version `GLIBC_2.30' not
-    # found". Ubuntu 18.04 puts the floor at glibc 2.27.
-    container: ubuntu:18.04
-
     steps:
-      # GoldSrc is 32-bit, so everything down to libstdc++ has to be.
-      - name: Install the 32-bit toolchain
-        run: |
-          apt-get update
-          apt-get install -y --no-install-recommends \
-            build-essential gcc-multilib g++-multilib \
-            git ca-certificates curl file make
-          # Debian 11 ships cmake 3.18 and the project asks for 3.20.
-          curl -fsSL https://github.com/Kitware/CMake/releases/download/v3.28.6/cmake-3.28.6-linux-x86_64.tar.gz \
-            | tar xz --strip-components=1 -C /usr/local
-
-      # After git is installed, or the submodules do not come down.
       - uses: actions/checkout@v5
         with:
           submodules: recursive
 
-      # -fPIC matters: the stock static objects are position-dependent, and
-      # they cannot be linked into a shared object.
-      - name: Build LuaJIT (x86, static, PIC)
+      # Deliberately an old distro to compile against - and deliberately not
+      # this job's own `container:`, because actions/checkout and everything
+      # else GitHub runs here needs a Node.js new enough to want a newer
+      # glibc than the target distro ships, which made the container itself
+      # unable to run the actions that populate it. So checkout happens on
+      # the normal runner above, and only the compile step below runs inside
+      # the old image, driven by hand through `docker run`.
+      #
+      # A module linked against a current glibc asks for symbol versions
+      # (GLIBC_2.38 and friends) that the boxes CS servers actually run on do
+      # not have, and it refuses to load there with a dlopen error, not a
+      # build error - so the floor has to be picked low up front, not caught
+      # by any check here. Debian 11 (glibc 2.31) was the original floor and
+      # it was not old enough: a real host still in service came back with
+      # "libpthread.so.0: version `GLIBC_2.30' not found". Ubuntu 18.04 puts
+      # the floor at glibc 2.27.
+      - name: Build inside ubuntu:18.04 (glibc 2.27 floor)
         run: |
-          make -C third_party/luajit/src \
-            CC="gcc -m32" BUILDMODE=static TARGET_CFLAGS=-fPIC -j"$(nproc)"
+          docker run --rm -v "$PWD:/work" -w /work ubuntu:18.04 bash -c '
+            set -e
+            apt-get update
+            apt-get install -y --no-install-recommends \
+              build-essential gcc-multilib g++-multilib curl file make
+            # 18.04 ships cmake 3.10 and the project asks for 3.20.
+            curl -fsSL https://github.com/Kitware/CMake/releases/download/v3.28.6/cmake-3.28.6-linux-x86_64.tar.gz \
+              | tar xz --strip-components=1 -C /usr/local
 
-      - name: Configure
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCSLUA_SERVER_DIR=
+            # -fPIC matters: the stock static objects are position-dependent,
+            # and they cannot be linked into a shared object.
+            make -C third_party/luajit/src \
+              CC="gcc -m32" BUILDMODE=static TARGET_CFLAGS=-fPIC -j"$(nproc)"
 
-      - name: Build
-        run: cmake --build build -j"$(nproc)"
+            cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCSLUA_SERVER_DIR=
+            cmake --build build -j"$(nproc)"
+          '
 
       # A module that pulls in a symbol the engine does not provide loads fine
       # and dies later, so check the file is what it claims to be and that
-      # nothing is left dangling.
+      # nothing is left dangling. Runs on the normal runner, not the old
+      # image - file/nm here are only inspecting the result, not running it.
       - name: Check the module
         run: |
           file build/lua_mm_i386.so
