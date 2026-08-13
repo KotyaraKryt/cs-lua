@@ -12,49 +12,62 @@ NS = {
                     'name': 'plugin{}',
                     'slug': 'manifest',
                     'brief': 'Объявляет метаданные и требования плагина.',
-                    'sig': 'plugin { name = , version = , author = , api_version = , requires = }',
+                    'sig': 'plugin { name = , version = , author = , api_version = , min_engine_version = , max_engine_version = , requires = }',
                     'args': None,
                     'fields': ('Поля', [
                         ('name', 'string', 'имя в `lua_list`'),
                         ('version', 'string', 'версия плагина'),
                         ('author', 'string', 'автор'),
                         ('api_version', 'number', 'версия Lua-API, под которую написан плагин'),
+                        ('min_engine_version', 'string', 'минимальная сборка cs-lua, `"X.Y.Z"`'),
+                        ('max_engine_version', 'string', 'максимальная проверенная сборка cs-lua, `"X.Y.Z"`'),
                         ('requires', 'table', 'модули, которые должны резолвиться через `require`'),
                     ]),
                     'example': """
 plugin {
-	name        = "Shop",
-	version     = "1.0",
-	author      = "kotyarakryt",
-	api_version = 2,
-	requires    = { "class" },
+	name               = "Shop",
+	version            = "1.0",
+	author             = "kotyarakryt",
+	api_version        = 2,
+	min_engine_version = "2.1.0",
+	requires           = { "class" },
 }
 """,
                     'extra': """
-Вызывается один раз, в начале `init.lua`.
+Вызывается один раз, в `manifest.lua` — это единственная обязанность этого
+файла. Движок грузит `manifest.lua` раньше `init.lua` и требует, чтобы `plugin{}`
+там прозвучал: если нет, плагин не запускается и `init.lua` не выполняется вовсе.
+См. [структуру плагина](../../plugins.md).
 
 `requires` проверяется при загрузке: отсутствующий модуль останавливает плагин на
-первой строке с указанием, чего не хватает.
+первой строке `manifest.lua` с указанием, чего не хватает.
+
+`api_version` меняется только на ломающем изменении API — новый натив
+(например `http_server`) может появиться в сборке, которая всё ещё говорит
+`api_version = 2`. Для этого `min_engine_version`: точнее, чем `api_version`, и не
+требует ждать следующего v3. `max_engine_version` — обратный случай, «плагин
+проверен только по эту сборку», отказ загрузки на более новой. Сравниваются
+как `X.Y.Z`, отсутствующая часть читается как `0`. Текущая сборка — `sv.version`.
 """,
                     'notes': [
                         ('warning', '`api_version` ниже текущего — отказ загрузки: v2 переименовал\nвесь API, см. [Переход с v1 на v2](../../migration.md). Выше\nтекущего — тоже отказ.'),
-                        ('note', 'Лёгкая опечатка: `plugin = { ... }` вместо `plugin { ... }`\nприсваивает таблицу и затирает пространство имён. Модуль пишет\nоб этом в консоль при загрузке.'),
+                        ('note', 'Лёгкая опечатка: `plugin = { ... }` вместо `plugin { ... }`\nприсваивает таблицу и затирает пространство имён — движок решит, что\nманифест ничего не объявил, и остановит загрузку с ошибкой в консоли.'),
                     ],
                 },
                 {
                     'name': 'plugin.id',
-                    'brief': 'Имя папки плагина или файла без `.lua`.',
+                    'brief': 'Имя папки плагина.',
                     'sig': 'plugin.id()',
                     'args': [],
                     'returns': [('string \\| nil', '`nil` в core-слое')],
-                    'extra': 'Это и есть идентичность плагина: у одиночного `.lua` она тоже есть, в отличие от `plugin.dir()`.',
+                    'extra': 'Это и есть идентичность плагина — на неё ключуется реестр [`export`](../exports/index.md).',
                 },
                 {
                     'name': 'plugin.dir',
                     'brief': 'Абсолютный путь к папке плагина.',
                     'sig': 'plugin.dir()',
                     'args': [],
-                    'returns': [('string \\| nil', '`nil` у одиночного `.lua`')],
+                    'returns': [('string \\| nil', '`nil` в core-слое')],
                     'notes': [('warning', 'Здесь лежит код, и установщик перезаписывает его при обновлении.\nДанные клади в [`plugin.data_dir()`](data_dir.md).')],
                 },
                 {

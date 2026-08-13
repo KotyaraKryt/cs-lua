@@ -88,7 +88,7 @@ description: "Плоский список всех функций и метод�
 | [`p:health`](players/health.md) | players | Здоровье игрока |
 | [`p:hud`](players/hud.md) | players | Рисует текст на HUD с позицией, цветом и таймингами |
 | [`p.id`](players/id.md) | players | Номер слота игрока |
-| [`plugin.id`](plugin/id.md) | plugin | Имя папки плагина или файла без `.lua` |
+| [`plugin.id`](plugin/id.md) | plugin | Имя папки плагина |
 | [`import`](exports/import.md) | export / import | Возвращает прокси к экспортам плагина; жёсткая зависимость |
 | [`ents.in_sphere`](ents/in_sphere.md) | ents | Находит все сущности в радиусе от точки |
 | [`e.index`](ents/index.md) | ents | Индекс edict'а |
