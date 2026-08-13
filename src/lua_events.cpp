@@ -3,6 +3,7 @@
 #include "lua_engine.h"
 #include "lua_natives.h"
 #include "lua_player.h"
+#include "lua_entity.h"
 
 #include <algorithm>
 #include <string.h>
@@ -26,12 +27,15 @@ static const char *const s_event_names[CSLUA_EVENT_COUNT] =
 	"player_death",
 	"player_team_change",
 	"weapon_fire",
+	"weapon_deploy",
 	"round_start",
 	"round_end",
 	"round_freeze_end",
 	"bomb_planted",
 	"bomb_defused",
 	"bomb_exploded",
+	"grenade_explode",
+	"grenade_thrown",
 };
 
 static int find_event(const char *name)
@@ -42,14 +46,15 @@ static int find_event(const char *name)
 	return -1;
 }
 
-// The three events whose outcome a handler can change. Everything else is a
+// The events whose outcome a handler can change. Everything else is a
 // notification: e:cancel() on one of those says so instead of quietly doing
 // nothing, which is the kind of bug that takes an evening to find.
 static bool is_cancellable(int ev)
 {
 	return ev == CSLUA_EVENT_CLIENT_CONNECT
 		|| ev == CSLUA_EVENT_PLAYER_CHAT
-		|| ev == CSLUA_EVENT_PLAYER_HURT;
+		|| ev == CSLUA_EVENT_PLAYER_HURT
+		|| ev == CSLUA_EVENT_GRENADE_EXPLODE;
 }
 
 static std::string known_events()
@@ -613,6 +618,14 @@ static void set_player(lua_State *L, int id, const char *field)
 	lua_setfield(L, -2, field);
 }
 
+// entity 0 - the throw failed, or whatever made the entity is gone - is nil,
+// same convention as set_player_or_nil.
+static void set_entity_or_nil(lua_State *L, int index, const char *field)
+{
+	cslua_push_entity_index(L, index);
+	lua_setfield(L, -2, field);
+}
+
 static void set_string(lua_State *L, const std::string &s, const char *field)
 {
 	lua_pushstring(L, s.c_str());
@@ -795,6 +808,33 @@ void LuaEvents::fire_weapon_fire(int id, const char *weapon, int clip)
 	});
 }
 
+void LuaEvents::fire_weapon_deploy(int id, const char *weapon,
+	std::string &view_model, std::string &world_model)
+{
+	std::string wname = weapon ? weapon : "";
+	std::string vm = view_model;
+	std::string wm = world_model;
+
+	run(CSLUA_EVENT_WEAPON_DEPLOY,
+		[=](lua_State *L) {
+			set_player(L, id, "player");
+			set_string(L, wname, "weapon");
+			set_string(L, vm, "view_model");
+			set_string(L, wm, "world_model");
+		},
+		[&](lua_State *L) {
+			lua_getfield(L, -1, "view_model");
+			if (lua_isstring(L, -1))
+				view_model = lua_tostring(L, -1);
+			lua_pop(L, 1);
+
+			lua_getfield(L, -1, "world_model");
+			if (lua_isstring(L, -1))
+				world_model = lua_tostring(L, -1);
+			lua_pop(L, 1);
+		});
+}
+
 void LuaEvents::fire_map_change(const char *map)
 {
 	std::string name = map ? map : "";
@@ -853,5 +893,23 @@ void LuaEvents::fire_bomb_exploded(float x, float y, float z)
 		set_number(L, x, "x");
 		set_number(L, y, "y");
 		set_number(L, z, "z");
+	});
+}
+
+bool LuaEvents::fire_grenade_explode(int owner, float x, float y, float z)
+{
+	return run(CSLUA_EVENT_GRENADE_EXPLODE, [=](lua_State *L) {
+		set_player_or_nil(L, owner, "player");
+		set_number(L, x, "x");
+		set_number(L, y, "y");
+		set_number(L, z, "z");
+	});
+}
+
+void LuaEvents::fire_grenade_thrown(int owner, int entity_index)
+{
+	notify(CSLUA_EVENT_GRENADE_THROWN, [=](lua_State *L) {
+		set_player_or_nil(L, owner, "player");
+		set_entity_or_nil(L, entity_index, "entity");
 	});
 }

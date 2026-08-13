@@ -241,6 +241,49 @@ end)
                        ('e.clip', 'number', 'патронов в магазине после выстрела')],
                       extra='Только огнестрел: нож бьёт через `TraceAttack`, гранаты идут своими цепочками. Дробовик даёт одно событие на выстрел, а не на дробину.',
                       regamedll=True),
+                event('weapon_deploy', 'Оружие вот-вот покажет вьюмодель и модель в руках.',
+                      [PLAYER, ('e.weapon', 'string', 'classname оружия'),
+                       ('e.view_model', 'string', 'путь вьюмодели; запись подменяет её'),
+                       ('e.world_model', 'string', 'путь модели в руках; запись подменяет её')],
+                      example="""
+hook.add("weapon_deploy", "healnade.reskin", function(e)
+	if e.weapon == "weapon_hegrenade" then
+		e.view_model = "models/reapi_healthnade/v_hegrenade_v1.mdl"
+		e.world_model = "models/reapi_healthnade/p_hegrenade_v1.mdl"
+	end
+end)
+""",
+                      extra='Оба поля приходят уже заполненными тем, что показал бы движок — меняет их только тот, кто хочет реснуть оружие. Не заменяет модель на земле/в полёте: это `grenade_thrown` про `weapon_hegrenade`.',
+                      regamedll=True,
+                      see=[('grenade_thrown', 'grenade_thrown.md')]),
+                event('grenade_explode', 'Граната HE вот-вот взорвётся.',
+                      [('e.player', 'player \\| nil', 'кто бросил; `nil`, если бросавшего не осталось'),
+                       ('e.x, e.y, e.z', 'number', 'точка взрыва')],
+                      cancel='`e:cancel()` забирает взрыв целиком себе: ни урона, ни decal\'ей, ни звука от игры — дальше плагин сам решает, что происходит в этой точке.',
+                      example="""
+hook.add("grenade_explode", "healnade.explode", function(e)
+	if not e.player then return end
+	e:cancel()
+	for _, p in ipairs(players.list{ alive = true, team = e.player:team() }) do
+		p:health(math.min(100, p:health() + 25))
+	end
+end)
+""",
+                      extra='Только `weapon_hegrenade` — у флешки и дымовой свой взрыв без урона, событие их не трогает. Бомбу тоже не задевает: у неё отдельная цепочка, `bomb_exploded`.',
+                      regamedll=True),
+                event('grenade_thrown', 'HE-граната только что покинула руку.',
+                      [('e.player', 'player \\| nil', 'кто бросил'),
+                       ('e.entity', 'entity \\| nil', 'сама граната; `nil`, если бросок не удался')],
+                      example="""
+hook.add("grenade_thrown", "healnade.reskin", function(e)
+	if e.entity then
+		e.entity:model("models/reapi_healthnade/w_hegrenade_v1.mdl")
+	end
+end)
+""",
+                      extra='`e.entity` — обычный объект сущности, тот же, что даёт `ents.create`: `e:model()`, `e:origin()` и весь остальной [`ents`](../ents/index.md) работают на нём как на любой другой.',
+                      regamedll=True,
+                      see=[('weapon_deploy', 'weapon_deploy.md'), ('ents', '../ents/index.md')]),
             ],
         },
         {

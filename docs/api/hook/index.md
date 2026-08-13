@@ -60,6 +60,9 @@ end)
 | [`player_death`](player_death.md) | Игрок погиб |
 | [`player_team_change`](player_team_change.md) | Игрок сменил сторону |
 | [`weapon_fire`](weapon_fire.md) | Из ствола вышел выстрел |
+| [`weapon_deploy`](weapon_deploy.md) | Оружие вот-вот покажет вьюмодель и модель в руках |
+| [`grenade_explode`](grenade_explode.md) | Граната HE вот-вот взорвётся |
+| [`grenade_thrown`](grenade_thrown.md) | HE-граната только что покинула руку |
 
 ## Раунд и бомба
 

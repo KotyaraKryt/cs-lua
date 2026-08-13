@@ -6,6 +6,8 @@
 #include "players.h"
 #include "platform.h"
 
+#include <string>
+
 static IReGameApi *s_api = nullptr;
 static IReGameHookchains *s_hooks = nullptr;
 static char s_version[64] = "unavailable";
@@ -286,6 +288,27 @@ static void hook_fire_buckshots(IReGameHook_CBaseEntity_FireBuckshots *chain, CB
 	fire_weapon_event(shooter);
 }
 
+// szViewModel/szWeaponModel are string literals the caller passed in, not
+// buffers to write through - the standard HL SDK deploy call is always
+// DefaultDeploy("models/v_x.mdl", "models/p_x.mdl", ...). Lua overrides by
+// value, so the fix is to hand the chain a different pointer, not to mutate
+// this one.
+static BOOL hook_deploy(IReGameHook_CBasePlayerWeapon_DefaultDeploy *chain, CBasePlayerWeapon *weapon,
+	char *szViewModel, char *szWeaponModel, int iAnim, char *szAnimExt, int skiplocal)
+{
+	if (!weapon || !weapon->pev || !weapon->m_pPlayer)
+		return chain->callNext(weapon, szViewModel, szWeaponModel, iAnim, szAnimExt, skiplocal);
+
+	std::string view_model = szViewModel ? szViewModel : "";
+	std::string world_model = szWeaponModel ? szWeaponModel : "";
+
+	g_events.fire_weapon_deploy(weapon->m_pPlayer->entindex(), STRING(weapon->pev->classname),
+		view_model, world_model);
+
+	return chain->callNext(weapon, (char *)view_model.c_str(), (char *)world_model.c_str(),
+		iAnim, szAnimExt, skiplocal);
+}
+
 static void hook_round_start(IReGameHook_CSGameRules_RestartRound *chain)
 {
 	chain->callNext();
@@ -306,6 +329,21 @@ static void hook_freeze_end(IReGameHook_CSGameRules_OnRoundFreezeEnd *chain)
 {
 	chain->callNext();
 	g_events.fire_round_freeze_end();
+}
+
+// Fires after the engine creates the projectile, so the entity is real and
+// spawned - a script can reskin it with the same ents API it would use on
+// anything from ents.create.
+static CGrenade *hook_throw_he_grenade(IReGameHook_ThrowHeGrenade *chain, entvars_t *pevOwner,
+	Vector &vecStart, Vector &vecVelocity, float time, int iTeam, unsigned short usEvent)
+{
+	CGrenade *grenade = chain->callNext(pevOwner, vecStart, vecVelocity, time, iTeam, usEvent);
+
+	int owner = attacker_slot(pevOwner);
+	int index = (grenade && grenade->pev) ? ENTINDEX(ENT(grenade->pev)) : 0;
+	g_events.fire_grenade_thrown(owner, index);
+
+	return grenade;
 }
 
 static CGrenade *hook_plant_bomb(IReGameHook_PlantBomb *chain, entvars_t *pevOwner,
@@ -338,6 +376,31 @@ static void hook_explode_bomb(IReGameHook_CGrenade_ExplodeBomb *chain, CGrenade 
 	g_events.fire_bomb_exploded(where.x, where.y, where.z);
 }
 
+// This is ExplodeHeGrenade specifically, not FireBullets or TakeDamage: an HE
+// grenade's blast never goes through either, so there was no way for a script
+// to tell "this player's HE just popped" from "the bomb just popped" short of
+// guessing off DMG_BLAST - which C4 sets too. Hooking the grenade's own
+// explode call sidesteps that entirely.
+static void hook_explode_he_grenade(IReGameHook_CGrenade_ExplodeHeGrenade *chain, CGrenade *grenade,
+	TraceResult *ptr, int bitsDamageType)
+{
+	Vector where = grenade && grenade->pev ? grenade->pev->origin : Vector(0, 0, 0);
+
+	// Standard HL SDK convention: a thrown grenade's pev->owner is the thrower.
+	int owner = 0;
+	if (grenade && grenade->pev && grenade->pev->owner) {
+		int idx = ENTINDEX(grenade->pev->owner);
+		if (idx >= 1 && idx < CSLUA_MAXPLAYERS)
+			owner = idx;
+	}
+
+	bool cancelled = g_events.fire_grenade_explode(owner, where.x, where.y, where.z);
+	if (cancelled)
+		return;			// a script took the explosion over: no damage, no effects
+
+	chain->callNext(grenade, ptr, bitsDamageType);
+}
+
 // Which chains we currently hold a hook on.
 //
 // registerHook is fatal when the same handler is added twice - ReGameDLL kills
@@ -352,12 +415,15 @@ enum HookSlot
 	HOOK_FIRE_BULLETS,
 	HOOK_FIRE_BULLETS3,
 	HOOK_FIRE_BUCKSHOTS,
+	HOOK_DEPLOY,
 	HOOK_ROUND_START,
 	HOOK_ROUND_END,
 	HOOK_FREEZE_END,
 	HOOK_PLANT,
 	HOOK_DEFUSE,
 	HOOK_EXPLODE,
+	HOOK_EXPLODE_HE,
+	HOOK_THROW_HE,
 	HOOK_COUNT
 };
 
@@ -404,6 +470,9 @@ void cslua_regamedll_install_hooks()
 	sync_hook(HOOK_FIRE_BULLETS3, s_hooks->CBaseEntity_FireBullets3(), &hook_fire_bullets3, shooting);
 	sync_hook(HOOK_FIRE_BUCKSHOTS, s_hooks->CBaseEntity_FireBuckshots(), &hook_fire_buckshots, shooting);
 
+	sync_hook(HOOK_DEPLOY, s_hooks->CBasePlayerWeapon_DefaultDeploy(), &hook_deploy,
+		g_events.any(CSLUA_EVENT_WEAPON_DEPLOY));
+
 	sync_hook(HOOK_ROUND_START, s_hooks->CSGameRules_RestartRound(), &hook_round_start,
 		g_events.any(CSLUA_EVENT_ROUND_START));
 
@@ -421,6 +490,12 @@ void cslua_regamedll_install_hooks()
 
 	sync_hook(HOOK_EXPLODE, s_hooks->CGrenade_ExplodeBomb(), &hook_explode_bomb,
 		g_events.any(CSLUA_EVENT_BOMB_EXPLODED));
+
+	sync_hook(HOOK_EXPLODE_HE, s_hooks->CGrenade_ExplodeHeGrenade(), &hook_explode_he_grenade,
+		g_events.any(CSLUA_EVENT_GRENADE_EXPLODE));
+
+	sync_hook(HOOK_THROW_HE, s_hooks->ThrowHeGrenade(), &hook_throw_he_grenade,
+		g_events.any(CSLUA_EVENT_GRENADE_THROWN));
 }
 
 void cslua_regamedll_remove_hooks()
@@ -436,12 +511,15 @@ void cslua_regamedll_remove_hooks()
 	s_hooks->CBaseEntity_FireBullets()->unregisterHook(&hook_fire_bullets);
 	s_hooks->CBaseEntity_FireBullets3()->unregisterHook(&hook_fire_bullets3);
 	s_hooks->CBaseEntity_FireBuckshots()->unregisterHook(&hook_fire_buckshots);
+	s_hooks->CBasePlayerWeapon_DefaultDeploy()->unregisterHook(&hook_deploy);
 	s_hooks->CSGameRules_RestartRound()->unregisterHook(&hook_round_start);
 	s_hooks->RoundEnd()->unregisterHook(&hook_round_end);
 	s_hooks->CSGameRules_OnRoundFreezeEnd()->unregisterHook(&hook_freeze_end);
 	s_hooks->PlantBomb()->unregisterHook(&hook_plant_bomb);
 	s_hooks->CGrenade_DefuseBombEnd()->unregisterHook(&hook_defuse_end);
 	s_hooks->CGrenade_ExplodeBomb()->unregisterHook(&hook_explode_bomb);
+	s_hooks->CGrenade_ExplodeHeGrenade()->unregisterHook(&hook_explode_he_grenade);
+	s_hooks->ThrowHeGrenade()->unregisterHook(&hook_throw_he_grenade);
 
 	for (int i = 0; i < HOOK_COUNT; i++)
 		s_installed[i] = false;

@@ -26,6 +26,7 @@ end)
 | [`players`](players/index.md) | объект игрока, поиск, рассылка |
 | [`timer`](timer/index.md) | отложенные и повторяющиеся вызовы |
 | [`ents`](ents/index.md) | сущности |
+| [`fx`](fx/index.md) | взрывы, лучи, шлейфы спрайтов |
 | [`res`](res/index.md) | прекеш звуков и моделей |
 | [`sv`](sv/index.md) | сервер: время, карта, cvar'ы, консоль |
 | [`db`](db/index.md) | SQLite |

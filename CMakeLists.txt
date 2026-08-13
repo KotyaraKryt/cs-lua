@@ -100,6 +100,7 @@ endif()
 add_library(lua_mm SHARED
 	src/h_export.cpp
 	src/meta_api.cpp
+	src/cslua_bootstrap.cpp
 	src/dllapi.cpp
 	src/commands.cpp
 	src/players.cpp
@@ -115,6 +116,7 @@ add_library(lua_mm SHARED
 	src/lua_sound.cpp
 	src/lua_menu.cpp
 	src/lua_entity.cpp
+	src/lua_fx.cpp
 	src/lua_db.cpp
 	src/lua_http.cpp
 	src/lua_httpserver.cpp

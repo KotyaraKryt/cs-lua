@@ -31,12 +31,15 @@ enum CsLuaEvent
 	CSLUA_EVENT_PLAYER_DEATH,		// was player_killed
 	CSLUA_EVENT_PLAYER_TEAM_CHANGE,
 	CSLUA_EVENT_WEAPON_FIRE,
+	CSLUA_EVENT_WEAPON_DEPLOY,		// view/world model can be swapped before the game applies them
 	CSLUA_EVENT_ROUND_START,
 	CSLUA_EVENT_ROUND_END,
 	CSLUA_EVENT_ROUND_FREEZE_END,	// freeze time over, players can move
 	CSLUA_EVENT_BOMB_PLANTED,
 	CSLUA_EVENT_BOMB_DEFUSED,
 	CSLUA_EVENT_BOMB_EXPLODED,
+	CSLUA_EVENT_GRENADE_EXPLODE,		// HE grenade only; cancel to take over the explosion
+	CSLUA_EVENT_GRENADE_THROWN,		// HE grenade just left the hand; entity for reskinning
 
 	CSLUA_EVENT_COUNT
 };
@@ -146,6 +149,12 @@ public:
 	// A shot left the barrel. Firearms only - see the note in docs/events.md.
 	void fire_weapon_fire(int id, const char *weapon, int clip);
 
+	// A weapon is about to show its view/world model. view_model/world_model
+	// come in holding what the game would use; a handler that changes the
+	// field gets that path applied instead, in and out through the same refs.
+	void fire_weapon_deploy(int id, const char *weapon,
+		std::string &view_model, std::string &world_model);
+
 	void fire_round_start();
 	void fire_round_end(int winner);
 	void fire_round_freeze_end();
@@ -154,6 +163,18 @@ public:
 	void fire_bomb_planted(int planter);
 	void fire_bomb_defused(int defuser, bool success);
 	void fire_bomb_exploded(float x, float y, float z);
+
+	// An HE grenade is about to explode. owner is 0 when the thrower is gone
+	// or was never a player. Returns true if a handler cancelled: the caller
+	// must then skip the game's own explosion (damage, decals, sound) and
+	// leave the whole effect to Lua.
+	bool fire_grenade_explode(int owner, float x, float y, float z);
+
+	// A thrown HE grenade, right after the engine creates it. entity_index is
+	// 0 if the throw failed. Scripts get the object through e:model() and the
+	// rest of ents rather than a bespoke setter, so reskinning it is exactly
+	// like reskinning anything else made with ents.create.
+	void fire_grenade_thrown(int owner, int entity_index);
 
 	// TakeDamage passes damage by reference, so a handler can change it or
 	// zero it out. Returns the final damage the game should apply: whatever

@@ -20,7 +20,7 @@ import render  # noqa: E402
 
 # Порядок в меню: от того, с чего начинают, к тому, что ищут реже.
 NAMESPACES = [
-    'hook', 'cmd', 'players', 'timer', 'ents', 'res',
+    'hook', 'cmd', 'players', 'timer', 'ents', 'fx', 'res',
     'sv', 'db', 'store', 'http', 'menu', 'ui', 'access', 'plugin', 'exports',
 ]
 

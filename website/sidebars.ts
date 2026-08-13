@@ -39,6 +39,9 @@ const sidebars: SidebarsConfig = {
             {type: 'doc', id: 'api/hook/player_death', label: 'player_death'},
             {type: 'doc', id: 'api/hook/player_team_change', label: 'player_team_change'},
             {type: 'doc', id: 'api/hook/weapon_fire', label: 'weapon_fire'},
+            {type: 'doc', id: 'api/hook/weapon_deploy', label: 'weapon_deploy'},
+            {type: 'doc', id: 'api/hook/grenade_explode', label: 'grenade_explode'},
+            {type: 'doc', id: 'api/hook/grenade_thrown', label: 'grenade_thrown'},
           ]},
           {type: 'category', label: 'Раунд и бомба', collapsed: true, items: [
             {type: 'doc', id: 'api/hook/round_start', label: 'round_start'},
@@ -160,6 +163,11 @@ const sidebars: SidebarsConfig = {
             {type: 'doc', id: 'api/ents/size', label: 'e:size'},
             {type: 'doc', id: 'api/ents/render', label: 'e:render'},
           ]},
+        ]},
+        {type: 'category', label: 'fx', collapsed: true, link: {type: 'doc', id: 'api/fx/index'}, items: [
+          {type: 'doc', id: 'api/fx/explosion', label: 'fx.explosion'},
+          {type: 'doc', id: 'api/fx/beam_cylinder', label: 'fx.beam_cylinder'},
+          {type: 'doc', id: 'api/fx/sprite_trail', label: 'fx.sprite_trail'},
         ]},
         {type: 'category', label: 'res', collapsed: true, link: {type: 'doc', id: 'api/res/index'}, items: [
           {type: 'doc', id: 'api/res/sound', label: 'res.sound'},

@@ -8,3 +8,7 @@
 // every method checks it before touching anything.
 void cslua_register_entity(lua_State *L);
 void cslua_entity_shutdown();
+
+// Wraps an edict by index the same way ents.find/e:spawn do, for hookchains
+// that only hand back an index (or 0 for "no entity").
+void cslua_push_entity_index(lua_State *L, int index);

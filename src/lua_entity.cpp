@@ -78,6 +78,18 @@ static void push_entity(lua_State *L, edict_t *e)
 	lua_setmetatable(L, -2);
 }
 
+// For callers outside this file that only have an index - a hookchain arg,
+// say - and want the same object a script gets from ents.find or e:spawn().
+void cslua_push_entity_index(lua_State *L, int index)
+{
+	if (!cslua_world_ready() || index <= 0) {
+		lua_pushnil(L);
+		return;
+	}
+
+	push_entity(L, g_engfuncs.pfnPEntityOfEntIndex(index));
+}
+
 // Same read/write-in-one-method idiom the player object uses.
 static int vector_field(lua_State *L, Vector &field)
 {

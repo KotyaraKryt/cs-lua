@@ -25,6 +25,7 @@ description: "Плоский список всех функций и метод�
 | [`p:armor`](players/armor.md) | players | Броня игрока |
 | [`datafile.at`](store/at.md) | store | Привязывает модуль к своему каталогу |
 | [`p:ban`](players/ban.md) | players | Банит игрока |
+| [`fx.beam_cylinder`](fx/beam_cylinder.md) | fx | Кольцо луча, расширяющееся от точки |
 | [`bomb_defused`](hook/bomb_defused.md) | hook | Попытка разминирования завершилась |
 | [`bomb_exploded`](hook/bomb_exploded.md) | hook | Бомба взорвалась |
 | [`bomb_planted`](hook/bomb_planted.md) | hook | Бомба заложена |
@@ -66,6 +67,7 @@ description: "Плоский список всех функций и метод�
 | [`timer.every`](timer/every.md) | timer | Вызывает функцию каждые N секунд, пока её не снимут |
 | [`db:exec`](db/exec.md) | db | Выполняет запрос, ничего не возвращающий |
 | [`p:exec`](players/exec.md) | players | Выполняет консольную команду на машине игрока |
+| [`fx.explosion`](fx/explosion.md) | fx | Спрайт взрыва в точке |
 | [`export`](exports/export.md) | export / import | Публикует функцию плагина наружу |
 | [`ents.find`](ents/find.md) | ents | Находит все сущности с заданным classname |
 | [`players.find`](players/find.md) | players | Ищет игрока по слоту, userid или части ника |
@@ -82,6 +84,8 @@ description: "Плоский список всех функций и метод�
 | [`p:godmode`](players/godmode.md) | players | Неуязвимость |
 | [`access.grant`](access/grant.md) | access | Выдаёт права по ключу |
 | [`p:gravity`](players/gravity.md) | players | Множитель гравитации |
+| [`grenade_explode`](hook/grenade_explode.md) | hook | Граната HE вот-вот взорвётся |
+| [`grenade_thrown`](hook/grenade_thrown.md) | hook | HE-граната только что покинула руку |
 | [`access.group`](access/group.md) | access | Одна группа по имени |
 | [`p:group`](players/group.md) | players | Состоит ли игрок в группе, с учётом наследования |
 | [`p:groups`](players/groups.md) | players | Массив групп игрока |
@@ -173,6 +177,7 @@ description: "Плоский список всех функций и метод�
 | [`res.sound`](res/sound.md) | res | Регистрирует звук для прекеша |
 | [`e:spawn`](ents/spawn.md) | ents | Запускает `Spawn` сущности |
 | [`p:spawn`](players/spawn.md) | players | Респаун игрока без потери денег и счёта |
+| [`fx.sprite_trail`](fx/sprite_trail.md) | fx | Поток светящихся спрайтов между двумя точками |
 | [`st:sql`](db/stmt_sql.md) | db | Исходный текст запроса |
 | [`p:steamid`](players/steamid.md) | players | SteamID игрока |
 | [`c:str`](sv/str.md) | sv | Значение переменной как строка |
@@ -187,8 +192,9 @@ description: "Плоский список всех функций и метод�
 | [`e:valid`](ents/valid.md) | ents | Жива ли сущность |
 | [`p:velocity`](players/velocity.md) | players | Скорость игрока |
 | [`p:weapon`](players/weapon.md) | players | Classname оружия в руках |
+| [`weapon_deploy`](hook/weapon_deploy.md) | hook | Оружие вот-вот покажет вьюмодель и модель в руках |
 | [`weapon_fire`](hook/weapon_fire.md) | hook | Из ствола вышел выстрел |
 | [`p:weapons`](players/weapons.md) | players | Массив classname всего, что несёт игрок |
 | [`p:weight`](players/weight.md) | players | Вес игрока для иммунитета |
 
-Всего: 179.
+Всего: 185.
