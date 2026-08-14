@@ -368,7 +368,9 @@ static int l_solid(lua_State *L)
 }
 
 // e:movetype() - how the engine moves it.
-//   0 none   4 fly   5 toss   6 push   8 bounce   10 follow
+//   0 none   4 step   5 fly   6 toss   7 push   8 noclip   10 bounce   12 follow
+// (cssdk/common/const.h's MOVETYPE_* - the values the docs used to list here
+// were off by a slot or two; MOVETYPE_FOLLOW is 12, not 10.)
 static int l_movetype(lua_State *L)
 {
 	edict_t *e = self_edict(L);
@@ -379,6 +381,53 @@ static int l_movetype(lua_State *L)
 	}
 
 	e->v.movetype = (int)luaL_checkinteger(L, 2);
+	return 0;
+}
+
+// e:attach(player, x, y, z) - rides along on player, engine-native: sets
+// MOVETYPE_FOLLOW and aiment, same as every classic fakemeta "hat" plugin.
+// The offset goes into pev->v_angle - unused by non-player entities, and the
+// exact field SV_Physics_Follow adds to the parent's origin every server
+// frame (see ReHLDS engine/sv_phys.cpp). Angles are not settable separately:
+// the engine copies the parent's angles (all of pitch/yaw/roll) onto this
+// entity wholesale, every frame, for as long as the attachment holds.
+static int l_attach(lua_State *L)
+{
+	edict_t *e = self_edict(L);
+
+	luaL_checktype(L, 2, LUA_TTABLE);
+	lua_getfield(L, 2, "id");
+	if (!lua_isnumber(L, -1))
+		return luaL_error(L, "attach: expected a player object");
+	int id = (int)lua_tointeger(L, -1);
+	lua_pop(L, 1);
+
+	if (id <= 0 || id >= CSLUA_MAXPLAYERS)
+		return luaL_error(L, "attach: invalid player");
+
+	edict_t *parent = g_engfuncs.pfnPEntityOfEntIndex(id);
+	if (!parent || parent->free)
+		return luaL_error(L, "attach: target player has no valid entity");
+
+	Vector offset(
+		(float)luaL_optnumber(L, 3, 0),
+		(float)luaL_optnumber(L, 4, 0),
+		(float)luaL_optnumber(L, 5, 0));
+
+	e->v.aiment = parent;
+	e->v.movetype = MOVETYPE_FOLLOW;
+	e->v.solid = SOLID_NOT;
+	e->v.v_angle = offset;
+	return 0;
+}
+
+// e:detach() - stops following; the entity stays wherever it last was.
+static int l_detach(lua_State *L)
+{
+	edict_t *e = self_edict(L);
+
+	e->v.aiment = NULL;
+	e->v.movetype = MOVETYPE_NONE;
 	return 0;
 }
 
@@ -553,6 +602,8 @@ static const luaL_Reg s_methods[] =
 	{ "keyvalue",  l_keyvalue },
 	{ "solid",     l_solid },
 	{ "movetype",  l_movetype },
+	{ "attach",    l_attach },
+	{ "detach",    l_detach },
 	{ "size",      l_size },
 	{ "render",    l_render },
 	{ "sequence",  l_sequence },

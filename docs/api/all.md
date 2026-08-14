@@ -23,6 +23,7 @@ description: "Плоский список всех функций и метод�
 | [`e:angles`](ents/angles.md) | ents | Читает или задаёт поворот сущности |
 | [`p:angles`](players/angles.md) | players | Поворот модели игрока |
 | [`p:armor`](players/armor.md) | players | Броня игрока |
+| [`e:attach`](ents/attach.md) | ents | Прикрепляет сущность к игроку, движком, а не телепортом |
 | [`datafile.at`](store/at.md) | store | Привязывает модуль к своему каталогу |
 | [`p:ban`](players/ban.md) | players | Банит игрока |
 | [`fx.beam_cylinder`](fx/beam_cylinder.md) | fx | Кольцо луча, расширяющееся от точки |
@@ -58,6 +59,7 @@ description: "Плоский список всех функций и метод�
 | [`p:deaths`](players/deaths.md) | players | Счётчик смертей |
 | [`access.declare`](access/declare.md) | access | Объявляет ноду прав |
 | [`s:delete`](store/delete.md) | store | Удаляет ключ |
+| [`e:detach`](ents/detach.md) | ents | Отменяет e:attach — сущность перестаёт следовать |
 | [`timer.destroy`](timer/destroy.md) | timer | Снимает именованный таймер этого плагина |
 | [`e:detonate_on_touch`](ents/detonate_on_touch.md) | ents | Следующее касание сразу запускает think сущности |
 | [`p:dhud`](players/dhud.md) | players | То же через `SVC_DIRECTOR` — directed HUD |
