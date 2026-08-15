@@ -23,7 +23,6 @@ description: "Плоский список всех функций и метод�
 | [`e:angles`](ents/angles.md) | ents | Читает или задаёт поворот сущности |
 | [`p:angles`](players/angles.md) | players | Поворот модели игрока |
 | [`p:armor`](players/armor.md) | players | Броня игрока |
-| [`e:attach`](ents/attach.md) | ents | Прикрепляет сущность к игроку, движком, а не телепортом |
 | [`datafile.at`](store/at.md) | store | Привязывает модуль к своему каталогу |
 | [`p:ban`](players/ban.md) | players | Банит игрока |
 | [`fx.beam_cylinder`](fx/beam_cylinder.md) | fx | Кольцо луча, расширяющееся от точки |
@@ -42,12 +41,14 @@ description: "Плоский список всех функций и метод�
 | [`client_connect`](hook/client_connect.md) | hook | Игрок стучится на сервер; его ещё можно не пустить |
 | [`client_disconnect`](hook/client_disconnect.md) | hook | Игрок отключился |
 | [`p:clip`](players/clip.md) | players | Читает или задаёт патроны в магазине |
+| [`conn:close`](mysql/close.md) | mysql | Закрывает соединение |
 | [`db:close`](db/close.md) | db | Закрывает базу |
 | [`m:close`](menu/close.md) | menu | Убирает меню с экрана игрока |
 | [`st:close`](db/stmt_close.md) | db | Освобождает выражение |
 | [`sv.cmd`](sv/cmd.md) | sv | Ставит команду в очередь серверной консоли |
 | [`m:color`](menu/color.md) | menu | Перекрашивает меню целиком |
 | [`ui.color`](ui/color.md) | ui | Разбирает цвет в `{ r, g, b }` |
+| [`mysql.connect`](mysql/connect.md) | mysql | Открывает соединение с сайтовой базой |
 | [`p:connected`](players/connected.md) | players | Занят ли слот |
 | [`p:console`](players/console.md) | players | Пишет строку в консоль игрока |
 | [`m:count`](menu/count.md) | menu | Количество пунктов |
@@ -59,7 +60,6 @@ description: "Плоский список всех функций и метод�
 | [`p:deaths`](players/deaths.md) | players | Счётчик смертей |
 | [`access.declare`](access/declare.md) | access | Объявляет ноду прав |
 | [`s:delete`](store/delete.md) | store | Удаляет ключ |
-| [`e:detach`](ents/detach.md) | ents | Отменяет e:attach — сущность перестаёт следовать |
 | [`timer.destroy`](timer/destroy.md) | timer | Снимает именованный таймер этого плагина |
 | [`e:detonate_on_touch`](ents/detonate_on_touch.md) | ents | Следующее касание сразу запускает think сущности |
 | [`p:dhud`](players/dhud.md) | players | То же через `SVC_DIRECTOR` — directed HUD |
@@ -68,6 +68,7 @@ description: "Плоский список всех функций и метод�
 | [`p:drop`](players/drop.md) | players | Выбрасывает оружие на пол |
 | [`p:ducking`](players/ducking.md) | players | Сидит ли игрок |
 | [`timer.every`](timer/every.md) | timer | Вызывает функцию каждые N секунд, пока её не снимут |
+| [`conn:exec`](mysql/exec.md) | mysql | То же самое, что conn:query — имя удобнее для запросов без строк |
 | [`db:exec`](db/exec.md) | db | Выполняет запрос, ничего не возвращающий |
 | [`p:exec`](players/exec.md) | players | Выполняет консольную команду на машине игрока |
 | [`fx.explosion`](fx/explosion.md) | fx | Спрайт взрыва в точке |
@@ -153,6 +154,7 @@ description: "Плоский список всех функций и метод�
 | [`plugin{}`](plugin/manifest.md) | plugin | Объявляет метаданные и требования плагина |
 | [`http.post`](http/post.md) | http | Выполняет POST-запрос с телом |
 | [`db:prepare`](db/prepare.md) | db | Разбирает SQL один раз для многократного выполнения |
+| [`conn:query`](mysql/query.md) | mysql | Выполняет запрос и отдаёт строки в коллбэк |
 | [`db:query`](db/query.md) | db | Выполняет запрос и возвращает все строки |
 | [`st:query`](db/stmt_query.md) | db | Выполняет выражение и возвращает все строки |
 | [`access.reload`](access/reload.md) | access | Перечитывает `groups.lua` и `users.lua` с диска |
@@ -202,4 +204,4 @@ description: "Плоский список всех функций и метод�
 | [`p:weapons`](players/weapons.md) | players | Массив classname всего, что несёт игрок |
 | [`p:weight`](players/weight.md) | players | Вес игрока для иммунитета |
 
-Всего: 188.
+Всего: 192.

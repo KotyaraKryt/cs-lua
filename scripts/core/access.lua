@@ -130,6 +130,25 @@ local function expired(entry)
 	return type(at) == "number" and at <= os.time()
 end
 
+-- Each group a player holds is its own record ({ name, until_, map }), not
+-- just a name in a flat list - see normalize_membership() below. Expiry is
+-- checked per record, independent of the entry's own until_/map (which now
+-- only gates the entry's personal allow/deny). One key holding several
+-- groups from several sources (GameCMS granting one service per row, say)
+-- used to share a single until_ on the whole entry instead - whichever
+-- grant call ran last silently capped every other group the player held,
+-- permanent ones included.
+local function group_record_expired(rec)
+	local at = rec.until_
+	if at == nil then
+		return false
+	end
+	if at == "map" then
+		return rec.map ~= nil and rec.map ~= sv.map()
+	end
+	return type(at) == "number" and at <= os.time()
+end
+
 -- where = { map = "de_dust2" } or { maps = { ... } }. Missing means "always".
 local function in_context(where)
 	if not where then
@@ -166,6 +185,51 @@ local function as_list(value)
 		return { value }
 	end
 	return value
+end
+
+-- A user's `groups` field is a mix of plain names ("vip", meaning forever)
+-- and tables ({ name = "filantrop", until_ = 1757337413 }, meaning until
+-- then) - written that way in data/users.lua, or built up the same way at
+-- runtime by access.grant(). Normalized here into one shape so nothing else
+-- has to handle both.
+local function normalize_membership(raw)
+	local out = {}
+	for _, g in ipairs(as_list(raw)) do
+		if type(g) == "table" then
+			out[#out + 1] = {
+				name   = tostring(g.name):lower(),
+				until_ = g.until_,
+				map    = g.map,
+			}
+		else
+			out[#out + 1] = { name = tostring(g):lower() }
+		end
+	end
+	return out
+end
+
+-- The inverse, for access.save(): a record with no expiry writes back as
+-- just its name (matches how a permanent grant reads by hand), one with an
+-- until_ keeps the table shape.
+local function serialize_membership(list)
+	local out = {}
+	for _, rec in ipairs(list) do
+		if rec.until_ == nil then
+			out[#out + 1] = rec.name
+		else
+			out[#out + 1] = { name = rec.name, until_ = rec.until_, map = rec.map }
+		end
+	end
+	return out
+end
+
+local function find_membership(list, name)
+	for i, rec in ipairs(list) do
+		if rec.name == name then
+			return i
+		end
+	end
+	return nil
 end
 
 -- One group, with defaults filled in, so nothing downstream has to test for
@@ -212,18 +276,43 @@ function access.reload()
 
 	users = {}
 	local dropped = 0
+	local pruned = 0
 	for key, raw in pairs(raw_users) do
 		local entry = {
 			name     = raw.name,
 			password = raw.password,
-			groups   = as_list(raw.groups),
+			groups   = normalize_membership(raw.groups),
 			allow    = as_list(raw.allow),
 			deny     = as_list(raw.deny),
 			until_   = raw.until_,
 			map      = raw.map,
 			where    = raw.where,
 		}
+
+		-- Each group is pruned on its own schedule now, not the whole entry
+		-- at once - one still-valid group must not vanish just because
+		-- another one on the same key ran out.
+		local kept = {}
+		for _, rec in ipairs(entry.groups) do
+			if group_record_expired(rec) then
+				pruned = pruned + 1
+			else
+				kept[#kept + 1] = rec
+			end
+		end
+		entry.groups = kept
+
+		-- The entry's own until_/map only ever covered its personal
+		-- allow/deny - clear those once expired, same as before, but no
+		-- longer as a reason to drop groups that are still good.
 		if expired(entry) then
+			entry.allow = {}
+			entry.deny = {}
+			entry.until_ = nil
+			entry.map = nil
+		end
+
+		if #entry.groups == 0 and #entry.allow == 0 and #entry.deny == 0 then
 			dropped = dropped + 1
 		else
 			users[key] = entry
@@ -233,6 +322,9 @@ function access.reload()
 	generation = generation + 1
 	cache = {}
 
+	if pruned > 0 then
+		print(("[access] pruned %d expired group grant(s)"):format(pruned))
+	end
 	if dropped > 0 then
 		print(("[access] dropped %d expired entr%s")
 			:format(dropped, dropped == 1 and "y" or "ies"))
@@ -248,7 +340,7 @@ function access.save()
 		out[key] = {
 			name     = e.name,
 			password = e.password,
-			groups   = #e.groups > 0 and e.groups or nil,
+			groups   = #e.groups > 0 and serialize_membership(e.groups) or nil,
 			allow    = #e.allow > 0 and e.allow or nil,
 			deny     = #e.deny > 0 and e.deny or nil,
 			until_   = e.until_,
@@ -382,17 +474,25 @@ local function build(p)
 	local key = identify(p)
 	local entry = key and users[key]
 
-	if entry and not expired(entry) and in_context(entry.where) then
-		for _, name in ipairs(entry.groups) do
-			local g = groups[tostring(name):lower()]
-			if g and in_context(g.where) then
-				weight = math.max(weight, g.weight)
+	if entry and in_context(entry.where) then
+		-- Each group checked against its own expiry, not the entry's -
+		-- see group_record_expired().
+		for _, rec in ipairs(entry.groups) do
+			if not group_record_expired(rec) then
+				local g = groups[rec.name]
+				if g and in_context(g.where) then
+					weight = math.max(weight, g.weight)
+				end
+				collect_group(rec.name, 2, list, names, seen)
 			end
-			collect_group(name, 2, list, names, seen)
 		end
-		-- Personal nodes outrank every group the player is in.
-		add_grants(list, entry.allow, true, 3, weight)
-		add_grants(list, entry.deny, false, 3, weight)
+		-- Personal nodes outrank every group the player is in. Still gated
+		-- by the entry's own until_/map - that field is exactly what these
+		-- (and only these) mean now.
+		if not expired(entry) then
+			add_grants(list, entry.allow, true, 3, weight)
+			add_grants(list, entry.deny, false, 3, weight)
+		end
 	end
 
 	-- Nodes declared with default = "vip" / true come in underneath
@@ -407,6 +507,18 @@ local function build(p)
 		end
 	end
 
+	-- Recheck at least this often, so a timed grant - the entry's own, or
+	-- any one group's - stops mattering the moment it runs out and not at
+	-- the next reconnect. The earliest of all of them, entry included.
+	local expires = entry and type(entry.until_) == "number" and entry.until_ or nil
+	if entry then
+		for _, rec in ipairs(entry.groups) do
+			if type(rec.until_) == "number" and (not expires or rec.until_ < expires) then
+				expires = rec.until_
+			end
+		end
+	end
+
 	return {
 		generation = generation,
 		map        = sv.map(),
@@ -415,9 +527,7 @@ local function build(p)
 		grants     = list,
 		groups     = names,
 		weight     = weight,
-		-- Recheck at least this often, so a timed grant stops mattering the
-		-- moment it runs out and not at the next reconnect.
-		expires    = entry and type(entry.until_) == "number" and entry.until_ or nil,
+		expires    = expires,
 	}
 end
 
@@ -552,26 +662,54 @@ end
 
 -- access.grant("STEAM_0:1:1", { groups = "vip", until_ = "30d" })
 -- access.grant("STEAM_0:1:1", { allow = { "shop.*" }, where = { map = "de_dust2" } })
+--
+-- until_ scopes to exactly what this call granted: each name in `groups`
+-- gets its own expiry (a second call for a different group, even on the
+-- same key, never touches the first one's), and `allow`/`deny` still share
+-- the entry's own until_ same as always. A group not re-listed here keeps
+-- whatever expiry it already had - passing groups without until_ does not
+-- reset them to forever.
 function access.grant(key, spec)
 	assert(type(key) == "string", "access.grant: key must be a steamid or name:<nick>")
 	assert(type(spec) == "table", "access.grant: expects a table")
 
 	local e = entry_for(key)
+	local granted_groups = as_list(spec.groups)
+	local granted_allow = as_list(spec.allow)
+	local granted_deny = as_list(spec.deny)
 
-	for _, name in ipairs(as_list(spec.groups)) do
+	local until_given = spec.until_ ~= nil
+	local at, map_at
+	if until_given then
+		at = access.expand(spec.until_)
+		map_at = at == "map" and sv.map() or nil
+	end
+
+	for _, name in ipairs(granted_groups) do
 		name = tostring(name):lower()
 		if not groups[name] then
 			return false, "no such group: " .. name
 		end
-		remove_value(e.groups, name)
-		e.groups[#e.groups + 1] = name
+		local idx = find_membership(e.groups, name)
+		local rec
+		if until_given then
+			rec = { name = name, until_ = at, map = map_at }
+		elseif idx then
+			rec = e.groups[idx]	-- re-granted with no until_: keep its expiry
+		else
+			rec = { name = name }	-- brand new, no until_ given: forever
+		end
+		if idx then
+			table.remove(e.groups, idx)
+		end
+		e.groups[#e.groups + 1] = rec
 	end
 
-	for _, node in ipairs(as_list(spec.allow)) do
+	for _, node in ipairs(granted_allow) do
 		remove_value(e.allow, node)
 		e.allow[#e.allow + 1] = node
 	end
-	for _, node in ipairs(as_list(spec.deny)) do
+	for _, node in ipairs(granted_deny) do
 		remove_value(e.deny, node)
 		e.deny[#e.deny + 1] = node
 	end
@@ -585,9 +723,13 @@ function access.grant(key, spec)
 	if spec.where ~= nil then
 		e.where = spec.where
 	end
-	if spec.until_ ~= nil then
-		e.until_ = access.expand(spec.until_)
-		e.map = e.until_ == "map" and sv.map() or nil
+
+	-- The entry's own until_ (personal allow/deny) is set whenever this
+	-- call actually touched allow/deny, or touched nothing group-shaped at
+	-- all - the plain "just set it" case a call with no `groups` is.
+	if until_given and (#granted_allow > 0 or #granted_deny > 0 or #granted_groups == 0) then
+		e.until_ = at
+		e.map = map_at
 	end
 
 	generation = generation + 1
@@ -607,12 +749,49 @@ function access.revoke(key, group, node)
 		users[key] = nil
 	end
 	if group then
-		remove_value(e.groups, tostring(group):lower())
+		local idx = find_membership(e.groups, tostring(group):lower())
+		if idx then
+			table.remove(e.groups, idx)
+		end
 	end
 	if node then
 		remove_value(e.allow, node)
 		remove_value(e.deny, node)
 	end
+
+	generation = generation + 1
+	return true
+end
+
+-- access.copy(from_key, to_key) - wipes to_key's entry and replaces it with
+-- a deep copy of from_key's (groups, personal allow/deny, until_/map, all
+-- of it). For testing as someone else: no DB involved, nothing written to
+-- users.lua until `lua_perms save` - a reload or a fresh access.grant (e.g.
+-- the next GameCMS resync) is enough to undo it.
+function access.copy(from_key, to_key)
+	local src = users[from_key]
+	if not src then
+		users[to_key] = nil
+		generation = generation + 1
+		return true
+	end
+
+	local groups_copy = {}
+	for i, rec in ipairs(src.groups) do
+		groups_copy[i] = { name = rec.name, until_ = rec.until_, map = rec.map }
+	end
+	local allow_copy, deny_copy = {}, {}
+	for i, node in ipairs(src.allow) do allow_copy[i] = node end
+	for i, node in ipairs(src.deny) do deny_copy[i] = node end
+
+	users[to_key] = {
+		groups = groups_copy,
+		allow  = allow_copy,
+		deny   = deny_copy,
+		until_ = src.until_,
+		map    = src.map,
+		where  = src.where,
+	}
 
 	generation = generation + 1
 	return true

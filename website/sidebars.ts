@@ -215,6 +215,16 @@ const sidebars: SidebarsConfig = {
             {type: 'doc', id: 'api/db/stmt_close', label: 'st:close'},
           ]},
         ]},
+        {type: 'category', label: 'mysql', collapsed: true, link: {type: 'doc', id: 'api/mysql/index'}, items: [
+          {type: 'category', label: 'Открытие', collapsed: true, items: [
+            {type: 'doc', id: 'api/mysql/connect', label: 'mysql.connect'},
+          ]},
+          {type: 'category', label: 'Объект соединения', collapsed: true, items: [
+            {type: 'doc', id: 'api/mysql/query', label: 'conn:query'},
+            {type: 'doc', id: 'api/mysql/exec', label: 'conn:exec'},
+            {type: 'doc', id: 'api/mysql/close', label: 'conn:close'},
+          ]},
+        ]},
         {type: 'category', label: 'store', collapsed: true, link: {type: 'doc', id: 'api/store/index'}, items: [
           {type: 'category', label: 'store', collapsed: true, items: [
             {type: 'doc', id: 'api/store/open', label: 'store.open'},

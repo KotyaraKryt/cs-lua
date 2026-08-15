@@ -22,6 +22,8 @@ local function sorted_names(t)
 	return names
 end
 
+-- Works on an entry (personal until_/map) or a group record ({ name,
+-- until_, map }) alike - same two fields, same meaning either way.
 local function describe_until(entry)
 	if entry.until_ == nil then
 		return "forever"
@@ -30,6 +32,23 @@ local function describe_until(entry)
 		return "until the map ends (" .. tostring(entry.map) .. ")"
 	end
 	return "until " .. os.date("%Y-%m-%d %H:%M", entry.until_)
+end
+
+-- e.groups is a list of records now, one expiry per group instead of one
+-- shared by the whole entry - see access.lua's normalize_membership().
+local function describe_groups(list)
+	if #list == 0 then
+		return "-"
+	end
+	local parts = {}
+	for _, rec in ipairs(list) do
+		if rec.until_ == nil then
+			parts[#parts + 1] = rec.name
+		else
+			parts[#parts + 1] = ("%s(%s)"):format(rec.name, describe_until(rec))
+		end
+	end
+	return table.concat(parts, ", ")
 end
 
 local subcommands = {}
@@ -71,9 +90,8 @@ function subcommands.users(ctx)
 	end
 	for _, key in ipairs(keys) do
 		local e = users[key]
-		ctx.reply(("  %-24s groups: %-20s %s"):format(key,
-			#e.groups > 0 and table.concat(e.groups, ",") or "-",
-			describe_until(e)))
+		ctx.reply(("  %-24s groups: %-30s personal: %s"):format(key,
+			describe_groups(e.groups), describe_until(e)))
 	end
 end
 
@@ -89,6 +107,7 @@ function subcommands.who(ctx)
 
 	local entry = access.user(p:steamid()) or access.user("name:" .. p:name())
 	if entry then
+		ctx.reply(("  granted: %s"):format(describe_groups(entry.groups)))
 		ctx.reply(("  entry:  %s"):format(describe_until(entry)))
 		if #entry.allow > 0 then
 			ctx.reply("  allow:  " .. table.concat(entry.allow, " "))
@@ -160,6 +179,26 @@ function subcommands.revoke(ctx)
 	ctx.reply("run `lua_perms save` to keep it across a restart")
 end
 
+-- lua_perms copy <target> <source> - test-only: wipes <target>'s rights and
+-- replaces them with an exact copy of <source>'s (groups, personal
+-- allow/deny, expiries, all of it). Not saved to users.lua unless you also
+-- run `lua_perms save` - a reload or the next GameCMS resync reverts it.
+function subcommands.copy(ctx)
+	local target, terr = players.find(ctx.args[2])
+	if not target then
+		return ctx.reply(terr or "usage: lua_perms copy <target> <source>")
+	end
+	local source, serr = players.find(ctx.args[3])
+	if not source then
+		return ctx.reply(serr or "usage: lua_perms copy <target> <source>")
+	end
+
+	access.copy(source:steamid(), target:steamid())
+	access.invalidate(target)
+	ctx.reply(("copied %s's rights onto %s (not saved - run `lua_perms save` to keep it)")
+		:format(source:name(), target:name()))
+end
+
 function subcommands.save(ctx)
 	local ok, err = access.save()
 	ctx.reply(ok and "saved data/users.lua" or ("save failed: " .. tostring(err)))
@@ -174,7 +213,7 @@ end
 cmd.add("lua_perms", function(ctx)
 	local sub = subcommands[(ctx.args[1] or ""):lower()]
 	if not sub then
-		return ctx.reply("lua_perms: groups | list | users | who | check | grant | revoke | save | reload")
+		return ctx.reply("lua_perms: groups | list | users | who | check | grant | revoke | copy | save | reload")
 	end
 	sub(ctx)
 end, { source = "console" })

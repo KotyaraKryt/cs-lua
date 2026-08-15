@@ -20,11 +20,17 @@
 // registered it. Resolved on first use and cached.
 static int msg_saytext()
 {
+	// A zero result means the game DLL had not registered this message yet -
+	// possible this early - not that it never will. Only a successful lookup
+	// gets cached; a miss keeps id at -1 so the next call tries again instead
+	// of leaving chat silently broken for the rest of the process.
 	static int id = -1;
 	if (id < 0) {
 		id = GET_USER_MSG_ID(PLID, "SayText", NULL);
-		if (!id)
-			cslua_error("user message 'SayText' is not registered, chat output is unavailable");
+		if (!id) {
+			cslua_error("user message 'SayText' is not registered yet, chat output unavailable this call");
+			id = -1;
+		}
 	}
 	return id;
 }
@@ -34,8 +40,10 @@ static int msg_textmsg()
 	static int id = -1;
 	if (id < 0) {
 		id = GET_USER_MSG_ID(PLID, "TextMsg", NULL);
-		if (!id)
-			cslua_error("user message 'TextMsg' is not registered");
+		if (!id) {
+			cslua_error("user message 'TextMsg' is not registered yet");
+			id = -1;
+		}
 	}
 	return id;
 }

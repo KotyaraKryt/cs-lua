@@ -287,6 +287,89 @@ return function(t, support)
 		t.ok(p:can("shop.vip.buy"))
 	end)
 
+	t.it("save/reload переживают смешанный список групп со сроками", function()
+		setup("{}")
+		local p = support.player(1)
+		access.grant(p:steamid(), { groups = "vip" })						-- бессрочно
+		access.grant(p:steamid(), { groups = "moderator", until_ = os.time() + 100 })	-- со сроком
+		t.ok(access.save())
+
+		access.reload()
+		access.invalidate()
+		t.ok(p:can("shop.vip.buy"), "vip должен пережить перезагрузку файла")
+		t.ok(p:can("admin.kick"), "moderator ещё не истёк - должен тоже остаться")
+
+		local e = access.user(p:steamid())
+		local by_name = {}
+		for _, rec in ipairs(e.groups) do
+			by_name[rec.name] = rec
+		end
+		t.eq(by_name.vip.until_, nil)
+		t.ok(type(by_name.moderator.until_) == "number")
+	end)
+
+	--------------------------------------------------------------------
+	-- Срок по группам
+	--
+	-- Раньше until_ был один на всю запись: несколько access.grant подряд
+	-- (GameCMS - по вызову на каждую купленную услугу) означали, что
+	-- последний вызов с реальным сроком тихо переписывал срок вообще всех
+	-- групп на этом ключе, включая бессрочные.
+	--------------------------------------------------------------------
+
+	t.it("срок одной группы не трогает бессрочность другой", function()
+		setup("{}")
+		local p = support.player(1)
+
+		access.grant(p:steamid(), { groups = "vip" })
+		access.grant(p:steamid(), { groups = "moderator", until_ = 30 })
+		access.invalidate()
+
+		local e = access.user(p:steamid())
+		local by_name = {}
+		for _, rec in ipairs(e.groups) do
+			by_name[rec.name] = rec
+		end
+		t.eq(by_name.vip.until_, nil, "vip выдавался без срока")
+		t.eq(by_name.moderator.until_, 30, "moderator должен хранить свой срок")
+	end)
+
+	t.it("просроченная группа отваливается, вечная остаётся", function()
+		setup("{}")
+		local p = support.player(1)
+
+		access.grant(p:steamid(), { groups = "vip" })
+		access.grant(p:steamid(), { groups = "moderator", until_ = os.time() - 10 })
+		access.invalidate()
+
+		t.ok(p:can("shop.vip.buy"), "vip бессрочный, должен остаться")
+		t.no(p:can("admin.kick"), "moderator уже истёк")
+	end)
+
+	t.it("повторная выдача без until_ сохраняет прежний срок группы", function()
+		setup("{}")
+		local p = support.player(1)
+
+		access.grant(p:steamid(), { groups = "vip", until_ = 12345 })
+		access.grant(p:steamid(), { groups = "vip" })	-- напр. gamecms.reload_services без нового until_
+		access.invalidate()
+
+		local e = access.user(p:steamid())
+		t.eq(e.groups[1].until_, 12345, "срок не должен слетать без явного until_")
+	end)
+
+	t.it("until_ у allow/deny не трогает срок групп", function()
+		setup("{}")
+		local p = support.player(1)
+
+		access.grant(p:steamid(), { groups = "vip" })
+		access.grant(p:steamid(), { allow = "admin.kick", until_ = os.time() - 10 })
+		access.invalidate()
+
+		t.ok(p:can("shop.vip.buy"), "vip не должен истечь из-за чужого until_")
+		t.no(p:can("admin.kick"), "личный allow истёк")
+	end)
+
 	--------------------------------------------------------------------
 	-- Кеш
 	--------------------------------------------------------------------

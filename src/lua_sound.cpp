@@ -178,6 +178,15 @@ static int add_resource(lua_State *L, std::vector<Entry> &list, bool models)
 {
 	const char *name = luaL_checkstring(L, 1);
 
+	// PRECACHE_SOUND/PRECACHE_MODEL do not fail gracefully on an empty name -
+	// Host_Error takes the whole process down, not just the offending plugin.
+	// A config with a stray "" (nil is the correct "nothing here", but a
+	// blank string is an easy typo) must not be able to do that - catch it
+	// here as an ordinary Lua error, same as any other bad argument.
+	if (name[0] == '\0') {
+		return luaL_error(L, models ? "res.model: empty name" : "res.sound: empty name");
+	}
+
 	if (!contains(list, name)) {
 		Entry e;
 		e.name = name;
