@@ -137,6 +137,7 @@ struct MysqlApi
 	mysql_error_fn error;
 	mysql_set_character_set_fn set_character_set;
 	bool tried;
+	std::string load_error;	// last dlerror()/GetLastError(), for when nothing loaded at all
 };
 
 MysqlApi s_api = { 0 };
@@ -190,8 +191,22 @@ bool mysql_ready()
 			std::string path = base + "/" + names[i];
 #ifdef _WIN32
 			s_api.handle = LoadLibraryA(path.c_str());
+			if (!s_api.handle) {
+				s_api.load_error = path + ": Win32 error " + std::to_string((unsigned long)GetLastError());
+			}
 #else
 			s_api.handle = dlopen(path.c_str(), RTLD_LAZY | RTLD_LOCAL);
+			// dlerror() only reports the most recent failure, and only
+			// once - the file-not-found misses from the bare-name pass
+			// above are not worth keeping, but this one (the file we
+			// actually expect someone to have dropped in addons/lua) is:
+			// a missing dependency of the library itself (OpenSSL, zlib,
+			// ...) or a permissions problem from an FTP upload both look
+			// identical from the outside otherwise.
+			if (!s_api.handle) {
+				const char *err = dlerror();
+				s_api.load_error = path + ": " + (err ? err : "unknown dlopen failure");
+			}
 #endif
 		}
 	}
@@ -474,6 +489,8 @@ void perform(const Request &req, Response &res)
 	if (!mysql_ready()) {
 		res.error = "no MySQL client library found on this server "
 			"(install libmariadb3 / libmysqlclient21, or the Windows equivalent DLL)";
+		if (!s_api.load_error.empty())
+			res.error += " - " + s_api.load_error;
 		return;
 	}
 
