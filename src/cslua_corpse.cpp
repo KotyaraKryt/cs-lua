@@ -1,5 +1,8 @@
 #include "cslua.h"
 #include "cslua_corpse.h"
+#include "cslua_netwatch.h"
+
+#include <string.h>
 
 // How many active corpses currently want ClCorpse hidden. Not per-player:
 // MessageBegin's own arguments (msg_dest, pOrigin, the destination edict)
@@ -47,6 +50,10 @@ static void Hook_MessageBegin(int msg_dest, int msg_type, const float *pOrigin, 
 	s_suppressing = s_hide_refs > 0 && msg_type == clcorpse_msg_id();
 	if (s_suppressing)
 		RETURN_META(MRES_SUPERCEDE);
+	// A suppressed message never reaches the wire, so it never gets counted -
+	// netwatch is explaining a client's real reliable-buffer usage, and a
+	// dropped ClCorpse never added anything to it.
+	cslua_netwatch_message_begin(ed, msg_type);
 	RETURN_META(MRES_IGNORED);
 }
 
@@ -56,54 +63,66 @@ static void Hook_MessageEnd(void)
 		s_suppressing = false;
 		RETURN_META(MRES_SUPERCEDE);
 	}
+	cslua_netwatch_message_end();
 	RETURN_META(MRES_IGNORED);
 }
 
+// Rough per-field wire sizes (unsigned varint/fixed encodings used by the
+// GoldSrc network protocol). Good enough for "who is flooding whom" - this
+// is a diagnostic estimate, not a byte-exact accounting of SZ_Write*.
 static void Hook_WriteByte(int iValue)
 {
 	if (s_suppressing) RETURN_META(MRES_SUPERCEDE);
+	cslua_netwatch_add_bytes(1);
 	RETURN_META(MRES_IGNORED);
 }
 
 static void Hook_WriteChar(int iValue)
 {
 	if (s_suppressing) RETURN_META(MRES_SUPERCEDE);
+	cslua_netwatch_add_bytes(1);
 	RETURN_META(MRES_IGNORED);
 }
 
 static void Hook_WriteShort(int iValue)
 {
 	if (s_suppressing) RETURN_META(MRES_SUPERCEDE);
+	cslua_netwatch_add_bytes(2);
 	RETURN_META(MRES_IGNORED);
 }
 
 static void Hook_WriteLong(int iValue)
 {
 	if (s_suppressing) RETURN_META(MRES_SUPERCEDE);
+	cslua_netwatch_add_bytes(4);
 	RETURN_META(MRES_IGNORED);
 }
 
 static void Hook_WriteAngle(float flValue)
 {
 	if (s_suppressing) RETURN_META(MRES_SUPERCEDE);
+	cslua_netwatch_add_bytes(1);
 	RETURN_META(MRES_IGNORED);
 }
 
 static void Hook_WriteCoord(float flValue)
 {
 	if (s_suppressing) RETURN_META(MRES_SUPERCEDE);
+	cslua_netwatch_add_bytes(2);
 	RETURN_META(MRES_IGNORED);
 }
 
 static void Hook_WriteString(const char *sz)
 {
 	if (s_suppressing) RETURN_META(MRES_SUPERCEDE);
+	cslua_netwatch_add_bytes(sz ? (int)strlen(sz) + 1 : 1);
 	RETURN_META(MRES_IGNORED);
 }
 
 static void Hook_WriteEntity(int iValue)
 {
 	if (s_suppressing) RETURN_META(MRES_SUPERCEDE);
+	cslua_netwatch_add_bytes(2);
 	RETURN_META(MRES_IGNORED);
 }
 

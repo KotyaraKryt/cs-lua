@@ -10,6 +10,7 @@
 #include "lua_entity.h"
 #include "players.h"
 #include "regamedll.h"
+#include "cslua_netwatch.h"
 
 #include <in_buttons.h>
 #include <string.h>
@@ -183,6 +184,7 @@ static void ClientDisconnect(edict_t *pEntity)
 
 	g_players.on_disconnect(id);
 	cslua_menu_reset(id);
+	cslua_netwatch_forget(id);
 	RETURN_META(MRES_IGNORED);
 }
 

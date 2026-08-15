@@ -196,6 +196,7 @@ add_library(lua_mm SHARED
 	src/regamedll.cpp
 	src/rehlds.cpp
 	src/cslua_corpse.cpp
+	src/cslua_netwatch.cpp
 )
 
 target_include_directories(lua_mm PRIVATE

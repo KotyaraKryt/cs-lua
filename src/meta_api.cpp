@@ -12,6 +12,7 @@
 #include "lua_sound.h"
 #include "lua_message.h"
 #include "cslua_corpse.h"
+#include "cslua_netwatch.h"
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -131,6 +132,25 @@ C_DLLEXPORT int GetEngineFunctions(enginefuncs_t *pengfuncsFromEngine, int *inte
 	return TRUE;
 }
 
+// pfnRegUserMsg only, so cslua_netwatch.cpp can learn a custom usermessage's
+// real name from the id the real engine just assigned it - see
+// cslua_netwatch.h for why that has to be a post-hook.
+C_DLLEXPORT int GetEngineFunctions_Post(enginefuncs_t *pengfuncsFromEngine, int *interfaceVersion)
+{
+	if (!pengfuncsFromEngine) {
+		ALERT(at_logged, "%s called with null pengfuncsFromEngine", __FUNCTION__);
+		return FALSE;
+	}
+	if (*interfaceVersion != ENGINE_INTERFACE_VERSION) {
+		ALERT(at_logged, "%s version mismatch; requested=%d ours=%d", __FUNCTION__, *interfaceVersion, ENGINE_INTERFACE_VERSION);
+		*interfaceVersion = ENGINE_INTERFACE_VERSION;
+		return FALSE;
+	}
+
+	memcpy(pengfuncsFromEngine, &g_CsluaNetwatchPostEngineFuncs, sizeof(enginefuncs_t));
+	return TRUE;
+}
+
 META_FUNCTIONS gMetaFunctionTable =
 {
 	NULL,						// pfnGetEntityAPI			HL SDK; called before game DLL
@@ -140,7 +160,7 @@ META_FUNCTIONS gMetaFunctionTable =
 	GetNewDLLFunctions,			// pfnGetNewDLLFunctions	HL SDK2; called before game DLL
 	GetNewDLLFunctions_Post,	// pfnGetNewDLLFunctions_Post	META; called after game DLL
 	GetEngineFunctions,			// pfnGetEngineFunctions	META; called before HL engine
-	NULL,						// pfnGetEngineFunctions_Post	META; called after HL engine
+	GetEngineFunctions_Post,	// pfnGetEngineFunctions_Post	META; called after HL engine
 };
 
 C_DLLEXPORT int Meta_Query(char *interfaceVersion, plugin_info_t **plinfo, mutil_funcs_t *pMetaUtilFuncs)
@@ -163,8 +183,10 @@ C_DLLEXPORT int Meta_Attach(PLUG_LOADTIME now, META_FUNCTIONS *pFunctionTable, m
 
 	// Engine-level accounting: with ReHLDS we can watch every precache on the
 	// server and stop plugins before the 512-slot tables overflow.
-	if (cslua_rehlds_init())
+	if (cslua_rehlds_init()) {
 		cslua_sound_install_hooks();
+		cslua_netwatch_install_hooks();
+	}
 
 	// Before anything reads addons/lua/core: a module dropped in on its own,
 	// with no scripts/ copied over by hand, gets the runtime layer fetched
