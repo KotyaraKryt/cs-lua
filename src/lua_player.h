@@ -13,3 +13,8 @@ void cslua_push_player(lua_State *L, int id);
 
 // Pushes the broadcast target used as the global `all`.
 void cslua_push_all(lua_State *L);
+
+// sv.hull_free(x, y, z[, ducking]) - registered into `sv` from
+// lua_natives.cpp, implemented here for the TRACE_HULL/Vector plumbing
+// this file already has.
+int cslua_sv_hull_free(lua_State *L);

@@ -463,9 +463,10 @@ static const luaL_Reg s_plugin[] =
 
 static const luaL_Reg s_sv[] =
 {
-	{ "cmd",  l_sv_cmd },
-	{ "time", l_sv_time },
-	{ "map",  l_sv_map },
+	{ "cmd",       l_sv_cmd },
+	{ "time",      l_sv_time },
+	{ "map",       l_sv_map },
+	{ "hull_free", cslua_sv_hull_free },
 	{ NULL, NULL }
 };
 

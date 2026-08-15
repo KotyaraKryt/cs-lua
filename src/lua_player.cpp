@@ -333,6 +333,28 @@ static int l_trace_to(lua_State *L)
 	return 1;
 }
 
+// sv.hull_free(x, y, z[, ducking]) - would a standing (or, with `ducking`,
+// crouching) player fit at this point without spawning stuck in world
+// geometry? A zero-length TRACE_HULL at the point is the standard GoldSrc
+// way to ask that: fStartSolid/fAllSolid come back true when the human hull
+// (or head_hull while ducked) is already overlapping something solid there.
+// Not a player method - nobody has to already exist at the point in question,
+// unlike trace()/trace_to() which fire from a player's own eyes.
+int cslua_sv_hull_free(lua_State *L)
+{
+	Vector point;
+	point.x = (float)luaL_checknumber(L, 1);
+	point.y = (float)luaL_checknumber(L, 2);
+	point.z = (float)luaL_checknumber(L, 3);
+	bool ducking = lua_toboolean(L, 4) != 0;
+
+	TraceResult tr;
+	TRACE_HULL(point, point, ignore_monsters, ducking ? head_hull : human_hull, NULL, &tr);
+
+	lua_pushboolean(L, !tr.fStartSolid && !tr.fAllSolid);
+	return 1;
+}
+
 static int l_alive(lua_State *L)
 {
 	entvars_t *pev = self_pev(L);
