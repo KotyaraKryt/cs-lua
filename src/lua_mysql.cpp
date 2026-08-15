@@ -14,48 +14,15 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifdef _WIN32
-	#include <windows.h>
-#else
-	#include <dlfcn.h>
-#endif
-
-// ---------------------------------------------------------------------------
-// The MySQL C API, resolved by hand
-//
-// No header from the client library is included: every symbol below has had
-// a stable, plain-old-data signature (pointers and integers only, nothing
-// passed by value) across libmysqlclient and MariaDB Connector/C for well
-// over a decade, so dlsym-and-cast is safe without the real declarations -
-// the same trade http.cpp makes for libcurl.
-//
-// The one struct we touch, MYSQL_FIELD, we never allocate or take sizeof: we
-// only ever read through a pointer the library itself handed back, and only
-// its very first member (`char *name`), whose offset has never moved. That
-// is enough to read column names without the real struct layout.
+// Statically linked (third_party/mariadb-connector-c, LGPL - compatible with
+// this project's own GPLv3, unlike Oracle's dual GPL/commercial
+// libmysqlclient). Built with WITH_SSL=OFF and every auth plugin forced
+// STATIC (see CMakeLists.txt): no OpenSSL, no dlopen of a plugin .so at
+// connect time, nothing for a shared host with no root and no apt to be
+// missing at runtime - the whole reason this used to be dlopen'd instead.
+#include <mysql.h>
 
 namespace {
-
-typedef void MYSQL;
-typedef void MYSQL_RES;
-
-// The full MYSQL_FIELD, not just its first member: this exact layout (plain
-// pointers and 4-byte ints, no vendor divergence before `extension`) is part
-// of the wire-compatible C API both libmysqlclient and MariaDB Connector/C
-// have kept unchanged since MySQL 4.1 - every language binding for this API
-// hardcodes the same struct. On the 32-bit builds this project targets every
-// member here is 4 bytes with natural alignment, so there is no padding to
-// get wrong either.
-struct MysqlField
-{
-	char *name, *org_name, *table, *org_table, *db, *catalog, *def;
-	unsigned long length, max_length;
-	unsigned int name_length, org_name_length, table_length, org_table_length,
-		db_length, catalog_length, def_length;
-	unsigned int flags, decimals, charsetnr;
-	int type;		// enum enum_field_types
-	void *extension;
-};
 
 // Text-protocol MySQL sends every value as a string; only the field's
 // declared type says whether "42" is the number 42 or the text "42". These
@@ -80,173 +47,6 @@ bool is_numeric_field_type(int type)
 	default:
 		return false;
 	}
-}
-
-// The client library's own convention, not ours: mysql.h #defines STDCALL to
-// __stdcall on Windows (every exported function, from mysql_init() on) and to
-// nothing everywhere else. Calling a __stdcall export through a plain (cdecl)
-// function pointer runs it fine but leaves the stack pointer off by however
-// many bytes the callee cleaned up on top of what the caller already did -
-// silent corruption, not a link error, and it takes down the process on the
-// very first call. Linux has one calling convention, so this only matters
-// behind the _WIN32 branch below.
-#ifdef _WIN32
-	#define MYSQL_CALL __stdcall
-#else
-	#define MYSQL_CALL
-#endif
-
-typedef MYSQL *(MYSQL_CALL *mysql_init_fn)(MYSQL *);
-typedef MYSQL *(MYSQL_CALL *mysql_real_connect_fn)(MYSQL *, const char *host, const char *user,
-	const char *passwd, const char *db, unsigned int port, const char *unix_socket,
-	unsigned long clientflag);
-typedef void (MYSQL_CALL *mysql_close_fn)(MYSQL *);
-typedef int (MYSQL_CALL *mysql_real_query_fn)(MYSQL *, const char *q, unsigned long length);
-typedef MYSQL_RES *(MYSQL_CALL *mysql_store_result_fn)(MYSQL *);
-typedef void (MYSQL_CALL *mysql_free_result_fn)(MYSQL_RES *);
-typedef char **(MYSQL_CALL *mysql_fetch_row_fn)(MYSQL_RES *);
-typedef unsigned int (MYSQL_CALL *mysql_num_fields_fn)(MYSQL_RES *);
-typedef unsigned int (MYSQL_CALL *mysql_field_count_fn)(MYSQL *);
-typedef void *(MYSQL_CALL *mysql_fetch_field_direct_fn)(MYSQL_RES *, unsigned int);
-typedef unsigned long (MYSQL_CALL *mysql_real_escape_string_fn)(MYSQL *, char *to, const char *from, unsigned long length);
-typedef unsigned long long (MYSQL_CALL *mysql_insert_id_fn)(MYSQL *);
-typedef unsigned long long (MYSQL_CALL *mysql_affected_rows_fn)(MYSQL *);
-typedef const char *(MYSQL_CALL *mysql_error_fn)(MYSQL *);
-typedef int (MYSQL_CALL *mysql_set_character_set_fn)(MYSQL *, const char *csname);
-
-struct MysqlApi
-{
-#ifdef _WIN32
-	HMODULE handle;
-#else
-	void *handle;
-#endif
-	mysql_init_fn init;
-	mysql_real_connect_fn real_connect;
-	mysql_close_fn close;
-	mysql_real_query_fn real_query;
-	mysql_store_result_fn store_result;
-	mysql_free_result_fn free_result;
-	mysql_fetch_row_fn fetch_row;
-	mysql_num_fields_fn num_fields;
-	mysql_field_count_fn field_count;
-	mysql_fetch_field_direct_fn fetch_field_direct;
-	mysql_real_escape_string_fn real_escape_string;
-	mysql_insert_id_fn insert_id;
-	mysql_affected_rows_fn affected_rows;
-	mysql_error_fn error;
-	mysql_set_character_set_fn set_character_set;
-	bool tried;
-	std::string load_error;	// last dlerror()/GetLastError(), for when nothing loaded at all
-};
-
-MysqlApi s_api = { 0 };
-std::mutex s_api_lock;
-
-#ifdef _WIN32
-template <typename Fn>
-void load_symbol(Fn &slot, const char *name)
-{
-	slot = (Fn)GetProcAddress(s_api.handle, name);
-}
-#else
-template <typename Fn>
-void load_symbol(Fn &slot, const char *name)
-{
-	slot = (Fn)dlsym(s_api.handle, name);
-}
-#endif
-
-bool mysql_ready()
-{
-	std::lock_guard<std::mutex> guard(s_api_lock);
-
-	if (s_api.tried)
-		return s_api.handle != NULL;
-
-	s_api.tried = true;
-
-#ifdef _WIN32
-	static const char *const names[] = { "libmariadb.dll", "libmysql.dll", NULL };
-	for (int i = 0; names[i] && !s_api.handle; i++)
-		s_api.handle = LoadLibraryA(names[i]);
-#else
-	static const char *const names[] = {
-		"libmariadb.so.3", "libmariadb.so",
-		"libmysqlclient.so.21", "libmysqlclient.so.20", "libmysqlclient.so",
-		NULL
-	};
-	for (int i = 0; names[i] && !s_api.handle; i++)
-		s_api.handle = dlopen(names[i], RTLD_LAZY | RTLD_LOCAL);
-#endif
-
-	// A shared host with FTP-only access (no root, no apt) cannot install a
-	// system package or set LD_LIBRARY_PATH - but addons/lua is exactly the
-	// directory such an account can always write to. A bare dlopen() name
-	// only searches the system's own library paths, so a copy uploaded next
-	// to the plugins needs its full path spelled out to be found at all.
-	if (!s_api.handle) {
-		const std::string &base = cslua_base_dir();
-		for (int i = 0; names[i] && !s_api.handle; i++) {
-			std::string path = base + "/" + names[i];
-#ifdef _WIN32
-			s_api.handle = LoadLibraryA(path.c_str());
-			if (!s_api.handle) {
-				if (!s_api.load_error.empty()) s_api.load_error += "; ";
-				s_api.load_error += path + ": Win32 error " + std::to_string((unsigned long)GetLastError());
-			}
-#else
-			s_api.handle = dlopen(path.c_str(), RTLD_LAZY | RTLD_LOCAL);
-			// Every candidate's failure gets kept, not just the last one -
-			// most of the names in the list genuinely do not exist on disk
-			// ("No such file or directory", not interesting), but the one
-			// someone actually dropped in addons/lua can fail for a real
-			// reason instead (a missing dependency of the library itself -
-			// OpenSSL, zlib, ... - or a permissions problem from an FTP
-			// upload), and keeping only the last entry in the list can
-			// throw that one away.
-			if (!s_api.handle) {
-				const char *err = dlerror();
-				if (!s_api.load_error.empty()) s_api.load_error += "; ";
-				s_api.load_error += path + ": " + (err ? err : "unknown dlopen failure");
-			}
-#endif
-		}
-	}
-
-	if (!s_api.handle)
-		return false;
-
-	load_symbol(s_api.init, "mysql_init");
-	load_symbol(s_api.real_connect, "mysql_real_connect");
-	load_symbol(s_api.close, "mysql_close");
-	load_symbol(s_api.real_query, "mysql_real_query");
-	load_symbol(s_api.store_result, "mysql_store_result");
-	load_symbol(s_api.free_result, "mysql_free_result");
-	load_symbol(s_api.fetch_row, "mysql_fetch_row");
-	load_symbol(s_api.num_fields, "mysql_num_fields");
-	load_symbol(s_api.field_count, "mysql_field_count");
-	load_symbol(s_api.fetch_field_direct, "mysql_fetch_field_direct");
-	load_symbol(s_api.real_escape_string, "mysql_real_escape_string");
-	load_symbol(s_api.insert_id, "mysql_insert_id");
-	load_symbol(s_api.affected_rows, "mysql_affected_rows");
-	load_symbol(s_api.error, "mysql_error");
-	load_symbol(s_api.set_character_set, "mysql_set_character_set");
-
-	if (!s_api.init || !s_api.real_connect || !s_api.close || !s_api.real_query ||
-		!s_api.store_result || !s_api.free_result || !s_api.fetch_row ||
-		!s_api.num_fields || !s_api.field_count || !s_api.fetch_field_direct ||
-		!s_api.real_escape_string || !s_api.error) {
-#ifdef _WIN32
-		FreeLibrary(s_api.handle);
-#else
-		dlclose(s_api.handle);
-#endif
-		s_api.handle = NULL;
-		return false;
-	}
-
-	return true;
 }
 
 } // namespace
@@ -439,7 +239,7 @@ bool append_param(MYSQL *handle, const Param &p, std::string &out)
 	case P_STR: {
 		std::string escaped;
 		escaped.resize(p.s.size() * 2 + 1);
-		unsigned long n = s_api.real_escape_string(handle, &escaped[0], p.s.data(), (unsigned long)p.s.size());
+		unsigned long n = mysql_real_escape_string(handle, &escaped[0], p.s.data(), (unsigned long)p.s.size());
 		out += '\'';
 		out.append(escaped.data(), n);
 		out += '\'';
@@ -489,30 +289,22 @@ void perform(const Request &req, Response &res)
 		return;
 	}
 
-	if (!mysql_ready()) {
-		res.error = "no MySQL client library found on this server "
-			"(install libmariadb3 / libmysqlclient21, or the Windows equivalent DLL)";
-		if (!s_api.load_error.empty())
-			res.error += " - " + s_api.load_error;
-		return;
-	}
-
 	if (!conn->handle) {
-		conn->handle = s_api.init(NULL);
-		MYSQL *ok = s_api.real_connect(conn->handle, conn->cfg.host.c_str(),
+		conn->handle = mysql_init(NULL);
+		MYSQL *ok = mysql_real_connect(conn->handle, conn->cfg.host.c_str(),
 			conn->cfg.user.c_str(), conn->cfg.password.c_str(),
 			conn->cfg.database.empty() ? NULL : conn->cfg.database.c_str(),
 			(unsigned int)conn->cfg.port, NULL, 0);
 
 		if (!ok) {
-			res.error = std::string("connect failed: ") + s_api.error(conn->handle);
-			s_api.close(conn->handle);
+			res.error = std::string("connect failed: ") + mysql_error(conn->handle);
+			mysql_close(conn->handle);
 			conn->handle = NULL;
 			return;
 		}
 
-		if (!conn->cfg.charset.empty() && s_api.set_character_set)
-			s_api.set_character_set(conn->handle, conn->cfg.charset.c_str());
+		if (!conn->cfg.charset.empty())
+			mysql_set_character_set(conn->handle, conn->cfg.charset.c_str());
 	}
 
 	std::string sql = build_sql(conn->handle, req);
@@ -522,26 +314,26 @@ void perform(const Request &req, Response &res)
 	// "the site's MySQL restarted underneath us", at the cost of one wasted
 	// reconnect on a plain SQL mistake too. Cheap enough for how rarely a query
 	// actually fails.
-	if (s_api.real_query(conn->handle, sql.c_str(), (unsigned long)sql.size()) != 0) {
-		res.error = s_api.error(conn->handle);
-		s_api.close(conn->handle);
+	if (mysql_real_query(conn->handle, sql.c_str(), (unsigned long)sql.size()) != 0) {
+		res.error = mysql_error(conn->handle);
+		mysql_close(conn->handle);
 		conn->handle = NULL;
 		return;
 	}
 
-	MYSQL_RES *result = s_api.store_result(conn->handle);
+	MYSQL_RES *result = mysql_store_result(conn->handle);
 	if (result) {
-		unsigned int nfields = s_api.num_fields(result);
+		unsigned int nfields = mysql_num_fields(result);
 		std::vector<std::string> names(nfields);
 		std::vector<bool> numeric(nfields);
 		for (unsigned int i = 0; i < nfields; i++) {
-			MysqlField *f = (MysqlField *)s_api.fetch_field_direct(result, i);
+			MYSQL_FIELD *f = mysql_fetch_field_direct(result, i);
 			names[i] = f ? f->name : "";
-			numeric[i] = f && is_numeric_field_type(f->type);
+			numeric[i] = f && is_numeric_field_type((int)f->type);
 		}
 
 		char **row;
-		while ((row = s_api.fetch_row(result)) != NULL) {
+		while ((row = mysql_fetch_row(result)) != NULL) {
 			Row r;
 			for (unsigned int i = 0; i < nfields; i++) {
 				if (row[i]) {
@@ -555,18 +347,18 @@ void perform(const Request &req, Response &res)
 			res.rows.push_back(r);
 		}
 
-		s_api.free_result(result);
-	} else if (s_api.field_count(conn->handle) != 0) {
+		mysql_free_result(result);
+	} else if (mysql_field_count(conn->handle) != 0) {
 		// store_result() failing on a statement that DOES produce a result set
 		// is a real error; on INSERT/UPDATE/DELETE it is simply "no rows".
-		res.error = s_api.error(conn->handle);
-		s_api.close(conn->handle);
+		res.error = mysql_error(conn->handle);
+		mysql_close(conn->handle);
 		conn->handle = NULL;
 		return;
 	}
 
-	res.affected_rows = s_api.affected_rows(conn->handle);
-	res.insert_id = s_api.insert_id(conn->handle);
+	res.affected_rows = mysql_affected_rows(conn->handle);
+	res.insert_id = mysql_insert_id(conn->handle);
 	res.ok = true;
 }
 
@@ -980,6 +772,6 @@ void cslua_mysql_shutdown()
 	std::lock_guard<std::mutex> guard(s_conns_lock);
 	for (size_t i = 1; i < s_conns.size(); i++) {
 		if (s_conns[i] && s_conns[i]->handle)
-			s_api.close(s_conns[i]->handle);
+			mysql_close(s_conns[i]->handle);
 	}
 }

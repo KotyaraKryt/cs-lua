@@ -38,6 +38,7 @@ set(MM_ROOT     "${CMAKE_SOURCE_DIR}/third_party/metamod-r/metamod")
 set(HLSDK_ROOT  "${CMAKE_SOURCE_DIR}/third_party/regamedll/cssdk")
 set(LUAJIT_ROOT "${CMAKE_SOURCE_DIR}/third_party/luajit/src")
 set(SQLITE_ROOT "${CMAKE_SOURCE_DIR}/third_party/sqlite")
+set(MARIADB_ROOT "${CMAKE_SOURCE_DIR}/third_party/mariadb-connector-c")
 
 if(NOT EXISTS "${HLSDK_ROOT}/dlls/regamedll_api.h")
 	message(FATAL_ERROR "ReGameDLL SDK not found at ${HLSDK_ROOT}. See third_party/regamedll/README.md.")
@@ -45,6 +46,10 @@ endif()
 
 if(NOT EXISTS "${SQLITE_ROOT}/sqlite3.c")
 	message(FATAL_ERROR "SQLite amalgamation not found at ${SQLITE_ROOT}. See third_party/sqlite/README.md.")
+endif()
+
+if(NOT EXISTS "${MARIADB_ROOT}/CMakeLists.txt")
+	message(FATAL_ERROR "MariaDB Connector/C not found at ${MARIADB_ROOT}. Run: git submodule update --init third_party/mariadb-connector-c")
 endif()
 
 if(WIN32)
@@ -59,6 +64,18 @@ endif()
 
 if(NOT EXISTS "${LUAJIT_LIB}")
 	message(FATAL_ERROR "LuaJIT not built: ${LUAJIT_LIB} is missing. Build it first: ${LUAJIT_HINT}")
+endif()
+
+# Set globally, before any target exists, so every vendored dependency below
+# (sqlite3, mariadbclient and its own sub-targets) picks the same default as
+# lua_mm without having to repeat the per-target property on each one by
+# hand. MSVC: must match lua_mm's own runtime - mixing a static and a
+# dynamic CRT in one module does not link. Linux: -fPIC, mandatory for
+# anything linked into a shared object.
+if(WIN32)
+	set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded")
+else()
+	set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 endif()
 
 # SQLite gets its own target rather than joining the source list below, for two
@@ -96,6 +113,61 @@ if(WIN32)
 else()
 	set_target_properties(sqlite3 PROPERTIES POSITION_INDEPENDENT_CODE ON)
 endif()
+
+# MariaDB Connector/C (LGPL), statically linked into mariadbclient - see
+# lua_mysql.cpp for why this replaced a dlopen'd system library. Every
+# option below is set as a CACHE variable *before* add_subdirectory: that is
+# how its own CMakeLists.txt's ADD_OPTION() macro is written to accept an
+# override instead of falling back to its own default.
+#
+#   WITH_SSL=OFF          no TLS support built in at all - the whole point.
+#                          A plain socket to the site's own MySQL/MariaDB,
+#                          same as every game server plugin already talking
+#                          to it (this one included, before this change).
+#                          Skipping it entirely sidesteps needing whichever
+#                          OpenSSL happens to exist on a given host (1.0 vs
+#                          1.1 vs 3.0), which is what made the old dlopen'd
+#                          system library such a losing game in the first
+#                          place - see lua_mysql.h.
+#   WITH_CURL=OFF          only used by an optional "load data from a URL"
+#                          plugin this project never calls.
+#   WITH_UNIT_TESTS=OFF    the connector's own test suite - nothing here
+#                          needs it built.
+#   WITH_MYSQLCOMPAT=OFF   Linux-only: symlinks named libmysql* next to the
+#                          real output. Cosmetic, and this never installs
+#                          anywhere such a symlink would be looked for.
+#   WITH_DOCS=OFF          Linux-only: manpages.
+#   CLIENT_PLUGIN_DIALOG / CLIENT_PLUGIN_MYSQL_CLEAR_PASSWORD
+#                          the two auth plugins that still default to a
+#                          separately dlopen'd DYNAMIC .so even with SSL
+#                          off (everything SSL/crypto-dependent, such as
+#                          caching_sha2_password, is skipped entirely once
+#                          WITH_SSL=OFF unsets CRYPTO_PLUGIN - see
+#                          plugins/auth/CMakeLists.txt). Forcing STATIC
+#                          closes the last two dlopen-at-connect-time gaps.
+set(WITH_SSL "OFF" CACHE STRING "" FORCE)
+set(WITH_CURL OFF CACHE BOOL "" FORCE)
+set(WITH_UNIT_TESTS OFF CACHE BOOL "" FORCE)
+set(WITH_MYSQLCOMPAT OFF CACHE BOOL "" FORCE)
+set(WITH_DOCS OFF CACHE BOOL "" FORCE)
+set(CLIENT_PLUGIN_DIALOG "STATIC" CACHE STRING "" FORCE)
+set(CLIENT_PLUGIN_MYSQL_CLEAR_PASSWORD "STATIC" CACHE STRING "" FORCE)
+
+# On Windows CRYPTO_PLUGIN stays on regardless of WITH_SSL (it uses WinCrypt,
+# not OpenSSL), so these four still default to DYNAMIC even with SSL off -
+# and auth_gssapi_client's Windows default is DYNAMIC_AND_STATIC either way.
+# None of them are needed against a plain site MySQL/MariaDB, so off rather
+# than fighting to make them link statically too.
+set(CLIENT_PLUGIN_CLIENT_ED25519 "OFF" CACHE STRING "" FORCE)
+set(CLIENT_PLUGIN_CACHING_SHA2_PASSWORD "OFF" CACHE STRING "" FORCE)
+set(CLIENT_PLUGIN_SHA256_PASSWORD "OFF" CACHE STRING "" FORCE)
+set(CLIENT_PLUGIN_AUTH_GSSAPI_CLIENT "OFF" CACHE STRING "" FORCE)
+# "OFF" is not in pvio_shmem's own allowed CONFIGURATIONS list - STATIC
+# instead; nothing calls it unless a connection string explicitly asks for
+# shared-memory transport, so linking it in unused costs nothing.
+set(CLIENT_PLUGIN_PVIO_SHMEM "STATIC" CACHE STRING "" FORCE)
+set(MARIADB_BINARY_DIR "${CMAKE_BINARY_DIR}/third_party/mariadb-connector-c")
+add_subdirectory("${MARIADB_ROOT}" "${MARIADB_BINARY_DIR}" EXCLUDE_FROM_ALL)
 
 add_library(lua_mm SHARED
 	src/h_export.cpp
@@ -138,9 +210,13 @@ target_include_directories(lua_mm PRIVATE
 	# instead would shadow cssdk headers with metamod's internal ones.
 	"${MM_ROOT}/extra/example/include/metamod"
 	"${LUAJIT_ROOT}"
+	"${MARIADB_ROOT}/include"
+	# mariadb_version.h/ma_config.h are generated, not vendored - CONFIGURE_FILE
+	# writes them into the subdirectory's own binary dir at configure time.
+	"${MARIADB_BINARY_DIR}/include"
 )
 
-target_link_libraries(lua_mm PRIVATE "${LUAJIT_LIB}" sqlite3)
+target_link_libraries(lua_mm PRIVATE "${LUAJIT_LIB}" sqlite3 mariadbclient)
 
 if(WIN32)
 	# lua_mm.dll next to metamod's own plugins.
@@ -173,10 +249,11 @@ else()
 		POSITION_INDEPENDENT_CODE ON
 	)
 
-	# Workers need pthreads; libcurl and the MySQL client library are both
-	# opened at run time, so it is dl that has to be here and not the libraries
-	# themselves - no -dev package to install, and a server without libcurl or
-	# without a MySQL client still loads the module.
+	# Workers need pthreads; libcurl is opened at run time, so it is dl that
+	# has to be here and not curl itself - no -dev package to install, and a
+	# server without libcurl still loads the module. The MySQL client used to
+	# be dlopen'd the same way; it is statically linked now (mariadbclient,
+	# above) and needs nothing here for that.
 	find_package(Threads REQUIRED)
 	target_link_libraries(lua_mm PRIVATE Threads::Threads ${CMAKE_DL_LIBS})
 

@@ -97,20 +97,6 @@ jobs:
 
             cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCSLUA_SERVER_DIR=
             cmake --build build -j"$(nproc)"
-
-            # MariaDB/MySQL do not publish a 32-bit Linux client build at all
-            # (only amd64/aarch64 on the connector download page), and a host
-            # on FTP-only shared hosting has no apt of its own to get one from
-            # either - so this pulls the i386 .deb straight from Ubuntu 18.04s
-            # own repos (no install, no runtime dependency on it existing on
-            # this box) and hands over just the .so, for lua_mysql.cpp addons/lua
-            # fallback path to pick up once dropped there by hand.
-            dpkg --add-architecture i386
-            apt-get update
-            apt-get download libmysqlclient20:i386
-            mkdir -p /work/dist/mysql-lib
-            dpkg-deb -x ./libmysqlclient20*.deb /tmp/mysql-extract
-            find /tmp/mysql-extract -name "libmysqlclient.so*" -exec cp -a {} /work/dist/mysql-lib/ \;
           '
 
       # A module that pulls in a symbol the engine does not provide loads fine
@@ -134,15 +120,6 @@ jobs:
           name: lua_mm-linux-x86
           path: build/lua_mm_i386.so
           if-no-files-found: error
-
-      # Only needed by scripts/plugins using db.mysql() (lua_mysql.cpp) - not
-      # required to run the module at all, so a missing file here does not
-      # fail the job.
-      - uses: actions/upload-artifact@v5
-        with:
-          name: mysql-client-lib-i386
-          path: dist/mysql-lib/
-          if-no-files-found: warn
 
   # CI artifacts expire, release assets do not - so on a version tag the same
   # binaries get attached to the release.

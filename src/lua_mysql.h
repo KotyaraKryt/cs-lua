@@ -20,12 +20,15 @@
 // writes ever touches a socket, and nothing a worker touches ever touches the
 // Lua state.
 //
-// Transport is dlopen'd at first use (libmariadb/libmysqlclient on Linux,
-// libmariadb.dll/libmysql.dll on Windows) rather than linked: the official
-// client library is GPL and the build is 32-bit, so vendoring it the way
-// SQLite is vendored is not a good fit. A server without the client library
-// still loads the module; mysql.connect() just answers every query with a
-// clear error instead of a link failure.
+// Statically linked, same as SQLite (third_party/mariadb-connector-c, LGPL -
+// compatible with this project's own GPLv3, unlike Oracle's dual
+// GPL/commercial libmysqlclient). Built with TLS and every dynamic auth
+// plugin turned off, so the result has no runtime dependency of its own
+// either - see CMakeLists.txt. A bare dlopen() of the system's own
+// libmysqlclient was tried first and abandoned: which SONAME exists, and
+// what *that* itself needs (OpenSSL 1.0 vs 1.1 vs 3.0, ...), varies enough
+// across hosts that it was a losing game, especially on shared hosting with
+// no root and no apt to fix it with.
 //
 // A connection is a handle object (id + metatable, like db.open()), but the
 // real TCP connect happens lazily on a worker the first time something is
