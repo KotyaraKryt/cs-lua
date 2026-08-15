@@ -120,6 +120,7 @@ add_library(lua_mm SHARED
 	src/lua_db.cpp
 	src/lua_http.cpp
 	src/lua_httpserver.cpp
+	src/lua_mysql.cpp
 	src/regamedll.cpp
 	src/rehlds.cpp
 	src/cslua_corpse.cpp
@@ -172,9 +173,10 @@ else()
 		POSITION_INDEPENDENT_CODE ON
 	)
 
-	# Workers need pthreads; libcurl is opened at run time, so it is dl that
-	# has to be here and not curl itself - no -dev package to install, and a
-	# server without libcurl still loads the module.
+	# Workers need pthreads; libcurl and the MySQL client library are both
+	# opened at run time, so it is dl that has to be here and not the libraries
+	# themselves - no -dev package to install, and a server without libcurl or
+	# without a MySQL client still loads the module.
 	find_package(Threads REQUIRED)
 	target_link_libraries(lua_mm PRIVATE Threads::Threads ${CMAKE_DL_LIBS})
 

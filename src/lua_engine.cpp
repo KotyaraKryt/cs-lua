@@ -13,6 +13,7 @@
 #include "lua_fx.h"
 #include "lua_db.h"
 #include "lua_http.h"
+#include "lua_mysql.h"
 #include "lua_httpserver.h"
 #include "regamedll.h"
 #include "platform.h"
@@ -272,6 +273,7 @@ void LuaEngine::init()
 	cslua_register_db(m_L);
 	cslua_register_http(m_L);
 	cslua_register_httpserver(m_L);
+	cslua_register_mysql(m_L);
 
 	// Only for code that reaches for the stock require; plugins get their own.
 	const std::string &base = cslua_base_dir();
@@ -327,6 +329,7 @@ void LuaEngine::shutdown()
 	// request here would freeze the server for the length of a lua_reload.
 	cslua_http_reset();
 	cslua_httpserver_reset();
+	cslua_mysql_reset();
 
 	g_events.clear();
 	cslua_errors_clear();
@@ -435,6 +438,7 @@ void LuaEngine::unload_plugin(int index, bool run_handlers)
 	cslua_db_remove_plugin(index);
 	cslua_http_remove_plugin(index);
 	cslua_httpserver_remove_plugin(index);
+	cslua_mysql_remove_plugin(index);
 }
 
 // One plugin, torn down and started again, with everyone else left alone.

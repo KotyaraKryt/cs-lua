@@ -3,6 +3,7 @@
 #include "lua_events.h"
 #include "lua_timers.h"
 #include "lua_http.h"
+#include "lua_mysql.h"
 #include "lua_httpserver.h"
 #include "lua_sound.h"
 #include "lua_menu.h"
@@ -327,6 +328,7 @@ static void StartFrame()
 	// Replies land on the game thread, next to the timers.
 	cslua_http_run();
 	cslua_httpserver_run();
+	cslua_mysql_run();
 	RETURN_META(MRES_IGNORED);
 }
 
