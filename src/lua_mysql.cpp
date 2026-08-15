@@ -179,6 +179,23 @@ bool mysql_ready()
 		s_api.handle = dlopen(names[i], RTLD_LAZY | RTLD_LOCAL);
 #endif
 
+	// A shared host with FTP-only access (no root, no apt) cannot install a
+	// system package or set LD_LIBRARY_PATH - but addons/lua is exactly the
+	// directory such an account can always write to. A bare dlopen() name
+	// only searches the system's own library paths, so a copy uploaded next
+	// to the plugins needs its full path spelled out to be found at all.
+	if (!s_api.handle) {
+		const std::string &base = cslua_base_dir();
+		for (int i = 0; names[i] && !s_api.handle; i++) {
+			std::string path = base + "/" + names[i];
+#ifdef _WIN32
+			s_api.handle = LoadLibraryA(path.c_str());
+#else
+			s_api.handle = dlopen(path.c_str(), RTLD_LAZY | RTLD_LOCAL);
+#endif
+		}
+	}
+
 	if (!s_api.handle)
 		return false;
 
