@@ -192,20 +192,23 @@ bool mysql_ready()
 #ifdef _WIN32
 			s_api.handle = LoadLibraryA(path.c_str());
 			if (!s_api.handle) {
-				s_api.load_error = path + ": Win32 error " + std::to_string((unsigned long)GetLastError());
+				if (!s_api.load_error.empty()) s_api.load_error += "; ";
+				s_api.load_error += path + ": Win32 error " + std::to_string((unsigned long)GetLastError());
 			}
 #else
 			s_api.handle = dlopen(path.c_str(), RTLD_LAZY | RTLD_LOCAL);
-			// dlerror() only reports the most recent failure, and only
-			// once - the file-not-found misses from the bare-name pass
-			// above are not worth keeping, but this one (the file we
-			// actually expect someone to have dropped in addons/lua) is:
-			// a missing dependency of the library itself (OpenSSL, zlib,
-			// ...) or a permissions problem from an FTP upload both look
-			// identical from the outside otherwise.
+			// Every candidate's failure gets kept, not just the last one -
+			// most of the names in the list genuinely do not exist on disk
+			// ("No such file or directory", not interesting), but the one
+			// someone actually dropped in addons/lua can fail for a real
+			// reason instead (a missing dependency of the library itself -
+			// OpenSSL, zlib, ... - or a permissions problem from an FTP
+			// upload), and keeping only the last entry in the list can
+			// throw that one away.
 			if (!s_api.handle) {
 				const char *err = dlerror();
-				s_api.load_error = path + ": " + (err ? err : "unknown dlopen failure");
+				if (!s_api.load_error.empty()) s_api.load_error += "; ";
+				s_api.load_error += path + ": " + (err ? err : "unknown dlopen failure");
 			}
 #endif
 		}
