@@ -62,13 +62,19 @@ linux addons/lua/lua_mm_i386.so
 
 ## Первый плагин
 
-`cstrike/addons/lua/plugins/hello.lua`:
+Плагин — папка, не одиночный файл (подробности — [Структура плагина](plugins.md)):
+
+`cstrike/addons/lua/plugins/hello/manifest.lua`:
 
 ```lua
-plugin { name = "Hello", api_version = 1 }
+plugin { name = "Hello", api_version = 2 }
+```
 
-hook.add("player_spawn", "test.spawn", function(e)
-	p:chat("{green}Привет, {default}" .. p:name())
+`cstrike/addons/lua/plugins/hello/init.lua`:
+
+```lua
+hook.add("player_spawn", "hello.greet", function(e)
+	e.player:chat("{green}Привет, {default}" .. e.player:name())
 end)
 ```
 
