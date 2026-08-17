@@ -18,6 +18,7 @@ NS = {
         },
         {
             'title': 'Сервер',
+            'slug': 'server',
             'items': [
                 {
                     'name': 'sv.time',
@@ -49,6 +50,7 @@ NS = {
         },
         {
             'title': 'Cvar',
+            'slug': 'cvar',
             'items': [
                 {
                     'name': 'sv.cvar',

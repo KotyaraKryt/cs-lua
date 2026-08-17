@@ -21,12 +21,13 @@ description: "Консольные команды модуля: lua_reload, lua_
 | `lua_perms <что>` | `groups`, `list`, `users`, `who`, `check`, `grant`, `revoke`, `save`, `reload` |
 
 `lua_reload <plugin>` снимает хендлеры, таймеры, команды и базы плагина,
-выполняет [`plugin.on_unload`](plugin/on_unload.md) и запускает `manifest.lua`,
+выполняет [`plugin.on_unload`](plugin/index.md#on_unload) и запускает `manifest.lua`,
 затем `init.lua` заново с чистым кешем `require`.
 
-> [!NOTE]
-> После правок в `core/` и `include/` нужна полная перезагрузка: их разделяют
-> все плагины.
+<Note>
+После правок в `core/` и `include/` нужна полная перезагрузка: их разделяют
+все плагины.
+</Note>
 
 `lua_check <plugin>` выполняет только `manifest.lua` — `plugin{}`, права,
 конфиг — в отдельном одноразовом слоте, который не попадает в список

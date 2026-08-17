@@ -44,10 +44,10 @@ end)
 
 | модуль | что даёт |
 |---|---|
-| [`store`](store/open.md) | key-value на SQLite |
-| [`datafile`](store/at.md) | чтение и запись `data/*.lua` |
+| [`store`](store/kv.md#open) | key-value на SQLite |
+| [`datafile`](store/datafile.md#at) | чтение и запись `data/*.lua` |
 | [`json`](http/index.md) | разбор и сборка JSON |
-| [`color`](ui/color.md) | разбор цвета |
+| [`color`](ui/index.md#color) | разбор цвета |
 | [`text`](ui/index.md#длина-строки) | длина строки как её считает клиент |
 | `class` | класс с наследованием |
 

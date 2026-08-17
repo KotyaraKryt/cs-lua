@@ -61,6 +61,7 @@ p:health(p:health() + 25)
     'groups': [
         {
             'title': 'Пространство имён',
+            'slug': 'namespace',
             'items': [
                 {
                     'name': 'players.get',
@@ -144,6 +145,7 @@ end)
         },
         {
             'title': 'Идентификация',
+            'slug': 'identity',
             'items': [
                 {
                     'name': 'p.id',
@@ -171,6 +173,7 @@ end)
         },
         {
             'title': 'Состояние',
+            'slug': 'state',
             'note': 'Пишется в `entvars_t` напрямую, ReGameDLL не нужен.',
             'items': [
                 rw('health', 'Здоровье игрока.', 'number',
@@ -219,7 +222,7 @@ end
                     'brief': 'Пускает луч из глаз игрока прямо к другому игроку.',
                     'sig': 'p:trace_to(other)',
                     'args': [('other', 'player', 'до кого трассировать')],
-                    'returns': [('table', 'что попалось, см. [Результат](trace.md#результат) — тот же формат, что у `p:trace`')],
+                    'returns': [('table', 'что попалось, см. [Результат](trace.md#trace-результат) — тот же формат, что у `p:trace`')],
                     'example': """
 local t = p:trace_to(victim)
 if t.kind == "player" and t.player.id == victim.id then
@@ -233,6 +236,7 @@ end
         },
         {
             'title': 'CS-состояние',
+            'slug': 'cs-state',
             'note': 'Читает и меняет `CBasePlayer` игры.',
             'items': [
                 {
@@ -331,6 +335,7 @@ p:ammo("weapon_ak47", 90)
         },
         {
             'title': 'Сообщения',
+            'slug': 'messages',
             'note': 'Те же методы есть у [`players.broadcast`](broadcast.md).',
             'items': [
                 {
@@ -409,7 +414,7 @@ p:motd([[<meta charset="utf-8">
 Единственная многострочная поверхность в игре: меню — это девять клавиш, а HUD —
 одна строка. Каталог магазина, топ-10 и правила сервера показывают здесь.
 
-## Панель — это HTML
+### Панель — это HTML
 
 У клиентов, которые ещё запускают, MOTD рисует HTML-вьюха, а не текстовое поле.
 Из этого следуют две вещи, знать которые вызывающему незачем, поэтому по
@@ -454,6 +459,7 @@ p:motd([[<meta charset="utf-8">
         },
         {
             'title': 'Админские действия',
+            'slug': 'admin',
             'items': [
                 {
                     'name': 'p:kick',
@@ -493,6 +499,7 @@ p:motd([[<meta charset="utf-8">
         },
         {
             'title': 'Права',
+            'slug': 'access',
             'note': 'Добавлены core-слоем, подробности — в [`access`](../access/index.md).',
             'items': [
                 ro('can', 'Есть ли у игрока право.', 'boolean',

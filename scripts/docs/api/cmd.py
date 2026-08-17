@@ -35,7 +35,7 @@ cmd.add("plant", fn, { source = "chat_team" })
 cmd.add("slay",  fn, { perm = "admin.slay", target = 1 })
 """,
                     'extra': """
-## ctx
+### ctx
 
 | поле | тип | |
 |---|---|---|

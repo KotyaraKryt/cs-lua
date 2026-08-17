@@ -69,10 +69,11 @@ end)
 | максимальный ответ | 4 МБ, дальше ошибка |
 | редиректы | до 5, автоматически |
 
-> [!WARNING]
-> На Windows таймаут применяется к каждой фазе отдельно — разрешение имени,
-> подключение, отправка, чтение. Запрос к висящему серверу вернётся примерно за
-> удвоенное значение, а не ровно за него.
+<Warning>
+На Windows таймаут применяется к каждой фазе отдельно — разрешение имени,
+подключение, отправка, чтение. Запрос к висящему серверу вернётся примерно за
+удвоенное значение, а не ровно за него.
+</Warning>
 
 ## Перезагрузка и выгрузка
 
@@ -84,9 +85,151 @@ end)
 на середине нельзя, а держать сервер до конца самого медленного из них — хуже,
 чем потерять его ответ.
 
-|  |  |
+## http.get {#get}
+
+Выполняет GET-запрос.
+
+```lua
+http.get(url[, opts], fn)
+```
+
+### Аргументы
+
+| # | имя | тип |  |
+|---|---|---|---|
+| 1 | `url` | string | адрес целиком, вместе со схемой |
+| 2 | `opts` | table \| nil | см. [Опции](#get-опции) |
+| 3 | `fn` | function | получает объект ответа |
+
+### Возвращает
+
+| тип |  |
 |---|---|
-| [`http.get`](get.md) | Выполняет GET-запрос |
-| [`http.post`](post.md) | Выполняет POST-запрос с телом |
-| [`http.request`](request.md) | Выполняет запрос произвольным методом |
-| [`http.cancel`](cancel.md) | Отменяет запрос по id |
+| `number` | id для [`http.cancel`](index.md#cancel) |
+
+### Опции {#get-опции}
+
+| поле | тип |  |
+|---|---|---|
+| `headers` | table | `{ ["Authorization"] = "Bearer ..." }` |
+| `timeout` | number | секунд, по умолчанию `10` |
+
+### Пример
+
+```lua
+http.get("https://api.github.com/repos/rehlds/ReHLDS", function(res)
+	if res.ok then
+		print(require("json").decode(res.body).stargazers_count)
+	end
+end)
+```
+
+### Смотри также
+
+- [json](../../plugins.md#include)
+
+## http.post {#post}
+
+Выполняет POST-запрос с телом.
+
+```lua
+http.post(url, body[, opts], fn)
+```
+
+### Аргументы
+
+| # | имя | тип |  |
+|---|---|---|---|
+| 1 | `url` | string | адрес |
+| 2 | `body` | string | тело; для JSON — `json.encode(t)` |
+| 3 | `opts` | table \| nil | как у [`http.get`](index.md#get) |
+| 4 | `fn` | function | получает объект ответа |
+
+### Возвращает
+
+| тип |  |
+|---|---|
+| `number` | id для [`http.cancel`](index.md#cancel) |
+
+### Пример
+
+```lua
+local json = require("json")
+
+http.post("https://discord.com/api/webhooks/...",
+	json.encode({ content = p:name() .. " зашёл на сервер" }),
+	{ headers = { ["Content-Type"] = "application/json" } },
+	function(res)
+		if not res.ok then print(res.error) end
+	end)
+```
+
+<Note>
+Заголовок `Content-Type` не подставляется сам: сервер на той\nстороне обычно требует конкретный, и угадывать его — плохая\nидея.
+</Note>
+
+## http.request {#request}
+
+Выполняет запрос произвольным методом.
+
+```lua
+http.request(opts, fn)
+```
+
+### Аргументы
+
+| # | имя | тип |  |
+|---|---|---|---|
+| 1 | `opts` | table | см. [Опции](#request-опции) |
+| 2 | `fn` | function | получает объект ответа |
+
+### Возвращает
+
+| тип |  |
+|---|---|
+| `number` | id для [`http.cancel`](index.md#cancel) |
+
+### Опции {#request-опции}
+
+| поле | тип |  |
+|---|---|---|
+| `url` | string | обязателен |
+| `method` | string | `GET` по умолчанию; `PUT`, `DELETE`, `PATCH` |
+| `body` | string | тело запроса |
+| `headers` | table | заголовки |
+| `timeout` | number | секунд, по умолчанию `10` |
+
+### Пример
+
+```lua
+http.request({
+	url     = "https://api.example.com/bans/42",
+	method  = "DELETE",
+	headers = { ["Authorization"] = "Bearer " .. token },
+	timeout = 5,
+}, function(res)
+	print(res.status)
+end)
+```
+
+## http.cancel {#cancel}
+
+Отменяет запрос по id.
+
+```lua
+http.cancel(id)
+```
+
+### Аргументы
+
+| # | имя | тип |  |
+|---|---|---|---|
+| 1 | `id` | number | то, что вернул вызов |
+
+### Возвращает
+
+| тип |  |
+|---|---|
+| `boolean` | `true`, если запрос нашёлся |
+
+Гарантия здесь одна: коллбэк не выполнится. Сам запрос, если он уже ушёл в сеть, доигрывается до конца — оборвать чужое соединение на середине нельзя.

@@ -57,9 +57,10 @@ require("config")
 Все файлы одного плагина делят одну таблицу глобальных переменных: папка — это
 пространство имён. Записи наружу не видны, чтение `_G` работает как обычно.
 
-> [!WARNING]
-> Ошибка при загрузке снимает все хендлеры плагина. Плагин не запускается
-> наполовину — в `lua_list` он помечается `[FAILED]`.
+<Warning>
+Ошибка при загрузке снимает все хендлеры плагина. Плагин не запускается
+наполовину — в `lua_list` он помечается `[FAILED]`.
+</Warning>
 
 ## Порядок загрузки
 
@@ -67,7 +68,7 @@ require("config")
 2. плагины — по алфавиту имени папки, для каждого `manifest.lua` перед `init.lua`.
 
 Плагин, которому нужен другой плагин, берёт зависимость через
-[`import`](api/exports/import.md) — лениво, если алфавит неудобен.
+[`import`](api/exports/index.md#import) — лениво, если алфавит неудобен.
 
 ## require
 
@@ -89,11 +90,11 @@ local class   = require("class")        -- addons/lua/include/class.lua
 | файл | что определяет |
 |---|---|
 | `access.lua` | [`access`](api/access/index.md), `p:can()`, группы, иммунитет |
-| `commands.lua` | [`cmd.add`](api/cmd/add.md), `players.find` |
+| `commands.lua` | [`cmd.add`](api/cmd/index.md#add), `players.find` |
 | `exports.lua` | [`export`](api/exports/index.md), `import`, `optional` |
 | `hook.lua` | консольная команда `lua_hooks` |
 | `perms.lua` | консольная команда `lua_perms` |
-| `ui.lua` | [`menu.new`](api/menu/new.md), [`ui.color`](api/ui/color.md) |
+| `ui.lua` | [`menu.new`](api/menu/index.md#new), [`ui.color`](api/ui/index.md#color) |
 
 Ошибки core логируются с пометкой `[core]`. После правок в `core/` нужна полная
 `lua_reload`, а не одиночная.
@@ -105,9 +106,9 @@ local class   = require("class")        -- addons/lua/include/class.lua
 | модуль | |
 |---|---|
 | [`store`](api/store/index.md) | key-value на SQLite |
-| [`datafile`](api/store/at.md) | чтение и запись `data/*.lua` |
+| [`datafile`](api/store/datafile.md#at) | чтение и запись `data/*.lua` |
 | [`json`](api/http/index.md) | разбор и сборка JSON, для ответов [`http`](api/http/index.md) |
-| [`color`](api/ui/color.md) | разбор цвета |
+| [`color`](api/ui/index.md#color) | разбор цвета |
 | [`text`](api/ui/index.md#длина-строки) | длина строки как её считает клиент |
 | `class` | класс с наследованием |
 

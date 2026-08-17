@@ -30,7 +30,7 @@ NS = {
                         ('opts', 'table', 'см. Опции'),
                     ],
                     'extra': """
-## Опции
+### Опции
 
 | поле | тип |  |
 |---|---|---|
@@ -54,7 +54,7 @@ fx.explosion(x, y, z, { sprite = "sprites/reapi_healthnade/heal_explode.spr", fl
                         ('opts', 'table', 'см. Опции'),
                     ],
                     'extra': """
-## Опции
+### Опции
 
 | поле | тип |  |
 |---|---|---|
@@ -88,7 +88,7 @@ fx.beam_cylinder(x, y, z, {
                         ('opts', 'table', 'см. Опции'),
                     ],
                     'extra': """
-## Опции
+### Опции
 
 | поле | тип |  |
 |---|---|---|

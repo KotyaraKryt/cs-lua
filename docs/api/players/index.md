@@ -21,25 +21,25 @@ p:health(p:health() + 25)
 
 |  |  |
 |---|---|
-| [`players.get`](get.md) | Возвращает игрока по номеру слота |
-| [`players.list`](list.md) | Возвращает массив подключённых игроков |
-| [`players.find`](find.md) | Ищет игрока по слоту, userid или части ника |
-| [`players.broadcast`](broadcast.md) | Приёмник «всем сразу»: только отправка сообщений |
-| [`players.method`](method.md) | Добавляет свой метод всем объектам игроков |
+| [`players.get`](namespace.md#get) | Возвращает игрока по номеру слота |
+| [`players.list`](namespace.md#list) | Возвращает массив подключённых игроков |
+| [`players.find`](namespace.md#find) | Ищет игрока по слоту, userid или части ника |
+| [`players.broadcast`](namespace.md#broadcast) | Приёмник «всем сразу»: только отправка сообщений |
+| [`players.method`](namespace.md#method) | Добавляет свой метод всем объектам игроков |
 
 ## Идентификация
 
 |  |  |
 |---|---|
-| [`p.id`](id.md) | Номер слота игрока |
-| [`p:name`](name.md) | Ник игрока |
-| [`p:ip`](ip.md) | Адрес игрока вида `1.2.3.4:27005` |
-| [`p:steamid`](steamid.md) | SteamID игрока |
-| [`p:userid`](userid.md) | Userid движка |
-| [`p:info`](info.md) | Читает ключ инфобуфера клиента |
-| [`p:connected`](connected.md) | Занят ли слот |
-| [`p:is_bot`](is_bot.md) | Серверный бот (`FL_FAKECLIENT`) |
-| [`p:is_hltv`](is_hltv.md) | HLTV-прокси (`FL_PROXY`) |
+| [`p.id`](identity.md#id) | Номер слота игрока |
+| [`p:name`](identity.md#name) | Ник игрока |
+| [`p:ip`](identity.md#ip) | Адрес игрока вида `1.2.3.4:27005` |
+| [`p:steamid`](identity.md#steamid) | SteamID игрока |
+| [`p:userid`](identity.md#userid) | Userid движка |
+| [`p:info`](identity.md#info) | Читает ключ инфобуфера клиента |
+| [`p:connected`](identity.md#connected) | Занят ли слот |
+| [`p:is_bot`](identity.md#is_bot) | Серверный бот (`FL_FAKECLIENT`) |
+| [`p:is_hltv`](identity.md#is_hltv) | HLTV-прокси (`FL_PROXY`) |
 
 ## Состояние
 
@@ -47,23 +47,23 @@ p:health(p:health() + 25)
 
 |  |  |
 |---|---|
-| [`p:health`](health.md) | Здоровье игрока |
-| [`p:armor`](armor.md) | Броня игрока |
-| [`p:frags`](frags.md) | Счётчик фрагов |
-| [`p:gravity`](gravity.md) | Множитель гравитации |
-| [`p:maxspeed`](maxspeed.md) | Максимальная скорость движения |
-| [`p:origin`](origin.md) | Позиция игрока в мире |
-| [`p:angles`](angles.md) | Поворот модели игрока |
-| [`p:velocity`](velocity.md) | Скорость игрока |
-| [`p:aim`](aim.md) | Направление взгляда, только чтение |
-| [`p:alive`](alive.md) | Жив ли игрок |
-| [`p:on_ground`](on_ground.md) | Стоит ли игрок на земле |
-| [`p:ducking`](ducking.md) | Сидит ли игрок |
-| [`p:freeze`](freeze.md) | Заморозка движения (`FL_FROZEN`) |
-| [`p:godmode`](godmode.md) | Неуязвимость |
-| [`p:noclip`](noclip.md) | Полёт сквозь стены |
-| [`p:trace`](trace.md) | Пускает луч из глаз игрока туда, куда он смотрит |
-| [`p:trace_to`](trace_to.md) | Пускает луч из глаз игрока прямо к другому игроку |
+| [`p:health`](state.md#health) | Здоровье игрока |
+| [`p:armor`](state.md#armor) | Броня игрока |
+| [`p:frags`](state.md#frags) | Счётчик фрагов |
+| [`p:gravity`](state.md#gravity) | Множитель гравитации |
+| [`p:maxspeed`](state.md#maxspeed) | Максимальная скорость движения |
+| [`p:origin`](state.md#origin) | Позиция игрока в мире |
+| [`p:angles`](state.md#angles) | Поворот модели игрока |
+| [`p:velocity`](state.md#velocity) | Скорость игрока |
+| [`p:aim`](state.md#aim) | Направление взгляда, только чтение |
+| [`p:alive`](state.md#alive) | Жив ли игрок |
+| [`p:on_ground`](state.md#on_ground) | Стоит ли игрок на земле |
+| [`p:ducking`](state.md#ducking) | Сидит ли игрок |
+| [`p:freeze`](state.md#freeze) | Заморозка движения (`FL_FROZEN`) |
+| [`p:godmode`](state.md#godmode) | Неуязвимость |
+| [`p:noclip`](state.md#noclip) | Полёт сквозь стены |
+| [`p:trace`](state.md#trace) | Пускает луч из глаз игрока туда, куда он смотрит |
+| [`p:trace_to`](state.md#trace_to) | Пускает луч из глаз игрока прямо к другому игроку |
 
 ## CS-состояние
 
@@ -71,41 +71,41 @@ p:health(p:health() + 25)
 
 |  |  |
 |---|---|
-| [`p:team`](team.md) | Читает или меняет сторону игрока |
-| [`p:spawn`](spawn.md) | Респаун игрока без потери денег и счёта |
-| [`p:money`](money.md) | Читает или задаёт деньги игрока |
-| [`p:deaths`](deaths.md) | Счётчик смертей |
-| [`p:give`](give.md) | Выдаёт игроку предмет по classname |
-| [`p:strip`](strip.md) | Забирает у игрока всё оружие |
-| [`p:weapon`](weapon.md) | Classname оружия в руках |
-| [`p:weapons`](weapons.md) | Массив classname всего, что несёт игрок |
-| [`p:ammo`](ammo.md) | Читает или задаёт патроны в запасе |
-| [`p:clip`](clip.md) | Читает или задаёт патроны в магазине |
-| [`p:drop`](drop.md) | Выбрасывает оружие на пол |
+| [`p:team`](cs-state.md#team) | Читает или меняет сторону игрока |
+| [`p:spawn`](cs-state.md#spawn) | Респаун игрока без потери денег и счёта |
+| [`p:money`](cs-state.md#money) | Читает или задаёт деньги игрока |
+| [`p:deaths`](cs-state.md#deaths) | Счётчик смертей |
+| [`p:give`](cs-state.md#give) | Выдаёт игроку предмет по classname |
+| [`p:strip`](cs-state.md#strip) | Забирает у игрока всё оружие |
+| [`p:weapon`](cs-state.md#weapon) | Classname оружия в руках |
+| [`p:weapons`](cs-state.md#weapons) | Массив classname всего, что несёт игрок |
+| [`p:ammo`](cs-state.md#ammo) | Читает или задаёт патроны в запасе |
+| [`p:clip`](cs-state.md#clip) | Читает или задаёт патроны в магазине |
+| [`p:drop`](cs-state.md#drop) | Выбрасывает оружие на пол |
 
 ## Сообщения
 
-Те же методы есть у [`players.broadcast`](broadcast.md).
+Те же методы есть у [`players.broadcast`](namespace.md#broadcast).
 
 |  |  |
 |---|---|
-| [`p:chat`](chat.md) | Отправляет строку в чат |
-| [`p:console`](console.md) | Пишет строку в консоль игрока |
-| [`p:center`](center.md) | Показывает текст по центру экрана |
-| [`p:hud`](hud.md) | Рисует текст на HUD с позицией, цветом и таймингами |
-| [`p:dhud`](dhud.md) | То же через `SVC_DIRECTOR` — directed HUD |
-| [`p:motd`](motd.md) | Открывает игроку панель MOTD |
-| [`p:play_sound`](play_sound.md) | Проигрывает игроку звук |
+| [`p:chat`](messages.md#chat) | Отправляет строку в чат |
+| [`p:console`](messages.md#console) | Пишет строку в консоль игрока |
+| [`p:center`](messages.md#center) | Показывает текст по центру экрана |
+| [`p:hud`](messages.md#hud) | Рисует текст на HUD с позицией, цветом и таймингами |
+| [`p:dhud`](messages.md#dhud) | То же через `SVC_DIRECTOR` — directed HUD |
+| [`p:motd`](messages.md#motd) | Открывает игроку панель MOTD |
+| [`p:play_sound`](messages.md#play_sound) | Проигрывает игроку звук |
 
 ## Админские действия
 
 |  |  |
 |---|---|
-| [`p:kick`](kick.md) | Отключает игрока от сервера |
-| [`p:ban`](ban.md) | Банит игрока |
-| [`p:slay`](slay.md) | Убивает игрока |
-| [`p:slap`](slap.md) | Наносит урон и толкает игрока в случайную сторону |
-| [`p:exec`](exec.md) | Выполняет консольную команду на машине игрока |
+| [`p:kick`](admin.md#kick) | Отключает игрока от сервера |
+| [`p:ban`](admin.md#ban) | Банит игрока |
+| [`p:slay`](admin.md#slay) | Убивает игрока |
+| [`p:slap`](admin.md#slap) | Наносит урон и толкает игрока в случайную сторону |
+| [`p:exec`](admin.md#exec) | Выполняет консольную команду на машине игрока |
 
 ## Права
 
@@ -113,8 +113,8 @@ p:health(p:health() + 25)
 
 |  |  |
 |---|---|
-| [`p:can`](can.md) | Есть ли у игрока право |
-| [`p:groups`](groups.md) | Массив групп игрока |
-| [`p:group`](group.md) | Состоит ли игрок в группе, с учётом наследования |
-| [`p:weight`](weight.md) | Вес игрока для иммунитета |
-| [`p:outranks`](outranks.md) | Старше ли игрок другого по весу |
+| [`p:can`](access.md#can) | Есть ли у игрока право |
+| [`p:groups`](access.md#groups) | Массив групп игрока |
+| [`p:group`](access.md#group) | Состоит ли игрок в группе, с учётом наследования |
+| [`p:weight`](access.md#weight) | Вес игрока для иммунитета |
+| [`p:outranks`](access.md#outranks) | Старше ли игрок другого по весу |

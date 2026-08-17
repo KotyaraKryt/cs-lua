@@ -17,13 +17,14 @@ cmd.add("slay", function(ctx)
 end, { perm = "admin.slay", target = 1 })
 ```
 
-> [!NOTE]
-> У консоли и rcon прав нет — им разрешено всё. `ctx.player` там `nil`, любая
-> проверка проходит.
+<Note>
+У консоли и rcon прав нет — им разрешено всё. `ctx.player` там `nil`, любая
+проверка проходит.
+</Note>
 
-Методы игрока — [`p:can`](../players/can.md), [`p:groups`](../players/groups.md),
-[`p:group`](../players/group.md), [`p:weight`](../players/weight.md),
-[`p:outranks`](../players/outranks.md).
+Методы игрока — [`p:can`](../players/access.md#can), [`p:groups`](../players/access.md#groups),
+[`p:group`](../players/access.md#group), [`p:weight`](../players/access.md#weight),
+[`p:outranks`](../players/access.md#outranks).
 
 ## Файлы
 
@@ -61,9 +62,10 @@ return {
 и `owner`. Битый файл даёт ошибку в консоль и пустую половину прав, а не
 половинчатые права.
 
-> [!WARNING]
-> Вход по нику годится только для LAN: ник подделывается тривиально, а пароль
-> передаётся открытым текстом. На публичном сервере выдавай права по steamid.
+<Warning>
+Вход по нику годится только для LAN: ник подделывается тривиально, а пароль
+передаётся открытым текстом. На публичном сервере выдавай права по steamid.
+</Warning>
 
 ## Разрешение конфликтов
 
@@ -86,8 +88,8 @@ return {
 Иммунитет — это `weight` группы. Действие против другого игрока требует **строго
 большего** веса, поэтому два админа одного ранга друг друга не тронут.
 
-Вручную — [`p:outranks`](../players/outranks.md). Декларативно — `opts.target` в
-[`cmd.add`](../cmd/add.md).
+Вручную — [`p:outranks`](../players/access.md#outranks). Декларативно — `opts.target` в
+[`cmd.add`](../cmd/index.md#add).
 
 Права считаются лениво и кешируются на слот. Кеш сбрасывается сам: на
 `player_authorized`, при смене карты, по истечении срока и при любом изменении
@@ -97,26 +99,26 @@ return {
 
 |  |  |
 |---|---|
-| [`access.declare`](declare.md) | Объявляет ноду прав |
-| [`access.rule`](rule.md) | Задаёт динамическое правило для ноды |
+| [`access.declare`](declare.md#declare) | Объявляет ноду прав |
+| [`access.rule`](declare.md#rule) | Задаёт динамическое правило для ноды |
 
 ## Выдача
 
 |  |  |
 |---|---|
-| [`access.grant`](grant.md) | Выдаёт права по ключу |
-| [`access.revoke`](revoke.md) | Забирает запись, группу или ноду |
-| [`access.save`](save.md) | Записывает `users.lua` на диск |
-| [`access.reload`](reload.md) | Перечитывает `groups.lua` и `users.lua` с диска |
-| [`access.invalidate`](invalidate.md) | Сбрасывает кеш прав |
+| [`access.grant`](grant.md#grant) | Выдаёт права по ключу |
+| [`access.revoke`](grant.md#revoke) | Забирает запись, группу или ноду |
+| [`access.save`](grant.md#save) | Записывает `users.lua` на диск |
+| [`access.reload`](grant.md#reload) | Перечитывает `groups.lua` и `users.lua` с диска |
+| [`access.invalidate`](grant.md#invalidate) | Сбрасывает кеш прав |
 
 ## Чтение
 
 |  |  |
 |---|---|
-| [`access.can`](can.md) | Есть ли у игрока право |
-| [`access.permissions`](permissions.md) | Все объявленные ноды |
-| [`access.users`](users.md) | Все записи из `users.lua` |
-| [`access.user`](user.md) | Одна запись из `users.lua` |
-| [`access.all_groups`](all_groups.md) | Все группы |
-| [`access.group`](group.md) | Одна группа по имени |
+| [`access.can`](read.md#can) | Есть ли у игрока право |
+| [`access.permissions`](read.md#permissions) | Все объявленные ноды |
+| [`access.users`](read.md#users) | Все записи из `users.lua` |
+| [`access.user`](read.md#user) | Одна запись из `users.lua` |
+| [`access.all_groups`](read.md#all_groups) | Все группы |
+| [`access.group`](read.md#group) | Одна группа по имени |

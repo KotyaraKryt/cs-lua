@@ -32,20 +32,20 @@ s:set(p:steamid(), rec)
 
 Функции и userdata не сохраняются нигде: это ошибка, а не тихая потеря.
 
-## store
+## Ключ-значение
 
 Key-value поверх SQLite в каталоге плагина.
 
 |  |  |
 |---|---|
-| [`store.open`](open.md) | Открывает хранилище |
-| [`s:get`](get.md) | Читает значение по ключу |
-| [`s:set`](set.md) | Кладёт значение в очередь записи |
-| [`s:delete`](delete.md) | Удаляет ключ |
-| [`s:keys`](keys.md) | Все ключи хранилища |
-| [`s:all`](all.md) | Всё содержимое хранилища |
-| [`s:flush`](flush.md) | Записывает очередь на диск одной транзакцией |
-| [`s:pending`](pending.md) | Сколько записей ждёт в очереди |
+| [`store.open`](kv.md#open) | Открывает хранилище |
+| [`s:get`](kv.md#get) | Читает значение по ключу |
+| [`s:set`](kv.md#set) | Кладёт значение в очередь записи |
+| [`s:delete`](kv.md#delete) | Удаляет ключ |
+| [`s:keys`](kv.md#keys) | Все ключи хранилища |
+| [`s:all`](kv.md#all) | Всё содержимое хранилища |
+| [`s:flush`](kv.md#flush) | Записывает очередь на диск одной транзакцией |
+| [`s:pending`](kv.md#pending) | Сколько записей ждёт в очереди |
 
 ## datafile
 
@@ -59,8 +59,8 @@ Key-value поверх SQLite в каталоге плагина.
 
 |  |  |
 |---|---|
-| [`datafile.at`](at.md) | Привязывает модуль к своему каталогу |
-| [`datafile.load`](load.md) | Читает таблицу из `<dir>/<name>.lua` |
-| [`datafile.save`](save.md) | Пишет таблицу в `<dir>/<name>.lua` |
-| [`datafile.serialize`](serialize.md) | Превращает таблицу в текст, без записи |
-| [`datafile.dir`](dir.md) | Каталог, к которому привязан модуль |
+| [`datafile.at`](datafile.md#at) | Привязывает модуль к своему каталогу |
+| [`datafile.load`](datafile.md#load) | Читает таблицу из `<dir>/<name>.lua` |
+| [`datafile.save`](datafile.md#save) | Пишет таблицу в `<dir>/<name>.lua` |
+| [`datafile.serialize`](datafile.md#serialize) | Превращает таблицу в текст, без записи |
+| [`datafile.dir`](datafile.md#dir) | Каталог, к которому привязан модуль |

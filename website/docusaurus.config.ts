@@ -87,6 +87,13 @@ const config: Config = {
       defaultMode: 'dark',
       respectPrefersColorScheme: true,
     },
+    // Страница - это несколько вызовов (H2), у каждого свои Аргументы/
+    // Возвращает (H3). Без ограничения TOC справа показал бы и то, и другое -
+    // список из полусотни строк вместо списка вызовов на странице.
+    tableOfContents: {
+      minHeadingLevel: 2,
+      maxHeadingLevel: 2,
+    },
     navbar: {
       title: 'cs-lua',
       items: [

@@ -44,6 +44,7 @@ end)
     'groups': [
         {
             'title': 'Пространство имён',
+            'slug': 'namespace',
             'items': [
                 {
                     'name': 'hook.add',
@@ -65,7 +66,7 @@ end)
 
 Id уникален внутри плагина — два разных плагина спокойно называют свои `"init"`.
 
-## Порядок вызова
+### Порядок вызова
 
 Обработчики идут в порядке загрузки плагинов. Обычно это неважно, но на
 отменяемом событии решает, кто выиграет: `e:cancel()` обрывает цепочку.
@@ -127,6 +128,7 @@ if e.cancelled then return end
         },
         {
             'title': 'Подключение',
+            'slug': 'connection',
             'note': 'Порядок: `client_connect` → `player_authorized` → `player_ready`.',
             'items': [
                 event('client_connect',
@@ -172,6 +174,7 @@ end)
         },
         {
             'title': 'Жизнь сервера',
+            'slug': 'lifecycle',
             'items': [
                 event('map_change', 'Карта заканчивается.',
                       [('e.map', 'string', 'имя карты, которая заканчивается')],
@@ -183,6 +186,7 @@ end)
         },
         {
             'title': 'Геймплей',
+            'slug': 'gameplay',
             'note': 'Всё в этом разделе приходит из ReGameDLL.',
             'items': [
                 event('player_spawn', 'Игрок появился в раунде живым.', [PLAYER],
@@ -307,6 +311,7 @@ end)
         },
         {
             'title': 'Раунд и бомба',
+            'slug': 'round',
             'items': [
                 event('round_start', 'Раунд начался.', [], regamedll=True),
                 event('round_end', 'Раунд закончился.',

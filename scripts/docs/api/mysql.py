@@ -47,10 +47,11 @@ site:query("SELECT id, shilings FROM users WHERE steam_id = ?", p:steamid(),
 | дробное | как есть |
 | строка | экранируется и берётся в кавычки |
 
-> [!WARNING]
-> Не склеивай запрос из данных игрока — так же, как и с `db`: через `?`
-> значение попадёт в базу строкой, чем бы ни было, в склейке — станет частью
-> запроса.
+<Warning>
+Не склеивай запрос из данных игрока — так же, как и с `db`: через `?`
+значение попадёт в базу строкой, чем бы ни было, в склейке — станет частью
+запроса.
+</Warning>
 
 ## Транспорт
 
@@ -115,6 +116,7 @@ site:query("SELECT id, shilings FROM users WHERE steam_id = ?", p:steamid(),
     'groups': [
         {
             'title': 'Открытие',
+            'slug': 'open',
             'items': [
                 {
                     'name': 'mysql.connect',
@@ -141,6 +143,7 @@ local site = mysql.connect{
         },
         {
             'title': 'Объект соединения',
+            'slug': 'connection',
             'items': [
                 {
                     'name': 'conn:query',

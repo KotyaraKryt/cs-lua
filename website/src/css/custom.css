@@ -8,6 +8,8 @@
   --ifm-color-primary-lighter: #cf5f0a;
   --ifm-color-primary-lightest: #e56c0d;
 
+  --ifm-font-family-base: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    Helvetica, Arial, sans-serif;
   --ifm-code-font-size: 92%;
   --ifm-font-family-monospace: ui-monospace, "SFMono-Regular", "JetBrains Mono",
     "Cascadia Code", Consolas, monospace;
@@ -21,6 +23,10 @@
 
   --cslua-line: color-mix(in srgb, var(--ifm-color-emphasis-300) 60%, transparent);
   --cslua-surface: color-mix(in srgb, var(--ifm-color-emphasis-100) 55%, transparent);
+
+  /* Шире стандартного: имена вызовов вроде "grenade_explode" не должны
+     переноситься в дереве из 190 страниц. */
+  --doc-sidebar-width: 300px;
 }
 
 [data-theme='dark'] {
@@ -32,8 +38,10 @@
   --ifm-color-primary-lighter: #f7ac2b;
   --ifm-color-primary-light: #f6a71e;
 
-  --ifm-background-color: #12131a;
-  --ifm-background-surface-color: #191b24;
+  /* Два оттенка тёмного, как в Discord: канва темнее панелей — так сайдбар и
+     контент читаются как разные слои, а не сливаются в одно пятно. */
+  --ifm-background-color: #0e0f13;
+  --ifm-background-surface-color: #16171d;
   --docusaurus-highlighted-code-line-bg: rgba(255, 255, 255, 0.08);
 }
 
@@ -56,34 +64,170 @@ a {
   transition: color var(--ifm-transition-fast) ease;
 }
 
-/* ── Доки ────────────────────────────────────────────────────────────── */
+/* ── Навбар ──────────────────────────────────────────────────────────── */
+
+.navbar {
+  box-shadow: none;
+  border-bottom: 1px solid var(--cslua-line);
+  backdrop-filter: blur(8px);
+}
+
+.navbar__title {
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.navbar__link {
+  font-weight: 500;
+  border-radius: 999px;
+  padding: 0.4rem 0.85rem;
+  transition: background-color var(--ifm-transition-fast) ease,
+    color var(--ifm-transition-fast) ease;
+}
+
+.navbar__link:hover,
+.navbar__link--active {
+  background: var(--cslua-surface);
+}
+
+/* Поиск: широкое пилюльное поле, как командная строка в Discord/GMod Wiki —
+   сюда набирают имя функции, а не одно слово. */
+.navbar__search-input {
+  width: 16rem;
+  border-radius: 999px;
+  background-color: var(--cslua-surface);
+  border: 1px solid var(--cslua-line);
+  transition: border-color var(--ifm-transition-fast) ease,
+    background-color var(--ifm-transition-fast) ease;
+}
+
+.navbar__search-input:focus {
+  border-color: color-mix(in srgb, var(--ifm-color-primary) 55%, transparent);
+  background-color: var(--ifm-background-surface-color);
+}
+
+@media (max-width: 996px) {
+  .navbar__search-input {
+    width: 100%;
+  }
+}
+
+/* ── Сайдбар: дерево категорий как в Discord/GMod Wiki ─────────────────── */
+
+.theme-doc-sidebar-container {
+  border-right: 1px solid var(--cslua-line) !important;
+}
+
+.menu {
+  font-size: 0.87rem;
+  padding: 1rem 0.75rem !important;
+}
+
+.menu__link {
+  border-radius: 6px;
+  padding: 0.4rem 0.65rem;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.85rem;
+  color: var(--ifm-color-emphasis-700);
+  transition: color var(--ifm-transition-fast) ease,
+    background-color var(--ifm-transition-fast) ease;
+}
+
+/* Разделы (категории) — по-русски, моноширинным читаются плохо: обычный шрифт,
+   приглушённее и капсом, как заголовки групп каналов в Discord. */
+.menu__list-item-collapsible > .menu__link,
+.theme-doc-sidebar-item-category > .menu__list-item-collapsible > .menu__link {
+  font-family: var(--ifm-font-family-base);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ifm-color-emphasis-600);
+}
+
+.menu__link:hover {
+  background: var(--cslua-surface);
+  color: var(--ifm-color-emphasis-900);
+}
+
+/* Активный пункт — заливка-пилюля + акцентная полоса слева, а не просто
+   цветной текст: глазами такой пункт находится мгновенно в списке из 190. */
+.menu__link--active:not(.menu__link--sublist) {
+  background: color-mix(in srgb, var(--ifm-color-primary) 14%, transparent);
+  color: var(--ifm-color-primary);
+  font-weight: 600;
+  box-shadow: inset 3px 0 0 var(--ifm-color-primary);
+}
+
+.menu__list .menu__list {
+  border-left: 1px solid var(--cslua-line);
+  margin-left: 0.55rem;
+  padding-left: 0.55rem;
+}
+
+.menu__caret:before,
+.menu__link--sublist-caret:after {
+  transition: transform var(--ifm-transition-fast) ease;
+}
+
+/* ── Оглавление справа ──────────────────────────────────────────────────
+   Длинная справочная страница (players/index, hook/index) без закреплённого
+   TOC заставляет скроллить наверх за навигацией — держим его на экране и
+   подсвечиваем текущий раздел вертикальной линией, как "on this page" в
+   доках Discord. */
+.table-of-contents {
+  font-size: 0.82rem;
+  border-left: 1px solid var(--cslua-line);
+  padding-left: 0.9rem;
+}
+
+.table-of-contents__link {
+  padding: 0.2rem 0;
+  color: var(--ifm-color-emphasis-600);
+}
+
+.table-of-contents__link--active {
+  color: var(--ifm-color-primary);
+  font-weight: 600;
+}
+
+.theme-doc-toc-desktop {
+  position: relative;
+}
+
+/* ── Доки: тело страницы ─────────────────────────────────────────────── */
 
 .markdown {
-  --ifm-h2-vertical-rhythm-top: 2.6;
-  --ifm-h3-vertical-rhythm-top: 1.8;
+  --ifm-h2-vertical-rhythm-top: 2.2;
+  --ifm-h3-vertical-rhythm-top: 1.6;
 }
 
-/* Раздел отделяется воздухом и тонкой линией, а не жирной чертой. */
+.markdown h1 {
+  font-size: 2rem;
+  letter-spacing: -0.02em;
+}
+
+/* Страница — это несколько вызовов подряд (страница-ресурс, как у Discord),
+   а не один. H2 — имя очередного вызова: цветом и моноширинным, чтобы взгляд
+   цеплялся за него в потоке, плюс граница сверху — разделитель между
+   функциями, а не декор. */
 .markdown > h2 {
   padding-top: 1.6rem;
+  margin-top: 2.4rem;
   border-top: 1px solid var(--cslua-line);
-  font-size: 1.65rem;
-  letter-spacing: -0.01em;
-}
-
-.markdown > h2:first-of-type {
-  border-top: none;
-}
-
-/* h3 — это обычно сигнатура функции: помечаем цветом, без рамок. */
-.markdown > h3 {
-  font-size: 1.15rem;
+  font-size: 1.3rem;
   color: var(--ifm-color-primary);
   font-family: var(--ifm-font-family-monospace);
   letter-spacing: -0.01em;
 }
 
-.markdown > h3 > code {
+.markdown > h2:first-of-type {
+  border-top: none;
+  padding-top: 0;
+  margin-top: 1.5rem;
+}
+
+.markdown > h2 > code {
   background: none;
   border: none;
   padding: 0;
@@ -91,18 +235,41 @@ a {
   color: inherit;
 }
 
-/* Якорь появляется мягко, а не выпрыгивает. */
+/* H3 — служебные разделы внутри вызова: Аргументы/Возвращает/Пример. Тише
+   имени функции, чтобы не спорить с ним за внимание. */
+.markdown > h3 {
+  padding-top: 0;
+  margin-top: 1.6rem;
+  margin-bottom: 0.6rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ifm-color-emphasis-600);
+}
+
+/* Сигнатура — код-блок сразу после имени вызова — то, за чем сюда пришли.
+   Отбиваем её слева цветом и лёгкой подложкой, как карточка описания
+   функции в GMod Wiki. Соседний-селектор матчит это под каждым H2 на
+   странице независимо, так что оформление получает каждый вызов. */
+.markdown > h2 + p + div[class*='codeBlockContainer'] {
+  border-left: 3px solid var(--ifm-color-primary);
+  border-radius: 0 var(--ifm-global-radius) var(--ifm-global-radius) 0;
+  margin-bottom: 1.5rem;
+}
+
 .hash-link {
   transition: opacity var(--ifm-transition-fast) ease;
 }
 
-/* Таблицы — основной формат справочника: без жирных рамок, с подсветкой строки. */
+/* Таблицы — основной формат справочника: без жирных рамок, плотные строки,
+   подсветка строки при наведении, как таблица аргументов в GMod Wiki. */
 .markdown table {
   display: table;
   width: 100%;
   border-collapse: collapse;
   border: none;
-  font-size: 0.94rem;
+  font-size: 0.9rem;
 }
 
 .markdown table thead {
@@ -116,20 +283,22 @@ a {
 
 .markdown table th {
   border: none;
-  padding: 0.55rem 0.8rem;
+  padding: 0.5rem 0.8rem;
   font-weight: 600;
-  font-size: 0.82rem;
+  font-size: 0.76rem;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
   color: var(--ifm-color-emphasis-600);
   background: none;
+  vertical-align: top;
 }
 
 .markdown table td {
   border: none;
   border-top: 1px solid var(--cslua-line);
-  padding: 0.55rem 0.8rem;
+  padding: 0.5rem 0.8rem;
   background: none;
+  vertical-align: top;
 }
 
 .markdown table tbody tr {
@@ -148,6 +317,22 @@ a {
 
 .markdown table td:last-child {
   white-space: normal;
+}
+
+/* Второй столбец в таблицах аргументов и полей — всегда тип. Подаём его
+   бейджем-пилюлей, чтобы "number | nil" читался как один опознаваемый кусок,
+   а не сливался со свободным текстом описания. */
+.markdown table td:nth-child(2) {
+  font-family: var(--ifm-font-family-monospace);
+}
+
+.markdown table td:nth-child(2) code {
+  background: var(--cslua-surface);
+  border: 1px solid var(--cslua-line);
+  border-radius: 999px;
+  padding: 0.1rem 0.55rem;
+  font-size: 0.78rem;
+  color: var(--ifm-color-emphasis-800);
 }
 
 /* Длинная таблица скроллится сама, а не тянет страницу вбок. */
@@ -173,25 +358,18 @@ a {
   border: 1px solid var(--cslua-line);
 }
 
-.menu__link,
-.table-of-contents__link {
-  transition: color var(--ifm-transition-fast) ease,
-    background-color var(--ifm-transition-fast) ease;
-}
-
 .pagination-nav__link {
   border-color: var(--cslua-line);
+  border-radius: var(--ifm-global-radius);
   transition: border-color var(--ifm-transition-fast) ease,
-    background-color var(--ifm-transition-fast) ease;
+    background-color var(--ifm-transition-fast) ease,
+    transform var(--ifm-transition-fast) ease;
 }
 
 .pagination-nav__link:hover {
   background: var(--cslua-surface);
-}
-
-.navbar {
-  box-shadow: none;
-  border-bottom: 1px solid var(--cslua-line);
+  border-color: color-mix(in srgb, var(--ifm-color-primary) 45%, transparent);
+  transform: translateY(-1px);
 }
 
 /* ── Лендинг ─────────────────────────────────────────────────────────── */
@@ -226,6 +404,7 @@ a {
 }
 
 .heroButtons .button {
+  border-radius: 999px;
   transition: transform var(--ifm-transition-fast) ease,
     background-color var(--ifm-transition-fast) ease,
     color var(--ifm-transition-fast) ease;
@@ -255,15 +434,17 @@ a {
 .featureCard {
   padding: 1.5rem;
   border: 1px solid var(--cslua-line);
-  border-radius: var(--ifm-global-radius);
+  border-radius: 0.75rem;
   background: var(--ifm-background-surface-color);
   transition: border-color var(--ifm-transition-slow) ease,
-    transform var(--ifm-transition-slow) ease;
+    transform var(--ifm-transition-slow) ease,
+    box-shadow var(--ifm-transition-slow) ease;
 }
 
 .featureCard:hover {
   border-color: color-mix(in srgb, var(--ifm-color-primary) 45%, transparent);
   transform: translateY(-2px);
+  box-shadow: 0 8px 24px -12px color-mix(in srgb, var(--ifm-color-primary) 35%, transparent);
 }
 
 .featureCard h3 {
@@ -275,97 +456,4 @@ a {
   margin: 0;
   color: var(--ifm-color-emphasis-700);
   font-size: 0.95rem;
-}
-
-
-/* ---------------------------------------------------------------------------
-   Справочник API
-   ---------------------------------------------------------------------------
-   190 страниц одной формы: заголовок, сигнатура, таблицы, пример. Правки ниже
-   отвечают на то, как такую страницу читают — глазами прыгают к сигнатуре и к
-   нужной строке таблицы, а не читают сверху вниз. */
-
-/* Сигнатура — первое, за чем сюда пришли, и она идёт сразу под H1. Отбиваем
-   её слева цветом, чтобы взгляд цеплялся за неё, а не за текст вокруг. */
-.markdown > h1 + p + div[class*='codeBlockContainer'] {
-  border-left: 3px solid var(--ifm-color-primary);
-  margin-bottom: 2rem;
-}
-
-/* Таблица аргументов - это данные, а не текст: плотнее строки, моноширинный
-   столбец типа, чтобы "number | nil" и "string" читались как один столбец. */
-.markdown table {
-  display: table;
-  width: 100%;
-  font-size: 0.92rem;
-}
-
-.markdown table td,
-.markdown table th {
-  padding: 0.45rem 0.75rem;
-  vertical-align: top;
-}
-
-.markdown table th {
-  font-size: 0.8rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--ifm-color-emphasis-600);
-  font-weight: 600;
-}
-
-/* Второй столбец в таблицах аргументов и полей — всегда тип. */
-.markdown table td:nth-child(2) {
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.86rem;
-  color: var(--ifm-color-emphasis-700);
-  white-space: nowrap;
-}
-
-/* Имена вызовов в меню и в таблицах моноширинные: p:health и players.get
-   должны выглядеть кодом, потому что они и есть код. */
-.menu__link {
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.87rem;
-}
-
-/* Кроме разделов - они по-русски и моноширинными читаются плохо. */
-.menu__list-item-collapsible > .menu__link,
-.theme-doc-sidebar-item-category > .menu__list-item-collapsible > .menu__link {
-  font-family: var(--ifm-font-family-base);
-  font-size: 0.9rem;
-}
-
-/* Оглавление справа держится на экране: на длинной странице (players/index,
-   hook/index) без этого приходится скроллить наверх за навигацией. */
-.table-of-contents {
-  font-size: 0.84rem;
-}
-
-/* Заголовки разделов страницы - Аргументы, Возвращает, Пример - служебные.
-   Делаем их тише основного текста, чтобы не спорили с сигнатурой. */
-.markdown > h2 {
-  font-size: 1.15rem;
-  margin-top: 2rem;
-  margin-bottom: 0.6rem;
-  padding-bottom: 0.3rem;
-  border-bottom: 1px solid var(--cslua-line);
-  color: var(--ifm-color-emphasis-800);
-}
-
-.markdown > h3 {
-  font-size: 1rem;
-  margin-top: 1.5rem;
-}
-
-/* Поиск: поле в шапке заметно шире стандартного - сюда набирают имя функции,
-   а не одно слово. */
-.navbar__search-input {
-  width: 14rem;
-}
-
-@media (max-width: 996px) {
-  .navbar__search-input {
-    width: 100%;
-  }
 }

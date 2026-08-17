@@ -23,10 +23,10 @@ end)
 
 |  |  |
 |---|---|
-| [`hook.add`](add.md) | Подписывает функцию на событие |
-| [`hook.remove`](remove.md) | Снимает подписку по имени события и id |
-| [`hook.run`](run.md) | Запускает своё событие плагина |
-| [`hook.list`](list.md) | Возвращает список подписок в порядке вызова |
+| [`hook.add`](namespace.md#add) | Подписывает функцию на событие |
+| [`hook.remove`](namespace.md#remove) | Снимает подписку по имени события и id |
+| [`hook.run`](namespace.md#run) | Запускает своё событие плагина |
+| [`hook.list`](namespace.md#list) | Возвращает список подписок в порядке вызова |
 
 ## Подключение
 
@@ -34,19 +34,19 @@ end)
 
 |  |  |
 |---|---|
-| [`client_connect`](client_connect.md) | Игрок стучится на сервер; его ещё можно не пустить |
-| [`client_disconnect`](client_disconnect.md) | Игрок отключился |
-| [`player_authorized`](player_authorized.md) | Steam ответил, steamid наконец известен |
-| [`player_ready`](player_ready.md) | Игрок в игре, сообщения до него доходят |
-| [`player_chat`](player_chat.md) | Игрок написал в чат |
-| [`menu_select`](menu_select.md) | Игрок нажал клавишу в меню, открытом из Lua |
+| [`client_connect`](connection.md#client_connect) | Игрок стучится на сервер; его ещё можно не пустить |
+| [`client_disconnect`](connection.md#client_disconnect) | Игрок отключился |
+| [`player_authorized`](connection.md#player_authorized) | Steam ответил, steamid наконец известен |
+| [`player_ready`](connection.md#player_ready) | Игрок в игре, сообщения до него доходят |
+| [`player_chat`](connection.md#player_chat) | Игрок написал в чат |
+| [`menu_select`](connection.md#menu_select) | Игрок нажал клавишу в меню, открытом из Lua |
 
 ## Жизнь сервера
 
 |  |  |
 |---|---|
-| [`map_change`](map_change.md) | Карта заканчивается |
-| [`plugin_unload`](plugin_unload.md) | Плагин или всё состояние уходит |
+| [`map_change`](lifecycle.md#map_change) | Карта заканчивается |
+| [`plugin_unload`](lifecycle.md#plugin_unload) | Плагин или всё состояние уходит |
 
 ## Геймплей
 
@@ -54,24 +54,24 @@ end)
 
 |  |  |
 |---|---|
-| [`player_spawn`](player_spawn.md) | Игрок появился в раунде живым |
-| [`player_hurt`](player_hurt.md) | Игроку наносят урон; урон можно изменить или погасить |
-| [`player_hurt_post`](player_hurt_post.md) | Урон уже применён; только для наблюдателей |
-| [`player_death`](player_death.md) | Игрок погиб |
-| [`player_team_change`](player_team_change.md) | Игрок сменил сторону |
-| [`weapon_fire`](weapon_fire.md) | Из ствола вышел выстрел |
-| [`weapon_deploy`](weapon_deploy.md) | Оружие вот-вот покажет вьюмодель и модель в руках |
-| [`grenade_throw`](grenade_throw.md) | HE- или дымовая граната вот-вот покинёт руку |
-| [`grenade_thrown`](grenade_thrown.md) | HE- или дымовая граната только что покинула руку |
-| [`grenade_explode`](grenade_explode.md) | HE- или дымовая граната вот-вот взорвётся |
+| [`player_spawn`](gameplay.md#player_spawn) | Игрок появился в раунде живым |
+| [`player_hurt`](gameplay.md#player_hurt) | Игроку наносят урон; урон можно изменить или погасить |
+| [`player_hurt_post`](gameplay.md#player_hurt_post) | Урон уже применён; только для наблюдателей |
+| [`player_death`](gameplay.md#player_death) | Игрок погиб |
+| [`player_team_change`](gameplay.md#player_team_change) | Игрок сменил сторону |
+| [`weapon_fire`](gameplay.md#weapon_fire) | Из ствола вышел выстрел |
+| [`weapon_deploy`](gameplay.md#weapon_deploy) | Оружие вот-вот покажет вьюмодель и модель в руках |
+| [`grenade_throw`](gameplay.md#grenade_throw) | HE- или дымовая граната вот-вот покинёт руку |
+| [`grenade_thrown`](gameplay.md#grenade_thrown) | HE- или дымовая граната только что покинула руку |
+| [`grenade_explode`](gameplay.md#grenade_explode) | HE- или дымовая граната вот-вот взорвётся |
 
 ## Раунд и бомба
 
 |  |  |
 |---|---|
-| [`round_start`](round_start.md) | Раунд начался |
-| [`round_end`](round_end.md) | Раунд закончился |
-| [`round_freeze_end`](round_freeze_end.md) | Заморозка кончилась, игроки могут двигаться |
-| [`bomb_planted`](bomb_planted.md) | Бомба заложена |
-| [`bomb_defused`](bomb_defused.md) | Попытка разминирования завершилась |
-| [`bomb_exploded`](bomb_exploded.md) | Бомба взорвалась |
+| [`round_start`](round.md#round_start) | Раунд начался |
+| [`round_end`](round.md#round_end) | Раунд закончился |
+| [`round_freeze_end`](round.md#round_freeze_end) | Заморозка кончилась, игроки могут двигаться |
+| [`bomb_planted`](round.md#bomb_planted) | Бомба заложена |
+| [`bomb_defused`](round.md#bomb_defused) | Попытка разминирования завершилась |
+| [`bomb_exploded`](round.md#bomb_exploded) | Бомба взорвалась |

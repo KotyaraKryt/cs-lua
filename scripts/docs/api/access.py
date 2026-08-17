@@ -15,9 +15,10 @@ cmd.add("slay", function(ctx)
 end, { perm = "admin.slay", target = 1 })
 ```
 
-> [!NOTE]
-> У консоли и rcon прав нет — им разрешено всё. `ctx.player` там `nil`, любая
-> проверка проходит.
+<Note>
+У консоли и rcon прав нет — им разрешено всё. `ctx.player` там `nil`, любая
+проверка проходит.
+</Note>
 
 Методы игрока — [`p:can`](../players/can.md), [`p:groups`](../players/groups.md),
 [`p:group`](../players/group.md), [`p:weight`](../players/weight.md),
@@ -59,9 +60,10 @@ return {
 и `owner`. Битый файл даёт ошибку в консоль и пустую половину прав, а не
 половинчатые права.
 
-> [!WARNING]
-> Вход по нику годится только для LAN: ник подделывается тривиально, а пароль
-> передаётся открытым текстом. На публичном сервере выдавай права по steamid.
+<Warning>
+Вход по нику годится только для LAN: ник подделывается тривиально, а пароль
+передаётся открытым текстом. На публичном сервере выдавай права по steamid.
+</Warning>
 
 ## Разрешение конфликтов
 
@@ -94,6 +96,7 @@ return {
     'groups': [
         {
             'title': 'Объявление',
+            'slug': 'declare',
             'items': [
                 {
                     'name': 'access.declare',
@@ -140,6 +143,7 @@ end)
         },
         {
             'title': 'Выдача',
+            'slug': 'grant',
             'items': [
                 {
                     'name': 'access.grant',
@@ -196,6 +200,7 @@ end)
         },
         {
             'title': 'Чтение',
+            'slug': 'read',
             'items': [
                 {
                     'name': 'access.can',

@@ -8,6 +8,7 @@
 """
 import importlib
 import io
+import json
 import os
 import shutil
 import sys
@@ -68,18 +69,11 @@ def main():
     for name, text in keep.items():
         io.open(os.path.join(api_dir, name), 'w', encoding='utf-8', newline='').write(text)
 
-    entries = []
-    loaded = []
-    pages = 0
-    for name in NAMESPACES:
-        mod = importlib.import_module('api.' + name)
-        entry = render.write(api_dir, mod.NS)
-        entries.append(entry)
-        loaded.append(mod.NS)
-        pages += 1 + sum(len(g['items']) for g in mod.NS['groups'])
+    loaded = [importlib.import_module('api.' + name).NS for name in NAMESPACES]
+    entries, registry, pages = render.generate(loaded, api_dir)
 
     io.open(os.path.join(api_dir, 'all.md'), 'w', encoding='utf-8', newline='').write(
-        render.render_all(loaded))
+        render.render_all(loaded, registry))
     pages += 1
 
     entries.append({'type': 'doc', 'id': 'api/all', 'label': 'Все вызовы'})
@@ -88,6 +82,28 @@ def main():
     io.open(os.path.join(ROOT, 'website', 'sidebars.ts'), 'w',
             encoding='utf-8', newline='').write(
         SIDEBAR % {'items': render.sidebar(entries)})
+
+    # Параллельный вывод под Mintlify - живёт рядом с Docusaurus, пока переезд
+    # не подтверждён (см. план миграции). Структура групп та же, что и в
+    # sidebars.ts выше, просто в формате docs.json вместо TS-литерала.
+    docs_json = {
+        '$schema': 'https://mintlify.com/docs.json',
+        'theme': 'palm',
+        'name': 'cs-lua',
+        'description': 'Плагины для CS 1.6 на Lua вместо SourcePawn',
+        'colors': {'primary': '#b45309', 'light': '#f59e0b', 'dark': '#f59e0b'},
+        'favicon': '/favicon.svg',
+        'navigation': {
+            'groups': [
+                {'group': 'Документация',
+                 'pages': ['intro', 'install', 'plugins', 'migration', 'building']},
+                {'group': 'Справочник API',
+                 'pages': ['api/index'] + render.mintlify_navigation(loaded) + ['api/all', 'api/console']},
+            ],
+        },
+    }
+    io.open(os.path.join(ROOT, 'docs', 'docs.json'), 'w', encoding='utf-8', newline='').write(
+        json.dumps(docs_json, ensure_ascii=False, indent=2) + '\n')
 
     print('%d namespace(s), %d page(s)' % (len(NAMESPACES), pages))
 

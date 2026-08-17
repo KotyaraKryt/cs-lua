@@ -21,6 +21,7 @@ ReGameDLL не нужен — слой работает и на ванильно
     'groups': [
         {
             'title': 'Пространство имён',
+            'slug': 'namespace',
             'items': [
                 {
                     'name': 'ents.create',
@@ -69,6 +70,7 @@ end)
         },
         {
             'title': 'Объект сущности',
+            'slug': 'entity',
             'items': [
                 {
                     'name': 'e.index',

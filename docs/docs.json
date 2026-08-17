@@ -1,0 +1,164 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "palm",
+  "name": "cs-lua",
+  "description": "Плагины для CS 1.6 на Lua вместо SourcePawn",
+  "colors": {
+    "primary": "#b45309",
+    "light": "#f59e0b",
+    "dark": "#f59e0b"
+  },
+  "favicon": "/favicon.svg",
+  "navigation": {
+    "groups": [
+      {
+        "group": "Документация",
+        "pages": [
+          "intro",
+          "install",
+          "plugins",
+          "migration",
+          "building"
+        ]
+      },
+      {
+        "group": "Справочник API",
+        "pages": [
+          "api/index",
+          {
+            "group": "hook",
+            "pages": [
+              "api/hook/index",
+              "api/hook/namespace",
+              "api/hook/connection",
+              "api/hook/lifecycle",
+              "api/hook/gameplay",
+              "api/hook/round"
+            ]
+          },
+          {
+            "group": "cmd",
+            "pages": [
+              "api/cmd/index"
+            ]
+          },
+          {
+            "group": "players",
+            "pages": [
+              "api/players/index",
+              "api/players/namespace",
+              "api/players/identity",
+              "api/players/state",
+              "api/players/cs-state",
+              "api/players/messages",
+              "api/players/admin",
+              "api/players/access"
+            ]
+          },
+          {
+            "group": "timer",
+            "pages": [
+              "api/timer/index",
+              "api/timer/anonymous",
+              "api/timer/named"
+            ]
+          },
+          {
+            "group": "ents",
+            "pages": [
+              "api/ents/index",
+              "api/ents/namespace",
+              "api/ents/entity"
+            ]
+          },
+          {
+            "group": "fx",
+            "pages": [
+              "api/fx/index"
+            ]
+          },
+          {
+            "group": "res",
+            "pages": [
+              "api/res/index"
+            ]
+          },
+          {
+            "group": "sv",
+            "pages": [
+              "api/sv/index",
+              "api/sv/server",
+              "api/sv/cvar"
+            ]
+          },
+          {
+            "group": "db",
+            "pages": [
+              "api/db/index",
+              "api/db/open",
+              "api/db/database",
+              "api/db/statement"
+            ]
+          },
+          {
+            "group": "mysql",
+            "pages": [
+              "api/mysql/index",
+              "api/mysql/open",
+              "api/mysql/connection"
+            ]
+          },
+          {
+            "group": "store",
+            "pages": [
+              "api/store/index",
+              "api/store/kv",
+              "api/store/datafile"
+            ]
+          },
+          {
+            "group": "http",
+            "pages": [
+              "api/http/index"
+            ]
+          },
+          {
+            "group": "menu",
+            "pages": [
+              "api/menu/index"
+            ]
+          },
+          {
+            "group": "ui",
+            "pages": [
+              "api/ui/index"
+            ]
+          },
+          {
+            "group": "access",
+            "pages": [
+              "api/access/index",
+              "api/access/declare",
+              "api/access/grant",
+              "api/access/read"
+            ]
+          },
+          {
+            "group": "plugin",
+            "pages": [
+              "api/plugin/index"
+            ]
+          },
+          {
+            "group": "export / import",
+            "pages": [
+              "api/exports/index"
+            ]
+          },
+          "api/all",
+          "api/console"
+        ]
+      }
+    ]
+  }
+}
