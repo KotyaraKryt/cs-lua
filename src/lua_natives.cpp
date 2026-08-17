@@ -87,7 +87,7 @@ static bool cslua_version_less(const char *a, const char *b)
 //
 // `plugin` is both the manifest call and a namespace:
 //
-//   plugin { name = "Shop", api_version = 2 }
+//   plugin { name = "Shop", api_version = 1 }
 //   plugin.data_dir()
 //
 // The call is manifest.lua's only job - the engine runs that file before
@@ -117,10 +117,6 @@ static int l_plugin_call(lua_State *L)
 
 	// api_version = N: the plugin was written against API version N. A newer
 	// one than this build offers would only fail later on a missing function.
-	//
-	// v1 is not "older but fine" - it is a different API. Everything was
-	// renamed, so a v1 plugin would die on its first call with a confusing
-	// "attempt to call a nil value". Say what actually happened instead.
 	lua_getfield(L, 2, "api_version");
 	if (lua_isnumber(L, -1)) {
 		int want = (int)lua_tointeger(L, -1);
@@ -129,16 +125,11 @@ static int l_plugin_call(lua_State *L)
 		if (want > CSLUA_API_VERSION)
 			return luaL_error(L, "plugin '%s' needs cs-lua API v%d, this build is v%d - update cs-lua",
 				plugin->id.c_str(), want, CSLUA_API_VERSION);
-
-		if (want < 2)
-			return luaL_error(L, "plugin '%s' targets cs-lua API v%d, which this build no longer speaks. "
-				"v2 renamed the whole Lua API (on -> hook.add, after -> timer.after, ...); "
-				"see docs/migration.md", plugin->id.c_str(), want);
 	} else {
 		lua_pop(L, 1);
 	}
 
-	// min_engine_version / max_engine_version = "2.1.0": pins to a specific
+	// min_engine_version / max_engine_version = "1.1.0": pins to a specific
 	// build, not just an API generation. api_version only moves on a breaking
 	// rename - a plugin using a native that shipped later under the same
 	// api_version (http_server, say) has no other way to say "at least this

@@ -50,6 +50,12 @@ public:
 	void set_suppress_drop(int id, bool suppress);
 	bool suppress_drop(int id) const;
 
+	// Turns a raw held-down IN_ATTACK2 into a single "just pressed" edge -
+	// there is no ReGameDLL hookchain for SecondaryAttack, so PlayerPreThink
+	// (dllapi.cpp) calls this every frame with the current button state and
+	// only fires weapon_secondary_attack when it returns true.
+	bool secondary_attack_pressed(int id, bool down);
+
 private:
 	static bool valid(int id) { return id >= 1 && id < CSLUA_MAXPLAYERS; }
 
@@ -63,6 +69,7 @@ private:
 		bool suppress_attack = false;
 		bool suppress_move = false;
 		bool suppress_drop = false;
+		bool attack2_down = false;
 	};
 
 	Info m_players[CSLUA_MAXPLAYERS];

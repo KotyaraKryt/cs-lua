@@ -210,6 +210,11 @@ static int l_velocity(lua_State *L)
 	return vector_field(L, self_pev(L)->velocity);
 }
 
+static int l_punchangle(lua_State *L)
+{
+	return vector_field(L, self_pev(L)->punchangle);
+}
+
 // Where the player is actually looking; read-only, the client owns it.
 static int l_aim(lua_State *L)
 {
@@ -667,8 +672,15 @@ static int l_team(lua_State *L)
 // already manages. They are addressed by userid, never by name: a nickname can
 // contain spaces or quotes and would break the command line.
 
-// p:kick([reason]) - the reason is shown to the player first, since the
-// engine's kick carries no text of its own.
+// p:kick([reason]) - the engine's own "kick #<userid> [reason]" takes a
+// trailing reason argument (see Host_Kick_f) and folds it straight into the
+// SV_DropClient message ("Kicked :<reason>"), which is what actually shows
+// up on the client's disconnect screen. A bare "kick #<userid>" with no
+// reason argument at all falls through to the engine's generic "Kicked" -
+// this used to only print the reason to the player's own console
+// (cslua_send_console), invisible unless their console happened to already
+// be open, and gone by the time it would matter anyway since the drop
+// follows immediately after.
 static int l_kick(lua_State *L)
 {
 	int id = self_player_id(L);
@@ -681,11 +693,22 @@ static int l_kick(lua_State *L)
 	if (!e || e->free)
 		return 0;
 
-	if (reason && *reason)
-		cslua_send_console(id, reason);
+	char cmd[256];
+	if (reason && *reason) {
+		// The reason rides the same console command line as a quoted
+		// argument, so it can't carry a '"' of its own - Cmd_TokenizeString
+		// would end the argument right there and split the rest into
+		// further tokens.
+		char escaped[192];
+		size_t w = 0;
+		for (const char *p = reason; *p && w < sizeof escaped - 1; p++)
+			escaped[w++] = (*p == '"') ? '\'' : *p;
+		escaped[w] = '\0';
 
-	char cmd[64];
-	cslua_snprintf(cmd, sizeof cmd, "kick #%d\n", g_engfuncs.pfnGetPlayerUserId(e));
+		cslua_snprintf(cmd, sizeof cmd, "kick #%d \"%s\"\n", g_engfuncs.pfnGetPlayerUserId(e), escaped);
+	} else {
+		cslua_snprintf(cmd, sizeof cmd, "kick #%d\n", g_engfuncs.pfnGetPlayerUserId(e));
+	}
 	cmd[sizeof cmd - 1] = '\0';
 	SERVER_COMMAND(cmd);
 	return 0;
@@ -885,13 +908,54 @@ static int l_deaths(lua_State *L)
 	return 0;
 }
 
-// p:give("weapon_ak47") - GiveNamedItemEx does the full pickup (ammo included),
-// same as walking over the weapon.
+// p:give("weapon_ak47"[, opts]) - GiveNamedItemEx does the full pickup (ammo
+// included), same as walking over the weapon.
+//
+// opts lets a script disguise the result as a different weapon for
+// inventory-bookkeeping purposes only - what "already have this weapon"
+// checks see and which ammo pool it draws from, not what the item actually
+// does:
+//
+//   id        - classname of a real weapon whose WeaponIdType to borrow
+//               (m_iId), resolved through ReGameDLL's own weapon table
+//               (GetWeaponInfo), not a hardcoded number. Also decides the
+//               HUD icon: the client already has that weapon's WeaponList
+//               entry from map load, so borrowing its id borrows its icon
+//               for free, no custom art or WeaponList hook needed.
+//   ammo_type - a spare index (0..31) into the player's ammo array
+//               (m_iPrimaryAmmoType), so this item's reserve is tracked
+//               separately from whatever it shares a real ammo type with.
+//               Pick one no real weapon in cfg uses.
+//
+// Same trick the reference AmxModX plugins reach for ReAPI's
+// rg_set_iteminfo for, minus the fragile part: m_iId and m_iPrimaryAmmoType
+// are plain public members on CBasePlayerItem/CBasePlayerWeapon
+// (weapons.h), not something that needs signature-scanning to reach - as
+// safe to write as m_pActiveItem already is elsewhere in this file.
 static int l_give(lua_State *L)
 {
 	CBasePlayer *player = self_cbase(L);
-	const char *item = luaL_checkstring(L, 2);
-	player->CSPlayer()->GiveNamedItemEx(item);
+	const char *item_name = luaL_checkstring(L, 2);
+
+	CBaseEntity *given = player->CSPlayer()->GiveNamedItemEx(item_name);
+	if (!given || !lua_istable(L, 3))
+		return 0;
+
+	CBasePlayerItem *item = static_cast<CBasePlayerItem *>(given);
+
+	lua_getfield(L, 3, "id");
+	if (lua_isstring(L, -1) && cslua_regamedll_api()) {
+		WeaponInfoStruct *info = cslua_regamedll_api()->GetWeaponInfo(lua_tostring(L, -1));
+		if (info)
+			item->m_iId = info->id;
+	}
+	lua_pop(L, 1);
+
+	lua_getfield(L, 3, "ammo_type");
+	if (lua_isnumber(L, -1) && item->IsWeapon())
+		static_cast<CBasePlayerWeapon *>(item)->m_iPrimaryAmmoType = (int)lua_tointeger(L, -1);
+	lua_pop(L, 1);
+
 	return 0;
 }
 
@@ -916,6 +980,26 @@ static int l_weapon(lua_State *L)
 	}
 
 	lua_pushstring(L, STRING(active->pev->classname));
+	return 1;
+}
+
+// p:switch_weapon(classname) -> true if the player was carrying it and the
+// game agreed to switch (same call the weapon-select key makes), false if
+// they don't have it. p:give() alone never makes the new weapon active on
+// its own unless the slot it lands in was empty - a script that wants a
+// just-given weapon in hand right away needs this too.
+static int l_switch_weapon(lua_State *L)
+{
+	CBasePlayer *player = self_cbase(L);
+	const char *classname = luaL_checkstring(L, 2);
+
+	CBasePlayerItem *item = player->CSPlayer()->GetItemByName(classname);
+	if (!item) {
+		lua_pushboolean(L, false);
+		return 1;
+	}
+
+	lua_pushboolean(L, player->CSPlayer()->SwitchWeapon(item) != 0);
 	return 1;
 }
 
@@ -1271,6 +1355,7 @@ static const luaL_Reg s_queries[] =
 	{ "origin",    l_origin },
 	{ "angles",    l_angles },
 	{ "velocity",  l_velocity },
+	{ "punchangle", l_punchangle },
 	{ "aim",       l_aim },
 	{ "trace",     l_trace },
 	{ "trace_to",  l_trace_to },
@@ -1302,6 +1387,7 @@ static const luaL_Reg s_queries[] =
 	{ "give",      l_give },
 	{ "strip",     l_strip },
 	{ "weapon",    l_weapon },
+	{ "switch_weapon", l_switch_weapon },
 	{ "weapons",   l_weapons },
 	{ "ammo",      l_ammo },
 	{ "clip",      l_clip },

@@ -12,6 +12,12 @@ bool cslua_regamedll_init();
 bool cslua_regamedll_ready();
 const char *cslua_regamedll_version();
 
+// NULL when the API is missing. IReGameApi::GetWeaponInfo(classname) is what
+// p:give's disguise opts resolve a real weapon's WeaponIdType through -
+// ReGameDLL's own table, not a hardcoded number.
+class IReGameApi;
+IReGameApi *cslua_regamedll_api();
+
 // NULL when the API is missing, the slot is empty, or the entity is not a
 // player yet.
 CBasePlayer *cslua_player_entity(int id);
@@ -21,6 +27,17 @@ CBasePlayer *cslua_player_entity(int id);
 // false and team is "" when the API or the player is unavailable.
 bool cslua_player_alive(int id);
 const char *cslua_player_team_name(int id);
+
+// classname of the weapon currently in hand, "" if none/unavailable. Backs
+// weapon_secondary_attack's button edge-detect in dllapi.cpp, which - like
+// the predicates above - must not pull in the full CS headers.
+const char *cslua_player_active_weapon(int id);
+
+// m_iPrimaryAmmoType of the weapon currently in hand, -1 if none/unavailable.
+// Same reason weapon_throw carries it: two items sharing a classname (a real
+// grenade and a p:give(..., {ammo_type=N}) disguised one) are otherwise
+// indistinguishable from classname alone.
+int cslua_player_active_weapon_ammo_type(int id);
 
 // Installs / removes the ReGameDLL hookchains that feed gameplay events
 // (spawn, death, round end) to Lua. Safe to call when the API is unavailable -

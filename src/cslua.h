@@ -13,19 +13,14 @@ class CBaseEntity;
 #include <string>
 
 #define CSLUA_NAME		"cs-lua"
-#define CSLUA_VERSION	"2.0.0"
+#define CSLUA_VERSION	"1.0.0"
 #define CSLUA_TAG		"[cs-lua] "
 
 // The scripting API version. A plain integer that bumps on every breaking
 // change to the Lua-facing API - independent of CSLUA_VERSION, which tracks
 // the whole project. Plugins declare the version they were written against
 // via plugin{ api_version = N }.
-//
-// v1 -> v2 renamed the whole Lua surface into namespaces and gave every event
-// handler one table instead of positional arguments. A v1 plugin is refused at
-// its plugin{} line rather than left to die on the first missing global; see
-// docs/migration.md.
-#define CSLUA_API_VERSION 2
+#define CSLUA_API_VERSION 1
 
 // Max players an HLDS server can hold, +1 because edict indices are 1-based.
 #define CSLUA_MAXPLAYERS 33

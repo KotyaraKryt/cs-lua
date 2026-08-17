@@ -36,8 +36,8 @@ plugin {
 	name               = "Shop",
 	version            = "1.0",
 	author             = "kotyarakryt",
-	api_version        = 2,
-	min_engine_version = "2.1.0",
+	api_version        = 1,
+	min_engine_version = "1.1.0",
 	requires           = { "class" },
 }
 ```
@@ -52,15 +52,14 @@ plugin {
 
 `api_version` меняется только на ломающем изменении API — новый натив
 (например `http_server`) может появиться в сборке, которая всё ещё говорит
-`api_version = 2`. Для этого `min_engine_version`: точнее, чем `api_version`, и не
-требует ждать следующего v3. `max_engine_version` — обратный случай, «плагин
+`api_version = 1`. Для этого `min_engine_version`: точнее, чем `api_version`, и не
+требует ждать следующего v2. `max_engine_version` — обратный случай, «плагин
 проверен только по эту сборку», отказ загрузки на более новой. Сравниваются
 как `X.Y.Z`, отсутствующая часть читается как `0`. Текущая сборка — `sv.version`.
 
 <Warning>
-`api_version` ниже текущего — отказ загрузки: v2 переименовал
-весь API, см. [Переход с v1 на v2](../../migration.md). Выше
-текущего — тоже отказ.
+`api_version` выше текущего — отказ загрузки: сборка ещё не
+знает этот API.
 </Warning>
 
 <Note>

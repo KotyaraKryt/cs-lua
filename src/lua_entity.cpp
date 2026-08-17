@@ -135,6 +135,14 @@ static int l_angles(lua_State *L)
 	return vector_field(L, self_edict(L)->v.angles);
 }
 
+// e:velocity([vx, vy, vz]) - a plain physics field, unlike origin: nothing to
+// relink, the movement code just reads it next frame. What turns a
+// MOVETYPE_BOUNCE entity into an actual thrown arc instead of a dead drop.
+static int l_velocity(lua_State *L)
+{
+	return vector_field(L, self_edict(L)->v.velocity);
+}
+
 // e:model("models/w_ak47.mdl") - the model has to be precached already, so put
 // res.model() at the top of the plugin. Setting one that is not costs the
 // server a "no precache" error and the entity draws as nothing.
@@ -593,6 +601,7 @@ static const luaL_Reg s_methods[] =
 {
 	{ "origin",    l_origin },
 	{ "angles",    l_angles },
+	{ "velocity",  l_velocity },
 	{ "model",     l_model },
 	{ "classname", l_classname },
 	{ "valid",     l_valid },

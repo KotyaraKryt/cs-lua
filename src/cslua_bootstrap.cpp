@@ -39,7 +39,7 @@ const BootstrapFile FILES[] =
 	{ "data", "users.lua" },
 };
 
-// Pulls "tag_name":"v2.0.0" out of the /releases/latest response by hand.
+// Pulls "tag_name":"v1.0.0" out of the /releases/latest response by hand.
 // The module has no other use for a JSON parser anywhere in its own C++, and
 // one field of one response at startup does not earn it one.
 bool extract_tag(const std::string &json, std::string &tag)

@@ -9,6 +9,15 @@ NS = {
     'title': 'ents',
     'brief': 'Сущности: дропы, точки интереса, зоны, маркеры.',
     'intro': """
+```lua
+hook.add("round_start", "drops.spawn", function()
+	local e = ents.create("info_target")
+	e:model("models/w_ak47.mdl")
+	e:origin(0, 0, 0)
+	e:spawn()
+end)
+```
+
 ReGameDLL не нужен — слой работает и на ванильном `mp.dll`.
 
 Объект хранит индекс edict'а и его serial number. Движок переиспользует индексы,

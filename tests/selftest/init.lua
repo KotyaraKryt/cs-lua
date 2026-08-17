@@ -12,7 +12,7 @@ plugin {
 	name        = "SelfTest",
 	version     = "1.0",
 	author      = "cs-lua",
-	api_version = 2,
+	api_version = 1,
 }
 
 local passed, failed, notes = 0, 0, {}

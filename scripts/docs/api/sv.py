@@ -4,13 +4,18 @@ NS = {
     'label': 'sv',
     'title': 'sv',
     'brief': 'Сервер: часы, карта, консоль, переменные движка.',
+    'intro': """
+```lua
+print("Карта: " .. sv.map() .. ", время раунда: " .. sv.cvar("mp_roundtime"):int())
+```
+""",
     'groups': [
         {
             'title': 'Константы',
             'note': """
 | поле | тип | |
 |---|---|---|
-| `sv.version` | string | версия модуля, `"2.0.0"` |
+| `sv.version` | string | версия модуля, `"1.0.0"` |
 | `sv.api` | number | версия Lua-API |
 | `sv.dir` | string | абсолютный путь `addons/lua` |
 """,

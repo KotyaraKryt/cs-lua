@@ -71,7 +71,6 @@ const sidebars: SidebarsConfig = {
         {type: 'doc', id: 'api/console', label: 'Консольные команды'},
       ],
     },
-    {type: 'doc', id: 'migration', label: 'Переход с v1 на v2'},
     {type: 'doc', id: 'building', label: 'Сборка модуля'},
   ],
 };

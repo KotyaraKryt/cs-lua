@@ -41,7 +41,6 @@ const sidebars: SidebarsConfig = {
       link: {type: 'doc', id: 'api/index'},
       items: %(items)s,
     },
-    {type: 'doc', id: 'migration', label: 'Переход с v1 на v2'},
     {type: 'doc', id: 'building', label: 'Сборка модуля'},
   ],
 };
@@ -96,7 +95,7 @@ def main():
         'navigation': {
             'groups': [
                 {'group': 'Документация',
-                 'pages': ['intro', 'install', 'plugins', 'migration', 'building']},
+                 'pages': ['intro', 'install', 'plugins', 'building']},
                 {'group': 'Справочник API',
                  'pages': ['api/index'] + render.mintlify_navigation(loaded) + ['api/all', 'api/console']},
             ],

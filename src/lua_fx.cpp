@@ -183,6 +183,52 @@ static int l_sprite_trail(lua_State *L)
 	return 0;
 }
 
+// fx.firefield(x, y, z, opts) - a field of N sprites scattered in a square
+// around the point, one network message for the whole batch. TE_EXPLOSION
+// (fx.explosion) plays a sprite's own animation frames additively and once;
+// this is the other shape entirely - alpha-blended by default, an explicit
+// duration independent of the sprite's frame count, and count sprites for
+// the cost of a single message instead of one message each. What the
+// reference AmxModX smoke plugin actually built its cloud from.
+static int l_firefield(lua_State *L)
+{
+	Vector origin;
+	read_origin(L, 1, origin);
+	luaL_checktype(L, 4, LUA_TTABLE);
+
+	int index = model_index(require_sprite(L, 4));
+	int radius = opt_int(L, 4, "radius", 100);
+	int count = opt_int(L, 4, "count", 20);
+	int duration = (int)(opt_float(L, 4, "duration", 2.0f) * 10.0f);
+
+	int flags = 0;
+	lua_getfield(L, 4, "all_float");  if (lua_toboolean(L, -1)) flags |= TEFIRE_FLAG_ALLFLOAT;  lua_pop(L, 1);
+	lua_getfield(L, 4, "some_float"); if (lua_toboolean(L, -1)) flags |= TEFIRE_FLAG_SOMEFLOAT; lua_pop(L, 1);
+	lua_getfield(L, 4, "loop");       if (lua_toboolean(L, -1)) flags |= TEFIRE_FLAG_LOOP;      lua_pop(L, 1);
+	lua_getfield(L, 4, "planar");     if (lua_toboolean(L, -1)) flags |= TEFIRE_FLAG_PLANAR;    lua_pop(L, 1);
+	lua_getfield(L, 4, "additive");   if (lua_toboolean(L, -1)) flags |= TEFIRE_FLAG_ADDITIVE;  lua_pop(L, 1);
+	// alpha-blended (not additive-glow) is the sane default for smoke/gas -
+	// opt in to a solid look with alpha = false rather than the reverse.
+	lua_getfield(L, 4, "alpha");
+	bool alpha = lua_isnil(L, -1) ? true : lua_toboolean(L, -1);
+	lua_pop(L, 1);
+	if (alpha) flags |= TEFIRE_FLAG_ALPHA;
+
+	MESSAGE_BEGIN(MSG_PVS, SVC_TEMPENTITY, origin, (edict_t *)NULL);
+	WRITE_BYTE(TE_FIREFIELD);
+	WRITE_COORD(origin.x);
+	WRITE_COORD(origin.y);
+	WRITE_COORD(origin.z);
+	WRITE_SHORT(radius);
+	WRITE_SHORT(index);
+	WRITE_BYTE(count);
+	WRITE_BYTE(flags);
+	WRITE_BYTE(duration);
+	MESSAGE_END();
+
+	return 0;
+}
+
 // fx.beam(x1, y1, z1, x2, y2, z2, opts) - a straight line between two exact
 // points, unlike beam_cylinder/sprite_trail which only take one point plus a
 // height. For drawing a line between two known things (a shot's path, a
@@ -233,6 +279,7 @@ static const luaL_Reg s_fx[] =
 	{ "explosion", l_explosion },
 	{ "beam_cylinder", l_beam_cylinder },
 	{ "sprite_trail", l_sprite_trail },
+	{ "firefield", l_firefield },
 	{ "beam", l_beam },
 	{ NULL, NULL }
 };

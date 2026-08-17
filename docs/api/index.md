@@ -8,7 +8,7 @@ description: "Все пространства имён cs-lua: hook, cmd, player
 таблицу.
 
 ```lua
-plugin { name = "Example", api_version = 2 }
+plugin { name = "Example", api_version = 1 }
 
 hook.add("player_spawn", "example.armor", function(e)
 	e.player:armor(100)

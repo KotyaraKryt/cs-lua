@@ -27,6 +27,11 @@ IReGameHookchains *cslua_regamedll_hooks()
 	return s_hooks;
 }
 
+IReGameApi *cslua_regamedll_api()
+{
+	return s_api;
+}
+
 bool cslua_regamedll_init()
 {
 	if (s_api)
@@ -114,6 +119,24 @@ const char *cslua_player_team_name(int id)
 	case SPECTATOR: return "SPEC";
 	default:        return "NONE";
 	}
+}
+
+const char *cslua_player_active_weapon(int id)
+{
+	CBasePlayer *p = cslua_player_entity(id);
+	if (!p || !p->m_pActiveItem || !p->m_pActiveItem->pev)
+		return "";
+
+	return STRING(p->m_pActiveItem->pev->classname);
+}
+
+int cslua_player_active_weapon_ammo_type(int id)
+{
+	CBasePlayer *p = cslua_player_entity(id);
+	if (!p || !p->m_pActiveItem || !p->m_pActiveItem->IsWeapon())
+		return -1;
+
+	return static_cast<CBasePlayerWeapon *>(p->m_pActiveItem)->m_iPrimaryAmmoType;
 }
 
 // The hookchains below are pre-hooks: they call the chain (so the game still
@@ -309,6 +332,48 @@ static BOOL hook_deploy(IReGameHook_CBasePlayerWeapon_DefaultDeploy *chain, CBas
 		iAnim, szAnimExt, skiplocal);
 }
 
+// DefaultReload/DefaultShotgunReload are the two helpers real weapon Reload()
+// implementations call - but calling them is not the same as reloading.
+// Both no-op and return 0/false when there is nothing to do (clip already
+// full, no reserve ammo): that check lives inside them, not before the
+// call, so a held/macroed reload key still reaches this hook every time.
+// The only reliable signal is the return value - true means the engine is
+// about to actually run the reload animation and refill the clip. Everything
+// but the shotguns (m3/xm1014, which reload one shell at a time through the
+// special path) goes through DefaultReload; both need a hook or shotgun
+// reloads go unseen.
+static int hook_reload(IReGameHook_CBasePlayerWeapon_DefaultReload *chain, CBasePlayerWeapon *weapon,
+	int iClipSize, int iAnim, float fDelay)
+{
+	int clip_before = (weapon && weapon->pev) ? weapon->m_iClip : 0;
+
+	int result = chain->callNext(weapon, iClipSize, iAnim, fDelay);
+
+	if (result && weapon && weapon->pev && weapon->m_pPlayer)
+		g_events.fire_weapon_reload(weapon->m_pPlayer->entindex(), STRING(weapon->pev->classname), clip_before, fDelay);
+
+	return result;
+}
+
+// Shotguns load one shell at a time, so DefaultShotgunReload runs once per
+// shell and carries two delays: fStartDelay times the animation that opens
+// the reload (the first call, m_fInSpecialReload still false going in),
+// fDelay times every shell-insert loop after that. Reading the flag before
+// callNext picks the one that actually applies to this call.
+static bool hook_shotgun_reload(IReGameHook_CBasePlayerWeapon_DefaultShotgunReload *chain, CBasePlayerWeapon *weapon,
+	int iAnim, int iStartAnim, float fDelay, float fStartDelay, const char *pszReloadSound1, const char *pszReloadSound2)
+{
+	int clip_before = (weapon && weapon->pev) ? weapon->m_iClip : 0;
+	float delay = (weapon && weapon->m_fInSpecialReload) ? fDelay : fStartDelay;
+
+	bool result = chain->callNext(weapon, iAnim, iStartAnim, fDelay, fStartDelay, pszReloadSound1, pszReloadSound2);
+
+	if (result && weapon && weapon->pev && weapon->m_pPlayer)
+		g_events.fire_weapon_reload(weapon->m_pPlayer->entindex(), STRING(weapon->pev->classname), clip_before, delay);
+
+	return result;
+}
+
 static void hook_round_start(IReGameHook_CSGameRules_RestartRound *chain)
 {
 	chain->callNext();
@@ -351,6 +416,31 @@ static CGrenade *hook_throw_he_grenade(IReGameHook_ThrowHeGrenade *chain, entvar
 	g_events.fire_grenade_thrown(owner, "weapon_hegrenade", index);
 
 	return grenade;
+}
+
+// The one dispatcher every grenade-slot throw goes through before the
+// engine picks a specific type and creates its CGrenade - unlike
+// ThrowHeGrenade/ThrowSmokeGrenade above, this fires for ANY weapon in that
+// slot, including one a plugin has repurposed for something that is not a
+// grenade at all (see weapon_throw's docs). A handler that cancels is
+// expected to have already built its own projectile inside its own handler
+// (typically ents.create + e:movetype(8)); returning nullptr here skips the
+// engine's own CGrenade entirely, so nothing throws twice.
+static CGrenade *hook_throw_grenade(IReGameHook_CBasePlayer_ThrowGrenade *chain,
+	CBasePlayer *player, CBasePlayerWeapon *item, Vector &vecSrc, Vector &vecThrow,
+	float time, unsigned short usEvent)
+{
+	int owner = (player && player->IsPlayer()) ? player->entindex() : 0;
+	const char *weapon = (item && item->pev) ? STRING(item->pev->classname) : "";
+	int ammo_type = item ? item->m_iPrimaryAmmoType : -1;
+
+	bool cancelled = g_events.fire_weapon_throw(owner, weapon, ammo_type,
+		vecSrc.x, vecSrc.y, vecSrc.z, vecThrow.x, vecThrow.y, vecThrow.z, time);
+
+	if (cancelled)
+		return nullptr;
+
+	return chain->callNext(player, item, vecSrc, vecThrow, time, usEvent);
 }
 
 static CGrenade *hook_throw_smoke_grenade(IReGameHook_ThrowSmokeGrenade *chain, entvars_t *pevOwner,
@@ -460,6 +550,8 @@ enum HookSlot
 	HOOK_FIRE_BULLETS3,
 	HOOK_FIRE_BUCKSHOTS,
 	HOOK_DEPLOY,
+	HOOK_RELOAD,
+	HOOK_SHOTGUN_RELOAD,
 	HOOK_ROUND_START,
 	HOOK_ROUND_END,
 	HOOK_FREEZE_END,
@@ -470,6 +562,7 @@ enum HookSlot
 	HOOK_EXPLODE_SMOKE,
 	HOOK_THROW_HE,
 	HOOK_THROW_SMOKE,
+	HOOK_THROW_GENERIC,
 	HOOK_COUNT
 };
 
@@ -519,6 +612,10 @@ void cslua_regamedll_install_hooks()
 	sync_hook(HOOK_DEPLOY, s_hooks->CBasePlayerWeapon_DefaultDeploy(), &hook_deploy,
 		g_events.any(CSLUA_EVENT_WEAPON_DEPLOY));
 
+	bool reloading = g_events.any(CSLUA_EVENT_WEAPON_RELOAD);
+	sync_hook(HOOK_RELOAD, s_hooks->CBasePlayerWeapon_DefaultReload(), &hook_reload, reloading);
+	sync_hook(HOOK_SHOTGUN_RELOAD, s_hooks->CBasePlayerWeapon_DefaultShotgunReload(), &hook_shotgun_reload, reloading);
+
 	sync_hook(HOOK_ROUND_START, s_hooks->CSGameRules_RestartRound(), &hook_round_start,
 		g_events.any(CSLUA_EVENT_ROUND_START));
 
@@ -544,6 +641,9 @@ void cslua_regamedll_install_hooks()
 	bool throwing = g_events.any(CSLUA_EVENT_GRENADE_THROW) || g_events.any(CSLUA_EVENT_GRENADE_THROWN);
 	sync_hook(HOOK_THROW_HE, s_hooks->ThrowHeGrenade(), &hook_throw_he_grenade, throwing);
 	sync_hook(HOOK_THROW_SMOKE, s_hooks->ThrowSmokeGrenade(), &hook_throw_smoke_grenade, throwing);
+
+	sync_hook(HOOK_THROW_GENERIC, s_hooks->CBasePlayer_ThrowGrenade(), &hook_throw_grenade,
+		g_events.any(CSLUA_EVENT_WEAPON_THROW));
 }
 
 void cslua_regamedll_remove_hooks()
@@ -560,6 +660,8 @@ void cslua_regamedll_remove_hooks()
 	s_hooks->CBaseEntity_FireBullets3()->unregisterHook(&hook_fire_bullets3);
 	s_hooks->CBaseEntity_FireBuckshots()->unregisterHook(&hook_fire_buckshots);
 	s_hooks->CBasePlayerWeapon_DefaultDeploy()->unregisterHook(&hook_deploy);
+	s_hooks->CBasePlayerWeapon_DefaultReload()->unregisterHook(&hook_reload);
+	s_hooks->CBasePlayerWeapon_DefaultShotgunReload()->unregisterHook(&hook_shotgun_reload);
 	s_hooks->CSGameRules_RestartRound()->unregisterHook(&hook_round_start);
 	s_hooks->RoundEnd()->unregisterHook(&hook_round_end);
 	s_hooks->CSGameRules_OnRoundFreezeEnd()->unregisterHook(&hook_freeze_end);
@@ -570,6 +672,7 @@ void cslua_regamedll_remove_hooks()
 	s_hooks->CGrenade_ExplodeSmokeGrenade()->unregisterHook(&hook_explode_smoke_grenade);
 	s_hooks->ThrowHeGrenade()->unregisterHook(&hook_throw_he_grenade);
 	s_hooks->ThrowSmokeGrenade()->unregisterHook(&hook_throw_smoke_grenade);
+	s_hooks->CBasePlayer_ThrowGrenade()->unregisterHook(&hook_throw_grenade);
 
 	for (int i = 0; i < HOOK_COUNT; i++)
 		s_installed[i] = false;

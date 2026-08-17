@@ -5,11 +5,20 @@ ReHLDS/ReGameDLL, внутри — LuaJIT 2.1.
 
 **[Документация →](https://kotyarakryt.github.io/cs-lua/)**
 
-```lua
-plugin { name = "Heal", api_version = 2 }
+| | |
+|---|---|
+| Функций в API | 192, 17 пространств имён |
+| Самопроверок на живом сервере | 104 |
+| Платформы | Windows, Linux — один код |
+| Лицензия | GPLv3 |
+
+```lua title="addons/lua/plugins/heal/manifest.lua"
+plugin { name = "Heal", api_version = 1 }
 
 access.declare("heal.use", { desc = "Лечить себя", default = "vip" })
+```
 
+```lua title="addons/lua/plugins/heal/init.lua"
 cmd.add("heal", function(ctx)
 	local p = ctx.player
 	if not p or not p:alive() then return end
@@ -19,8 +28,8 @@ cmd.add("heal", function(ctx)
 end, { perm = "heal.use" })
 ```
 
-Файл в `addons/lua/plugins/heal.lua`, в консоли `lua_reload` — работает.
-Рестарт сервера не нужен.
+`lua_reload` в консоли — и команда `!heal` в чате уже лечит. Рестарт сервера
+не нужен.
 
 Готовые плагины — в [cs-lua-plugins](https://github.com/KotyaraKryt/cs-lua-plugins).
 Здесь только модуль и core-слой.
@@ -36,7 +45,6 @@ end, { perm = "heal.use" })
 | [Установка](docs/install.md) | требования к серверу, раскладка файлов, `plugins.ini` |
 | [Структура плагина](docs/plugins.md) | папки, `require`, окружение, core-слой |
 | **[Справочник API](docs/api/index.md)** | все пространства имён |
-| [Переход с v1 на v2](docs/migration.md) | таблица переименований, объект события |
 | [Сборка модуля](docs/building.md) | Windows, Linux, деплой на тестовый сервер |
 
 Сайт пересобирается сам при пуше в `main`; его исходники — в

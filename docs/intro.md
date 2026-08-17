@@ -4,30 +4,18 @@ description: "Что такое cs-lua, отличия от AMX Mod X, сост�
 
 # Что это
 
-Metamod-модуль для CS 1.6, выполняющий серверные плагины на Lua. Внутри
-LuaJIT 2.1, состояние игроков и события геймплея — из ReHLDS и ReGameDLL.
+Metamod-модуль для CS 1.6, выполняющий серверные плагины на Lua вместо
+SourcePawn/Pawn. Внутри LuaJIT 2.1, состояние игроков и события геймплея —
+из ReHLDS и ReGameDLL. Нужен [metamod-r](https://github.com/rehlds/Metamod-R)
+и [ReGameDLL_CS](https://github.com/s1lentq/ReGameDLL_CS) — подробнее в
+[Установке](install.md).
 
-Плагин — папка с `manifest.lua` и `init.lua` в `addons/lua/plugins/`. После
-`lua_reload` он работает: без компиляции и рестарта сервера.
+## С чего начать
 
-```lua title="addons/lua/plugins/heal/manifest.lua"
-plugin { name = "Heal", api_version = 2 }
-
-access.declare("heal.use", { desc = "Лечить себя", default = "vip" })
-```
-
-```lua title="addons/lua/plugins/heal/init.lua"
-cmd.add("heal", function(ctx)
-	local p = ctx.player
-	if not p or not p:alive() then return end
-
-	p:health(p:health() + 25)
-	p:chat("{green}[Server]{default} подлечили до " .. p:health())
-end, { perm = "heal.use" })
-```
-
-Команда доступна в чате (`!heal`, `/heal`), в консоли и по rcon. Право
-проверяется до вызова хендлера.
+| | |
+|---|---|
+| Поставить готовые плагины на сервер | [Установка](install.md) → [готовые плагины](https://github.com/KotyaraKryt/cs-lua-plugins) |
+| Написать свой плагин | [Структура плагина](plugins.md) → [Справочник API](api/index.md) |
 
 ## Отличия от AMX Mod X
 
@@ -40,33 +28,13 @@ end, { perm = "heal.use" })
 | права плагина | `.amxx` ограничен нативами | полный доступ, как у модуля AMXX |
 | готовые плагины | двадцать лет наработок | [cs-lua-plugins](https://github.com/KotyaraKryt/cs-lua-plugins) |
 
-## Состав
-
-```
-cstrike/addons/lua/
-  lua_mm.dll          модуль, грузится metamod'ом при старте сервера
-  core/               базовый Lua-слой: команды, права, меню, экспорты
-  include/            библиотеки под require: store, datafile, color, text, class
-  data/               groups.lua, users.lua
-  plugins/            плагины
-```
+## Что внутри
 
 Модуль отдаёт в Lua игроков, события, сущности, таймеры, cvar'ы и SQLite. Роутер
 команд, права и меню написаны на Lua, лежат в `core/` и грузятся до плагинов.
-
-Модуль не выгружается: `meta unload` запрещён, движок держит указатели на его
-консольные команды. Итерации по скриптам — `lua_reload`.
-
-## Требования
-
-| | |
-|---|---|
-| [metamod-r](https://github.com/rehlds/Metamod-R) | обязательно |
-| [ReGameDLL_CS](https://github.com/s1lentq/ReGameDLL_CS) | обязательно для событий геймплея и CS-состояния |
-| [ReHLDS](https://github.com/dreamstalker/rehlds) | желательно, даёт точный учёт прекеша |
-
-Без ReGameDLL модуль загрузится, но раунды, деньги, команды игроков и покупки
-работать не будут.
+Не выгружается: `meta unload` запрещён, движок держит указатели на его
+консольные команды. Итерации по скриптам — `lua_reload`, раскладка файлов —
+в [Установке](install.md#раскладка-файлов).
 
 ## Дальше
 
@@ -75,4 +43,3 @@ cstrike/addons/lua/
 | [Установка](install.md) | раскладка файлов, `plugins.ini`, проверка |
 | [Структура плагина](plugins.md) | папки, `require`, окружение, core-слой |
 | [Справочник API](api/index.md) | все пространства имён |
-| [Переход с v1 на v2](migration.md) | таблица переименований, объект события |

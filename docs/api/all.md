@@ -201,7 +201,8 @@ description: "Плоский список всех функций и метод�
 | [`p:weapon`](players/cs-state.md#weapon) | players | Classname оружия в руках |
 | [`weapon_deploy`](hook/gameplay.md#weapon_deploy) | hook | Оружие вот-вот покажет вьюмодель и модель в руках |
 | [`weapon_fire`](hook/gameplay.md#weapon_fire) | hook | Из ствола вышел выстрел |
+| [`weapon_reload`](hook/gameplay.md#weapon_reload) | hook | Началась настоящая перезарядка |
 | [`p:weapons`](players/cs-state.md#weapons) | players | Массив classname всего, что несёт игрок |
 | [`p:weight`](players/access.md#weight) | players | Вес игрока для иммунитета |
 
-Всего: 192.
+Всего: 193.

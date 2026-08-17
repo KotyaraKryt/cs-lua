@@ -168,10 +168,24 @@ static void Touch(edict_t *pentTouched, edict_t *pentOther)
 static void PlayerPreThink(edict_t *pEntity)
 {
 	int id = g_engfuncs.pfnIndexOfEdict(pEntity);
+
+	// Synthesized SecondaryAttack: ReGameDLL has no hookchain for it
+	// (unlike PrimaryAttack, which weapon_fire piggybacks on), so a button
+	// edge-detect here is the only way to catch "player just pressed RMB"
+	// without HamSandwich-style vtable hooking. Read before suppress_attack
+	// strips the button below - a script using suppress_attack to swallow a
+	// repurposed weapon's real fire (see docs/api/hook/weapon_secondary_attack.md)
+	// still needs its own RMB to register.
+	bool attack2_down = (pEntity->v.button & IN_ATTACK2) != 0;
+	if (g_players.secondary_attack_pressed(id, attack2_down))
+		g_events.fire_weapon_secondary_attack(id, cslua_player_active_weapon(id),
+			cslua_player_active_weapon_ammo_type(id));
+
 	if (g_players.suppress_attack(id))
 		pEntity->v.button &= ~(IN_ATTACK | IN_ATTACK2);
 	if (g_players.suppress_move(id))
 		pEntity->v.button &= ~(IN_FORWARD | IN_BACK | IN_MOVELEFT | IN_MOVERIGHT);
+
 	RETURN_META(MRES_IGNORED);
 }
 

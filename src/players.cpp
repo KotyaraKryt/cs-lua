@@ -98,6 +98,17 @@ bool Players::suppress_drop(int id) const
 	return valid(id) && m_players[id].suppress_drop;
 }
 
+bool Players::secondary_attack_pressed(int id, bool down)
+{
+	if (!valid(id))
+		return false;
+
+	Info &p = m_players[id];
+	bool edge = down && !p.attack2_down;
+	p.attack2_down = down;
+	return edge;
+}
+
 bool Players::refresh_authid(int id)
 {
 	if (!authid_pending(id))

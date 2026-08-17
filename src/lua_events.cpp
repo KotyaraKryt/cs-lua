@@ -28,6 +28,7 @@ static const char *const s_event_names[CSLUA_EVENT_COUNT] =
 	"player_team_change",
 	"weapon_fire",
 	"weapon_deploy",
+	"weapon_reload",
 	"round_start",
 	"round_end",
 	"round_freeze_end",
@@ -37,6 +38,8 @@ static const char *const s_event_names[CSLUA_EVENT_COUNT] =
 	"grenade_throw",
 	"grenade_thrown",
 	"grenade_explode",
+	"weapon_throw",
+	"weapon_secondary_attack",
 };
 
 static int find_event(const char *name)
@@ -55,7 +58,8 @@ static bool is_cancellable(int ev)
 	return ev == CSLUA_EVENT_CLIENT_CONNECT
 		|| ev == CSLUA_EVENT_PLAYER_CHAT
 		|| ev == CSLUA_EVENT_PLAYER_HURT
-		|| ev == CSLUA_EVENT_GRENADE_EXPLODE;
+		|| ev == CSLUA_EVENT_GRENADE_EXPLODE
+		|| ev == CSLUA_EVENT_WEAPON_THROW;
 }
 
 static std::string known_events()
@@ -836,6 +840,19 @@ void LuaEvents::fire_weapon_deploy(int id, const char *weapon,
 		});
 }
 
+void LuaEvents::fire_weapon_reload(int id, const char *weapon, int clip, float delay)
+{
+	std::string name = weapon ? weapon : "";
+
+	notify(CSLUA_EVENT_WEAPON_RELOAD, [=](lua_State *L) {
+		set_player(L, id, "player");
+		set_string(L, name, "weapon");
+		lua_pushinteger(L, clip);
+		lua_setfield(L, -2, "clip");
+		set_number(L, delay, "delay");
+	});
+}
+
 void LuaEvents::fire_map_change(const char *map)
 {
 	std::string name = map ? map : "";
@@ -939,5 +956,35 @@ bool LuaEvents::fire_grenade_explode(int owner, const char *weapon, int entity_i
 		set_number(L, x, "x");
 		set_number(L, y, "y");
 		set_number(L, z, "z");
+	});
+}
+
+bool LuaEvents::fire_weapon_throw(int player, const char *weapon, int ammo_type,
+	float x, float y, float z, float vx, float vy, float vz, float time)
+{
+	std::string wname = weapon ? weapon : "";
+
+	return run(CSLUA_EVENT_WEAPON_THROW, [=](lua_State *L) {
+		set_player_or_nil(L, player, "player");
+		set_string(L, wname, "weapon");
+		set_number(L, ammo_type, "ammo_type");
+		set_number(L, x, "x");
+		set_number(L, y, "y");
+		set_number(L, z, "z");
+		set_number(L, vx, "vx");
+		set_number(L, vy, "vy");
+		set_number(L, vz, "vz");
+		set_number(L, time, "time");
+	});
+}
+
+void LuaEvents::fire_weapon_secondary_attack(int player, const char *weapon, int ammo_type)
+{
+	std::string wname = weapon ? weapon : "";
+
+	notify(CSLUA_EVENT_WEAPON_SECONDARY_ATTACK, [=](lua_State *L) {
+		set_player_or_nil(L, player, "player");
+		set_string(L, wname, "weapon");
+		set_number(L, ammo_type, "ammo_type");
 	});
 }

@@ -61,6 +61,7 @@ end)
 | [`player_team_change`](gameplay.md#player_team_change) | Игрок сменил сторону |
 | [`weapon_fire`](gameplay.md#weapon_fire) | Из ствола вышел выстрел |
 | [`weapon_deploy`](gameplay.md#weapon_deploy) | Оружие вот-вот покажет вьюмодель и модель в руках |
+| [`weapon_reload`](gameplay.md#weapon_reload) | Началась настоящая перезарядка |
 | [`grenade_throw`](gameplay.md#grenade_throw) | HE- или дымовая граната вот-вот покинёт руку |
 | [`grenade_thrown`](gameplay.md#grenade_thrown) | HE- или дымовая граната только что покинула руку |
 | [`grenade_explode`](gameplay.md#grenade_explode) | HE- или дымовая граната вот-вот взорвётся |

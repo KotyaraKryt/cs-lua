@@ -32,6 +32,7 @@ enum CsLuaEvent
 	CSLUA_EVENT_PLAYER_TEAM_CHANGE,
 	CSLUA_EVENT_WEAPON_FIRE,
 	CSLUA_EVENT_WEAPON_DEPLOY,		// view/world model can be swapped before the game applies them
+	CSLUA_EVENT_WEAPON_RELOAD,		// a real reload just started: ammo was available, clip wasn't full
 	CSLUA_EVENT_ROUND_START,
 	CSLUA_EVENT_ROUND_END,
 	CSLUA_EVENT_ROUND_FREEZE_END,	// freeze time over, players can move
@@ -41,6 +42,8 @@ enum CsLuaEvent
 	CSLUA_EVENT_GRENADE_THROW,		// about to leave the hand; fuse time can be changed
 	CSLUA_EVENT_GRENADE_THROWN,		// just left the hand; entity for reskinning
 	CSLUA_EVENT_GRENADE_EXPLODE,		// about to explode; cancel to take over
+	CSLUA_EVENT_WEAPON_THROW,		// any grenade-slot throw, before HE/flash/smoke is picked; cancel to take over
+	CSLUA_EVENT_WEAPON_SECONDARY_ATTACK,	// right-click pressed, synthesized from a button edge-detect
 
 	CSLUA_EVENT_COUNT
 };
@@ -156,6 +159,16 @@ public:
 	void fire_weapon_deploy(int id, const char *weapon,
 		std::string &view_model, std::string &world_model);
 
+	// Fires from CBasePlayerWeapon::DefaultReload/DefaultShotgunReload, but
+	// only when they report back that a reload is actually starting - both
+	// get called on every reload attempt regardless of whether one is
+	// possible, and no-op internally when the clip is full or reserve ammo
+	// is empty. clip is read before the call, so this is what was left when
+	// the reload began, not what came out of it. delay is the animation
+	// length the engine is about to run, in seconds from now - same fDelay
+	// the game itself passed in, not recomputed.
+	void fire_weapon_reload(int id, const char *weapon, int clip, float delay);
+
 	void fire_round_start();
 	void fire_round_end(int winner);
 	void fire_round_freeze_end();
@@ -184,6 +197,33 @@ public:
 	// game's own explosion (damage, decals, sound) and leave the whole effect
 	// - including removing the entity - to Lua.
 	bool fire_grenade_explode(int owner, const char *weapon, int entity_index, float x, float y, float z);
+
+	// Fires before the engine decides which real grenade type (HE/flash/
+	// smoke) to create and throw - the one dispatcher every grenade-slot
+	// weapon's throw goes through, regardless of which weapon it actually
+	// is. weapon is the classname of the item being thrown; x,y,z/vx,vy,vz
+	// are the position and velocity, time the fuse/spawn delay, all as the
+	// engine intended to use them.
+	// Returns true if a handler cancelled: the caller must then skip the
+	// engine's own throw entirely (return no CGrenade) and leave the whole
+	// projectile - typically a hand-built ents.create() entity - up to Lua.
+	// ammo_type is the item's m_iPrimaryAmmoType - normally a real ammo
+	// index, but a script's p:give(..., { ammo_type = N }) can point it at
+	// a spare one instead, which is what lets a handler tell "this throw is
+	// my disguised item" apart from a real grenade of the same classname
+	// (grenade_thrown/grenade_explode only know the thrown entity's
+	// classname, which reads the same for both).
+	bool fire_weapon_throw(int player, const char *weapon, int ammo_type,
+		float x, float y, float z, float vx, float vy, float vz, float time);
+
+	// The player pressed secondary fire (right-click) while holding this
+	// weapon. Fires once per press, not once per frame held - there is no
+	// ReGameDLL hookchain for SecondaryAttack (unlike PrimaryAttack, which
+	// weapon_fire piggybacks on), so this is synthesized from a button
+	// edge-detect in PlayerPreThink (dllapi.cpp). ammo_type is the same
+	// m_iPrimaryAmmoType field weapon_throw carries, for telling apart two
+	// items that share a classname (see its own comment).
+	void fire_weapon_secondary_attack(int player, const char *weapon, int ammo_type);
 
 	// TakeDamage passes damage by reference, so a handler can change it or
 	// zero it out. Returns the final damage the game should apply: whatever
