@@ -840,7 +840,7 @@ void LuaEvents::fire_weapon_deploy(int id, const char *weapon,
 		});
 }
 
-void LuaEvents::fire_weapon_reload(int id, const char *weapon, int clip, float delay)
+void LuaEvents::fire_weapon_reload(int id, const char *weapon, int clip, float delay, int max_clip)
 {
 	std::string name = weapon ? weapon : "";
 
@@ -850,6 +850,12 @@ void LuaEvents::fire_weapon_reload(int id, const char *weapon, int clip, float d
 		lua_pushinteger(L, clip);
 		lua_setfield(L, -2, "clip");
 		set_number(L, delay, "delay");
+
+		if (max_clip >= 0)
+			lua_pushinteger(L, max_clip);
+		else
+			lua_pushnil(L);
+		lua_setfield(L, -2, "max_clip");
 	});
 }
 

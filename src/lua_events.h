@@ -166,8 +166,9 @@ public:
 	// is empty. clip is read before the call, so this is what was left when
 	// the reload began, not what came out of it. delay is the animation
 	// length the engine is about to run, in seconds from now - same fDelay
-	// the game itself passed in, not recomputed.
-	void fire_weapon_reload(int id, const char *weapon, int clip, float delay);
+	// the game itself passed in, not recomputed. max_clip is the weapon's
+	// magazine capacity (GetItemInfo's iMaxClip), -1 if it could not be read.
+	void fire_weapon_reload(int id, const char *weapon, int clip, float delay, int max_clip);
 
 	void fire_round_start();
 	void fire_round_end(int winner);

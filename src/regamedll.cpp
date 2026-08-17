@@ -350,7 +350,7 @@ static int hook_reload(IReGameHook_CBasePlayerWeapon_DefaultReload *chain, CBase
 	int result = chain->callNext(weapon, iClipSize, iAnim, fDelay);
 
 	if (result && weapon && weapon->pev && weapon->m_pPlayer)
-		g_events.fire_weapon_reload(weapon->m_pPlayer->entindex(), STRING(weapon->pev->classname), clip_before, fDelay);
+		g_events.fire_weapon_reload(weapon->m_pPlayer->entindex(), STRING(weapon->pev->classname), clip_before, fDelay, iClipSize);
 
 	return result;
 }
@@ -366,10 +366,17 @@ static bool hook_shotgun_reload(IReGameHook_CBasePlayerWeapon_DefaultShotgunRelo
 	int clip_before = (weapon && weapon->pev) ? weapon->m_iClip : 0;
 	float delay = (weapon && weapon->m_fInSpecialReload) ? fDelay : fStartDelay;
 
+	// DefaultShotgunReload never gets iClipSize handed in - it loads one
+	// shell at a time, not to a fixed target in one call - so the only way
+	// to know the magazine capacity here is to ask the weapon directly.
+	ItemInfo info;
+	memset(&info, 0, sizeof info);
+	int max_clip = (weapon && weapon->GetItemInfo(&info)) ? info.iMaxClip : -1;
+
 	bool result = chain->callNext(weapon, iAnim, iStartAnim, fDelay, fStartDelay, pszReloadSound1, pszReloadSound2);
 
 	if (result && weapon && weapon->pev && weapon->m_pPlayer)
-		g_events.fire_weapon_reload(weapon->m_pPlayer->entindex(), STRING(weapon->pev->classname), clip_before, delay);
+		g_events.fire_weapon_reload(weapon->m_pPlayer->entindex(), STRING(weapon->pev->classname), clip_before, delay, max_clip);
 
 	return result;
 }
