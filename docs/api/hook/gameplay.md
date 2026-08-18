@@ -283,7 +283,7 @@ end)
 
 ## grenade_throw {#grenade_throw}
 
-HE- или дымовая граната вот-вот покинёт руку.
+HE, дымовая или флешка вот-вот покинёт руку.
 
 ```lua
 hook.add("grenade_throw", id, function(e)
@@ -296,7 +296,7 @@ end)
 | поле | тип |  |
 |---|---|---|
 | `e.player` | player \| nil | кто бросает |
-| `e.weapon` | string | `weapon_hegrenade` или `weapon_smokegrenade` |
+| `e.weapon` | string | `weapon_hegrenade`, `weapon_smokegrenade` или `weapon_flashbang` |
 | `e.fuse` | number | секунд до взрыва; запись подменяет таймер |
 
 ### Пример
@@ -322,7 +322,7 @@ end)
 
 ## grenade_thrown {#grenade_thrown}
 
-HE- или дымовая граната только что покинула руку.
+HE, дымовая или флешка только что покинула руку.
 
 ```lua
 hook.add("grenade_thrown", id, function(e)
@@ -335,7 +335,7 @@ end)
 | поле | тип |  |
 |---|---|---|
 | `e.player` | player \| nil | кто бросил |
-| `e.weapon` | string | `weapon_hegrenade` или `weapon_smokegrenade` |
+| `e.weapon` | string | `weapon_hegrenade`, `weapon_smokegrenade` или `weapon_flashbang` |
 | `e.entity` | entity \| nil | сама граната; `nil`, если бросок не удался |
 
 ### Пример
@@ -363,7 +363,7 @@ end)
 
 ## grenade_explode {#grenade_explode}
 
-HE- или дымовая граната вот-вот взорвётся.
+HE, дымовая или флешка вот-вот взорвётся.
 
 ```lua
 hook.add("grenade_explode", id, function(e)
@@ -376,7 +376,7 @@ end)
 | поле | тип |  |
 |---|---|---|
 | `e.player` | player \| nil | кто бросил; `nil`, если бросавшего не осталось |
-| `e.weapon` | string | `weapon_hegrenade` или `weapon_smokegrenade` |
+| `e.weapon` | string | `weapon_hegrenade`, `weapon_smokegrenade` или `weapon_flashbang` |
 | `e.entity` | entity \| nil | сама граната; `nil`, если уже пропала |
 | `e.x, e.y, e.z` | number | точка взрыва |
 
@@ -393,9 +393,9 @@ hook.add("grenade_explode", "healnade.explode", function(e)
 end)
 ```
 
-**Отмена.** `e:cancel()` забирает взрыв целиком себе: ни урона (у HE), ни дыма (у smoke), ни звука от игры — дальше плагин сам решает, что происходит в этой точке. Сущность при этом не убирается сама: если она больше не нужна, убирай через `e.entity:remove()`.
+**Отмена.** `e:cancel()` забирает взрыв целиком себе: ни урона (у HE), ни дыма (у smoke), ни ослепления/звона в ушах (у флешки), ни звука от игры — дальше плагин сам решает, что происходит в этой точке. Сущность при этом не убирается сама: если она больше не нужна, убирай через `e.entity:remove()`.
 
-Бомбу не задевает: у неё отдельная цепочка, `bomb_exploded`. Флешку тоже — у неё свой взрыв без урона и дыма, событие его не трогает.
+Бомбу не задевает: у неё отдельная цепочка, `bomb_exploded`.
 
 <Warning>
 Событие приходит из ReGameDLL. На ванильном `mp.dll` оно не

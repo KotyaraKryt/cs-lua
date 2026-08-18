@@ -994,3 +994,33 @@ void LuaEvents::fire_weapon_secondary_attack(int player, const char *weapon, int
 		set_number(L, ammo_type, "ammo_type");
 	});
 }
+
+bool LuaEvents::fire_weapon_buy(int player, const char *weapon)
+{
+	std::string wname = weapon ? weapon : "";
+
+	return run(CSLUA_EVENT_WEAPON_BUY, [=](lua_State *L) {
+		set_player_or_nil(L, player, "player");
+		set_string(L, wname, "weapon");
+	});
+}
+
+bool LuaEvents::fire_ammo_buy(int player, const char *weapon)
+{
+	std::string wname = weapon ? weapon : "";
+
+	return run(CSLUA_EVENT_AMMO_BUY, [=](lua_State *L) {
+		set_player_or_nil(L, player, "player");
+		set_string(L, wname, "weapon");
+	});
+}
+
+bool LuaEvents::fire_item_buy(int player, const char *item)
+{
+	std::string iname = item ? item : "";
+
+	return run(CSLUA_EVENT_ITEM_BUY, [=](lua_State *L) {
+		set_player_or_nil(L, player, "player");
+		set_string(L, iname, "item");
+	});
+}

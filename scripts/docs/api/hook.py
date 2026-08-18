@@ -274,9 +274,9 @@ end)
                       extra='Приходит из `DefaultReload`/`DefaultShotgunReload` — но только когда те реально начинают перезарядку. Сами хелперы вызываются при каждой попытке (в том числе от зажатой или забинженной клавиши), а внутри молча ничего не делают, если магазин уже полон или патронов в запасе нет — так что это не то же самое, что чтение кнопки `reload` на клиенте: событие приходит, только когда перезарядка правда стартовала.\n\n`e.clip` — это ещё старое значение, до заполнения: сколько патронов оставалось в магазине в момент, когда игрок начал перезарядку.\n\n`e.delay` — время, которое движок передал самой анимации, а не пересчитанный остаток; для дробовиков (перезарядка патрон за патроном) это время именно текущего патрона, а не всей перезарядки целиком.\n\n`e.max_clip` — вместимость магазина этого оружия. Для обычного оружия это тот же `iClipSize`, что движок передаёт в `DefaultReload`; для дробовиков (у `DefaultShotgunReload` такого параметра нет) читается через `GetItemInfo()`. Пригождается, когда нужно посчитать, сколько патронов реально уйдёт из запаса — например, для механики, где недострелянные патроны в стволе не досыпаются к новому магазину, а теряются.',
                       regamedll=True,
                       see=[('weapon_deploy', 'weapon_deploy.md')]),
-                event('grenade_throw', 'HE- или дымовая граната вот-вот покинёт руку.',
+                event('grenade_throw', 'HE, дымовая или флешка вот-вот покинёт руку.',
                       [('e.player', 'player \\| nil', 'кто бросает'),
-                       ('e.weapon', 'string', '`weapon_hegrenade` или `weapon_smokegrenade`'),
+                       ('e.weapon', 'string', '`weapon_hegrenade`, `weapon_smokegrenade` или `weapon_flashbang`'),
                        ('e.fuse', 'number', 'секунд до взрыва; запись подменяет таймер')],
                       example="""
 hook.add("grenade_throw", "healnade.instant", function(e)
@@ -288,9 +288,9 @@ end)
                       extra='Приходит до того, как движок создаст сам снаряд — на этом этапе ещё нет сущности для `e:detonate_on_touch()`, только число. Взрыв по касанию, а не по таймеру — это [`e:detonate_on_touch()`](../ents/detonate_on_touch.md) в `grenade_thrown`, а не подмена `fuse` здесь.',
                       regamedll=True,
                       see=[('grenade_thrown', 'grenade_thrown.md')]),
-                event('grenade_thrown', 'HE- или дымовая граната только что покинула руку.',
+                event('grenade_thrown', 'HE, дымовая или флешка только что покинула руку.',
                       [('e.player', 'player \\| nil', 'кто бросил'),
-                       ('e.weapon', 'string', '`weapon_hegrenade` или `weapon_smokegrenade`'),
+                       ('e.weapon', 'string', '`weapon_hegrenade`, `weapon_smokegrenade` или `weapon_flashbang`'),
                        ('e.entity', 'entity \\| nil', 'сама граната; `nil`, если бросок не удался')],
                       example="""
 hook.add("grenade_thrown", "healnade.reskin", function(e)
@@ -303,12 +303,12 @@ end)
                       extra='`e.entity` — обычный объект сущности, тот же, что даёт `ents.create`: `e:model()`, `e:origin()`, [`e:detonate_on_touch()`](../ents/detonate_on_touch.md) и весь остальной [`ents`](../ents/index.md) работают на нём как на любой другой.',
                       regamedll=True,
                       see=[('weapon_deploy', 'weapon_deploy.md'), ('ents', '../ents/index.md')]),
-                event('grenade_explode', 'HE- или дымовая граната вот-вот взорвётся.',
+                event('grenade_explode', 'HE, дымовая или флешка вот-вот взорвётся.',
                       [('e.player', 'player \\| nil', 'кто бросил; `nil`, если бросавшего не осталось'),
-                       ('e.weapon', 'string', '`weapon_hegrenade` или `weapon_smokegrenade`'),
+                       ('e.weapon', 'string', '`weapon_hegrenade`, `weapon_smokegrenade` или `weapon_flashbang`'),
                        ('e.entity', 'entity \\| nil', 'сама граната; `nil`, если уже пропала'),
                        ('e.x, e.y, e.z', 'number', 'точка взрыва')],
-                      cancel='`e:cancel()` забирает взрыв целиком себе: ни урона (у HE), ни дыма (у smoke), ни звука от игры — дальше плагин сам решает, что происходит в этой точке. Сущность при этом не убирается сама: если она больше не нужна, убирай через `e.entity:remove()`.',
+                      cancel='`e:cancel()` забирает взрыв целиком себе: ни урона (у HE), ни дыма (у smoke), ни ослепления/звона в ушах (у флешки), ни звука от игры — дальше плагин сам решает, что происходит в этой точке. Сущность при этом не убирается сама: если она больше не нужна, убирай через `e.entity:remove()`.',
                       example="""
 hook.add("grenade_explode", "healnade.explode", function(e)
 	if e.weapon ~= "weapon_smokegrenade" or not e.player then return end
@@ -319,7 +319,7 @@ hook.add("grenade_explode", "healnade.explode", function(e)
 	if e.entity then e.entity:remove() end
 end)
 """,
-                      extra='Бомбу не задевает: у неё отдельная цепочка, `bomb_exploded`. Флешку тоже — у неё свой взрыв без урона и дыма, событие его не трогает.',
+                      extra='Бомбу не задевает: у неё отдельная цепочка, `bomb_exploded`.',
                       regamedll=True),
             ],
         },
@@ -345,6 +345,44 @@ end)
                       [('e.x, e.y, e.z', 'number', 'координаты взрыва')],
                       extra='Игрока в событии нет: запоминай заложившего в `bomb_planted`, если он нужен.',
                       regamedll=True),
+            ],
+        },
+        {
+            'title': 'Магазин',
+            'slug': 'shop',
+            'items': [
+                event('weapon_buy', 'Игрок покупает оружие в магазине.',
+                      [PLAYER, ('e.weapon', 'string', 'classname покупаемого оружия')],
+                      cancel='`e:cancel()` отменяет покупку целиком: деньги не списываются, оружие не выдаётся — как будто игрок ничего не покупал.',
+                      example="""
+hook.add("weapon_buy", "myplugin.no_awp", function(e)
+	if e.weapon == "weapon_awp" then
+		e.player:hud("AWP запрещён на этой карте")
+		e:cancel()
+	end
+end)
+""",
+                      extra='Приходит на любую покупку оружия — ручную, ребай и автобай, все идут через один и тот же вызов движка. Сама сущность оружия на этот момент ещё не создана, поэтому в событии нет `e.entity`.',
+                      regamedll=True,
+                      see=[('ammo_buy', 'ammo_buy.md'), ('item_buy', 'item_buy.md')]),
+                event('ammo_buy', 'Игрок покупает патроны для оружия в руках.',
+                      [PLAYER, ('e.weapon', 'string', 'classname оружия, для которого докупают патроны')],
+                      cancel='`e:cancel()` отменяет покупку: деньги не списываются, патроны не добавляются.',
+                      regamedll=True,
+                      see=[('weapon_buy', 'weapon_buy.md')]),
+                event('item_buy', 'Игрок покупает не-оружие в магазине: броню, прибор ночного видения, набор для разминирования, щит или гранату.',
+                      [PLAYER, ('e.item', 'string', '`vest`, `vesthelm`, `flashbang`, `hegrenade`, `smokegrenade`, `nvg`, `defusekit` или `shield`')],
+                      cancel='`e:cancel()` отменяет покупку: деньги не списываются, предмет не выдаётся.',
+                      example="""
+hook.add("item_buy", "myplugin.no_defuse_for_t", function(e)
+	if e.item == "defusekit" and e.player:team() == "t" then
+		e:cancel()
+	end
+end)
+""",
+                      extra='Гранаты (`hegrenade`, `flashbang`, `smokegrenade`) идут через тот же пункт меню, что и броня/щит — это не то же самое, что бросок: `weapon_buy` про оружие, `item_buy` про всё остальное в магазине.',
+                      regamedll=True,
+                      see=[('weapon_buy', 'weapon_buy.md')]),
             ],
         },
     ],

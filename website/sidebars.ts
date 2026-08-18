@@ -19,6 +19,7 @@ const sidebars: SidebarsConfig = {
           {type: 'doc', id: 'api/hook/lifecycle', label: 'Жизнь сервера'},
           {type: 'doc', id: 'api/hook/gameplay', label: 'Геймплей'},
           {type: 'doc', id: 'api/hook/round', label: 'Раунд и бомба'},
+          {type: 'doc', id: 'api/hook/shop', label: 'Магазин'},
         ]},
         {type: 'doc', id: 'api/cmd/index', label: 'cmd'},
         {type: 'category', label: 'players', collapsed: true, link: {type: 'doc', id: 'api/players/index'}, items: [

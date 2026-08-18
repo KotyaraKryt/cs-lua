@@ -32,7 +32,8 @@
               "api/hook/connection",
               "api/hook/lifecycle",
               "api/hook/gameplay",
-              "api/hook/round"
+              "api/hook/round",
+              "api/hook/shop"
             ]
           },
           {

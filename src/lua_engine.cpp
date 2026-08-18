@@ -9,6 +9,7 @@
 #include "lua_sound.h"
 #include "lua_menu.h"
 #include "lua_message.h"
+#include "lua_msg.h"
 #include "lua_entity.h"
 #include "lua_fx.h"
 #include "lua_db.h"
@@ -267,6 +268,7 @@ void LuaEngine::init()
 	cslua_register_command_api(m_L);
 	cslua_register_sound(m_L);
 	cslua_register_ui(m_L);
+	cslua_register_msg(m_L);
 	cslua_register_menu(m_L);
 	cslua_register_entity(m_L);
 	cslua_register_fx(m_L);

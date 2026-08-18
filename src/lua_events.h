@@ -44,6 +44,9 @@ enum CsLuaEvent
 	CSLUA_EVENT_GRENADE_EXPLODE,		// about to explode; cancel to take over
 	CSLUA_EVENT_WEAPON_THROW,		// any grenade-slot throw, before HE/flash/smoke is picked; cancel to take over
 	CSLUA_EVENT_WEAPON_SECONDARY_ATTACK,	// right-click pressed, synthesized from a button edge-detect
+	CSLUA_EVENT_WEAPON_BUY,			// buy menu bought a weapon; cancel to block it
+	CSLUA_EVENT_AMMO_BUY,			// buy menu bought ammo for the held weapon; cancel to block it
+	CSLUA_EVENT_ITEM_BUY,			// buy menu bought armor/nvg/defuser/shield/a grenade; cancel to block it
 
 	CSLUA_EVENT_COUNT
 };
@@ -225,6 +228,24 @@ public:
 	// m_iPrimaryAmmoType field weapon_throw carries, for telling apart two
 	// items that share a classname (see its own comment).
 	void fire_weapon_secondary_attack(int player, const char *weapon, int ammo_type);
+
+	// Buy menu bought a weapon by its WeaponIdType - weapon is the classname
+	// GetItemInfo() already had for that id, before the engine spends the
+	// money or spawns anything. Returns true if a handler cancelled: the
+	// caller must then skip BuyWeaponByWeaponID's own chain entirely, so
+	// nothing is charged and nothing is given.
+	bool fire_weapon_buy(int player, const char *weapon);
+
+	// Buy menu topped up ammo for the weapon currently in hand. weapon is
+	// that weapon's classname. Same cancel contract as fire_weapon_buy.
+	bool fire_ammo_buy(int player, const char *weapon);
+
+	// Buy menu bought a non-weapon item - armor, defuse kit, NVGs, a shield,
+	// or (through the same menu slot) a grenade. item is one of "vest",
+	// "vesthelm", "flashbang", "hegrenade", "smokegrenade", "nvg",
+	// "defusekit", "shield" - see BuyItemMenuSlot in the SDK. Same cancel
+	// contract as fire_weapon_buy.
+	bool fire_item_buy(int player, const char *item);
 
 	// TakeDamage passes damage by reference, so a handler can change it or
 	// zero it out. Returns the final damage the game should apply: whatever

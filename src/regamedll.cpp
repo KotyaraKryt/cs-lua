@@ -450,6 +450,70 @@ static CGrenade *hook_throw_grenade(IReGameHook_CBasePlayer_ThrowGrenade *chain,
 	return chain->callNext(player, item, vecSrc, vecThrow, time, usEvent);
 }
 
+// The buy menu goes through here for every weapon purchase - rebuy, autobuy,
+// a manual pick, all the same chain. The entity does not exist yet at this
+// point, so the classname comes from GetItemInfo(id) rather than reading it
+// off the result the way grenade_thrown does.
+static CBaseEntity *hook_buy_weapon(IReGameHook_BuyWeaponByWeaponID *chain, CBasePlayer *player, WeaponIdType id)
+{
+	int slot = (player && player->IsPlayer()) ? player->entindex() : 0;
+
+	ItemInfo *info = s_api ? s_api->GetItemInfo(id) : nullptr;
+	const char *weapon = (info && info->pszName) ? info->pszName : "";
+
+	bool cancelled = g_events.fire_weapon_buy(slot, weapon);
+	if (cancelled)
+		return nullptr;			// no charge, no weapon - same as buying nothing
+
+	return chain->callNext(player, id);
+}
+
+// Ammo for whatever is currently in the player's hands, not a specific
+// weapon slot - weapon is that held item's own classname.
+static bool hook_buy_gun_ammo(IReGameHook_BuyGunAmmo *chain, CBasePlayer *player,
+	CBasePlayerItem *weapon, bool bBlink)
+{
+	int slot = (player && player->IsPlayer()) ? player->entindex() : 0;
+	const char *wname = (weapon && weapon->pev) ? STRING(weapon->pev->classname) : "";
+
+	bool cancelled = g_events.fire_ammo_buy(slot, wname);
+	if (cancelled)
+		return false;
+
+	return chain->callNext(player, weapon, bBlink);
+}
+
+// Everything the buy menu sells that isn't a weapon: armor, NVGs, defuse
+// kit, shield, and (through the same menu slot) HE/flash/smoke. item is the
+// BuyItemMenuSlot the client sent - named here rather than left as a raw
+// number, same reason weapon/grenade events give a classname instead of a
+// WeaponIdType.
+static const char *buy_item_name(int item)
+{
+	switch (item) {
+	case MENU_SLOT_ITEM_VEST:      return "vest";
+	case MENU_SLOT_ITEM_VESTHELM:  return "vesthelm";
+	case MENU_SLOT_ITEM_FLASHGREN: return "flashbang";
+	case MENU_SLOT_ITEM_HEGREN:    return "hegrenade";
+	case MENU_SLOT_ITEM_SMOKEGREN: return "smokegrenade";
+	case MENU_SLOT_ITEM_NVG:       return "nvg";
+	case MENU_SLOT_ITEM_DEFUSEKIT: return "defusekit";
+	case MENU_SLOT_ITEM_SHIELD:    return "shield";
+	default:                       return "";
+	}
+}
+
+static void hook_buy_item(IReGameHook_BuyItem *chain, CBasePlayer *player, int item)
+{
+	int slot = (player && player->IsPlayer()) ? player->entindex() : 0;
+
+	bool cancelled = g_events.fire_item_buy(slot, buy_item_name(item));
+	if (cancelled)
+		return;					// no charge, nothing given
+
+	chain->callNext(player, item);
+}
+
 static CGrenade *hook_throw_smoke_grenade(IReGameHook_ThrowSmokeGrenade *chain, entvars_t *pevOwner,
 	Vector &vecStart, Vector &vecVelocity, float time, unsigned short usEvent)
 {
@@ -462,6 +526,24 @@ static CGrenade *hook_throw_smoke_grenade(IReGameHook_ThrowSmokeGrenade *chain, 
 
 	int index = (grenade && grenade->pev) ? ENTINDEX(ENT(grenade->pev)) : 0;
 	g_events.fire_grenade_thrown(owner, "weapon_smokegrenade", index);
+
+	return grenade;
+}
+
+// ThrowFlashbang has no usEvent parameter - the engine picks the flashbang's
+// own event internally, unlike ThrowHeGrenade/ThrowSmokeGrenade above.
+static CGrenade *hook_throw_flashbang(IReGameHook_ThrowFlashbang *chain, entvars_t *pevOwner,
+	Vector &vecStart, Vector &vecVelocity, float time)
+{
+	int owner = attacker_slot(pevOwner);
+
+	float fuse = time;
+	g_events.fire_grenade_throw(owner, "weapon_flashbang", fuse);
+
+	CGrenade *grenade = chain->callNext(pevOwner, vecStart, vecVelocity, fuse);
+
+	int index = (grenade && grenade->pev) ? ENTINDEX(ENT(grenade->pev)) : 0;
+	g_events.fire_grenade_thrown(owner, "weapon_flashbang", index);
 
 	return grenade;
 }
@@ -542,6 +624,23 @@ static void hook_explode_smoke_grenade(IReGameHook_CGrenade_ExplodeSmokeGrenade 
 	chain->callNext(grenade);
 }
 
+// Same idea as hook_explode_smoke_grenade: flashbang deals no direct damage,
+// so cancelling only skips the stock blind/deafen effect and pop sound, not
+// any TakeDamage call.
+static void hook_explode_flashbang(IReGameHook_CGrenade_ExplodeFlashbang *chain, CGrenade *grenade,
+	TraceResult *ptr, int bitsDamageType)
+{
+	Vector where = grenade && grenade->pev ? grenade->pev->origin : Vector(0, 0, 0);
+	int owner = grenade_owner_slot(grenade);
+	int index = (grenade && grenade->pev) ? ENTINDEX(ENT(grenade->pev)) : 0;
+
+	bool cancelled = g_events.fire_grenade_explode(owner, "weapon_flashbang", index, where.x, where.y, where.z);
+	if (cancelled)
+		return;
+
+	chain->callNext(grenade, ptr, bitsDamageType);
+}
+
 // Which chains we currently hold a hook on.
 //
 // registerHook is fatal when the same handler is added twice - ReGameDLL kills
@@ -567,9 +666,14 @@ enum HookSlot
 	HOOK_EXPLODE,
 	HOOK_EXPLODE_HE,
 	HOOK_EXPLODE_SMOKE,
+	HOOK_EXPLODE_FLASH,
 	HOOK_THROW_HE,
 	HOOK_THROW_SMOKE,
+	HOOK_THROW_FLASH,
 	HOOK_THROW_GENERIC,
+	HOOK_BUY_WEAPON,
+	HOOK_BUY_AMMO,
+	HOOK_BUY_ITEM,
 	HOOK_COUNT
 };
 
@@ -644,13 +748,24 @@ void cslua_regamedll_install_hooks()
 	bool exploding = g_events.any(CSLUA_EVENT_GRENADE_EXPLODE);
 	sync_hook(HOOK_EXPLODE_HE, s_hooks->CGrenade_ExplodeHeGrenade(), &hook_explode_he_grenade, exploding);
 	sync_hook(HOOK_EXPLODE_SMOKE, s_hooks->CGrenade_ExplodeSmokeGrenade(), &hook_explode_smoke_grenade, exploding);
+	sync_hook(HOOK_EXPLODE_FLASH, s_hooks->CGrenade_ExplodeFlashbang(), &hook_explode_flashbang, exploding);
 
 	bool throwing = g_events.any(CSLUA_EVENT_GRENADE_THROW) || g_events.any(CSLUA_EVENT_GRENADE_THROWN);
 	sync_hook(HOOK_THROW_HE, s_hooks->ThrowHeGrenade(), &hook_throw_he_grenade, throwing);
 	sync_hook(HOOK_THROW_SMOKE, s_hooks->ThrowSmokeGrenade(), &hook_throw_smoke_grenade, throwing);
+	sync_hook(HOOK_THROW_FLASH, s_hooks->ThrowFlashbang(), &hook_throw_flashbang, throwing);
 
 	sync_hook(HOOK_THROW_GENERIC, s_hooks->CBasePlayer_ThrowGrenade(), &hook_throw_grenade,
 		g_events.any(CSLUA_EVENT_WEAPON_THROW));
+
+	sync_hook(HOOK_BUY_WEAPON, s_hooks->BuyWeaponByWeaponID(), &hook_buy_weapon,
+		g_events.any(CSLUA_EVENT_WEAPON_BUY));
+
+	sync_hook(HOOK_BUY_AMMO, s_hooks->BuyGunAmmo(), &hook_buy_gun_ammo,
+		g_events.any(CSLUA_EVENT_AMMO_BUY));
+
+	sync_hook(HOOK_BUY_ITEM, s_hooks->BuyItem(), &hook_buy_item,
+		g_events.any(CSLUA_EVENT_ITEM_BUY));
 }
 
 void cslua_regamedll_remove_hooks()
@@ -677,9 +792,14 @@ void cslua_regamedll_remove_hooks()
 	s_hooks->CGrenade_ExplodeBomb()->unregisterHook(&hook_explode_bomb);
 	s_hooks->CGrenade_ExplodeHeGrenade()->unregisterHook(&hook_explode_he_grenade);
 	s_hooks->CGrenade_ExplodeSmokeGrenade()->unregisterHook(&hook_explode_smoke_grenade);
+	s_hooks->CGrenade_ExplodeFlashbang()->unregisterHook(&hook_explode_flashbang);
 	s_hooks->ThrowHeGrenade()->unregisterHook(&hook_throw_he_grenade);
 	s_hooks->ThrowSmokeGrenade()->unregisterHook(&hook_throw_smoke_grenade);
+	s_hooks->ThrowFlashbang()->unregisterHook(&hook_throw_flashbang);
 	s_hooks->CBasePlayer_ThrowGrenade()->unregisterHook(&hook_throw_grenade);
+	s_hooks->BuyWeaponByWeaponID()->unregisterHook(&hook_buy_weapon);
+	s_hooks->BuyGunAmmo()->unregisterHook(&hook_buy_gun_ammo);
+	s_hooks->BuyItem()->unregisterHook(&hook_buy_item);
 
 	for (int i = 0; i < HOOK_COUNT; i++)
 		s_installed[i] = false;

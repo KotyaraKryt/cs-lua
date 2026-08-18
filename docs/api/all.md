@@ -20,6 +20,7 @@ description: "Плоский список всех функций и метод�
 | [`s:all`](store/kv.md#all) | store | Всё содержимое хранилища |
 | [`access.all_groups`](access/read.md#all_groups) | access | Все группы |
 | [`p:ammo`](players/cs-state.md#ammo) | players | Читает или задаёт патроны в запасе |
+| [`ammo_buy`](hook/shop.md#ammo_buy) | hook | Игрок покупает патроны для оружия в руках |
 | [`e:angles`](ents/entity.md#angles) | ents | Читает или задаёт поворот сущности |
 | [`p:angles`](players/state.md#angles) | players | Поворот модели игрока |
 | [`p:armor`](players/state.md#armor) | players | Броня игрока |
@@ -88,9 +89,9 @@ description: "Плоский список всех функций и метод�
 | [`p:godmode`](players/state.md#godmode) | players | Неуязвимость |
 | [`access.grant`](access/grant.md#grant) | access | Выдаёт права по ключу |
 | [`p:gravity`](players/state.md#gravity) | players | Множитель гравитации |
-| [`grenade_explode`](hook/gameplay.md#grenade_explode) | hook | HE- или дымовая граната вот-вот взорвётся |
-| [`grenade_throw`](hook/gameplay.md#grenade_throw) | hook | HE- или дымовая граната вот-вот покинёт руку |
-| [`grenade_thrown`](hook/gameplay.md#grenade_thrown) | hook | HE- или дымовая граната только что покинула руку |
+| [`grenade_explode`](hook/gameplay.md#grenade_explode) | hook | HE, дымовая или флешка вот-вот взорвётся |
+| [`grenade_throw`](hook/gameplay.md#grenade_throw) | hook | HE, дымовая или флешка вот-вот покинёт руку |
+| [`grenade_thrown`](hook/gameplay.md#grenade_thrown) | hook | HE, дымовая или флешка только что покинула руку |
 | [`access.group`](access/read.md#group) | access | Одна группа по имени |
 | [`p:group`](players/access.md#group) | players | Состоит ли игрок в группе, с учётом наследования |
 | [`p:groups`](players/access.md#groups) | players | Массив групп игрока |
@@ -107,6 +108,7 @@ description: "Плоский список всех функций и метод�
 | [`p:ip`](players/identity.md#ip) | players | Адрес игрока вида `1.2.3.4:27005` |
 | [`p:is_bot`](players/identity.md#is_bot) | players | Серверный бот (`FL_FAKECLIENT`) |
 | [`p:is_hltv`](players/identity.md#is_hltv) | players | HLTV-прокси (`FL_PROXY`) |
+| [`item_buy`](hook/shop.md#item_buy) | hook | Игрок покупает не-оружие в магазине: броню, прибор ночного видения, набор для разминирования, щит или гранату |
 | [`m:item_color`](menu/index.md#item_color) | menu | Перекрашивает один пункт |
 | [`s:keys`](store/kv.md#keys) | store | Все ключи хранилища |
 | [`e:keyvalue`](ents/entity.md#keyvalue) | ents | Задаёт keyvalue — то же, что делает карта |
@@ -199,10 +201,11 @@ description: "Плоский список всех функций и метод�
 | [`e:valid`](ents/entity.md#valid) | ents | Жива ли сущность |
 | [`p:velocity`](players/state.md#velocity) | players | Скорость игрока |
 | [`p:weapon`](players/cs-state.md#weapon) | players | Classname оружия в руках |
+| [`weapon_buy`](hook/shop.md#weapon_buy) | hook | Игрок покупает оружие в магазине |
 | [`weapon_deploy`](hook/gameplay.md#weapon_deploy) | hook | Оружие вот-вот покажет вьюмодель и модель в руках |
 | [`weapon_fire`](hook/gameplay.md#weapon_fire) | hook | Из ствола вышел выстрел |
 | [`weapon_reload`](hook/gameplay.md#weapon_reload) | hook | Началась настоящая перезарядка |
 | [`p:weapons`](players/cs-state.md#weapons) | players | Массив classname всего, что несёт игрок |
 | [`p:weight`](players/access.md#weight) | players | Вес игрока для иммунитета |
 
-Всего: 193.
+Всего: 196.
