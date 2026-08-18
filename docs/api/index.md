@@ -1,65 +1,108 @@
 ---
-description: "Все пространства имён cs-lua: hook, cmd, players, timer, ents, res, sv, db, store, menu, ui, access, plugin."
+description: "Справочник API cs-lua для разработки серверных Lua-плагинов."
 ---
 
 # Справочник API
 
-Всё регистрируется одинаково: пространство имён, глагол, обработчик на одну
-таблицу.
+API `cs-lua` предоставляет Lua-плагинам доступ к игрокам, событиям,
+командам, таймерам, сущностям, серверу и другим возможностям движка.
 
-```lua
-plugin { name = "Example", api_version = 1 }
+## Основные возможности
 
-hook.add("player_spawn", "example.armor", function(e)
-	e.player:armor(100)
-end)
+<CardGroup cols={2}>
+  <Card title="Игроки" icon="user" href="/api/players">
+    Работа с игроками: здоровье, броня, оружие, поиск и рассылка сообщений.
+  </Card>
 
-cmd.add("hp", function(ctx)
-	ctx.reply(tostring(ctx.player:health()))
-end)
-```
+  <Card title="События" icon="zap" href="/api/hook">
+    Обработка игровых событий и создание собственных событий.
+  </Card>
 
-| namespace | что даёт |
+  <Card title="Команды" icon="terminal" href="/api/cmd">
+    Регистрация команд чата, серверной консоли и RCON.
+  </Card>
+
+  <Card title="Таймеры" icon="clock" href="/api/timer">
+    Выполнение кода с задержкой или через заданные интервалы.
+  </Card>
+
+  <Card title="Сущности" icon="box" href="/api/ents">
+    Поиск и работа с сущностями игрового мира.
+  </Card>
+
+  <Card title="Сервер" icon="server" href="/api/sv">
+    Управление сервером, картой, CVar и выполнение консольных команд.
+  </Card>
+</CardGroup>
+
+## Дополнительные возможности
+
+<CardGroup cols={2}>
+  <Card title="Эффекты" icon="sparkles" href="/api/fx">
+    Взрывы, лучи, спрайты и другие визуальные эффекты.
+  </Card>
+
+  <Card title="Ресурсы" icon="database" href="/api/res">
+    Прекеш звуков, моделей и других ресурсов.
+  </Card>
+
+  <Card title="База данных" icon="database" href="/api/db">
+    Работа с SQLite и MySQL.
+  </Card>
+
+  <Card title="Хранилище" icon="hard-drive" href="/api/store">
+    Key-value хранилище на SQLite.
+  </Card>
+
+  <Card title="HTTP" icon="globe" href="/api/http">
+    Выполнение исходящих HTTP-запросов без блокировки игрового цикла.
+  </Card>
+
+  <Card title="Меню" icon="list" href="/api/menu">
+    Создание интерактивных меню для игроков.
+  </Card>
+
+  <Card title="UI" icon="palette" href="/api/ui">
+    Цвета, текст и другие возможности для работы с интерфейсом.
+  </Card>
+</CardGroup>
+
+## Плагины и доступ
+
+<CardGroup cols={2}>
+  <Card title="Права доступа" icon="shield" href="/api/access">
+    Права, группы и иммунитет игроков.
+  </Card>
+
+  <Card title="Плагины" icon="puzzle-piece" href="/api/plugin">
+    Метаданные, жизненный цикл и управление плагином.
+  </Card>
+
+  <Card title="Экспорты" icon="share" href="/api/exports">
+    Вызов функций и взаимодействие между плагинами.
+  </Card>
+</CardGroup>
+
+## Модули
+
+Помимо API, `cs-lua` предоставляет несколько модулей, которые можно
+подключить через стандартный `require()`.
+
+| Модуль | Описание |
 |---|---|
-| [`hook`](hook/index.md) | события движка и свои |
-| [`cmd`](cmd/index.md) | команды чата, консоли и rcon |
-| [`players`](players/index.md) | объект игрока, поиск, рассылка |
-| [`timer`](timer/index.md) | отложенные и повторяющиеся вызовы |
-| [`ents`](ents/index.md) | сущности |
-| [`fx`](fx/index.md) | взрывы, лучи, шлейфы спрайтов |
-| [`res`](res/index.md) | прекеш звуков и моделей |
-| [`sv`](sv/index.md) | сервер: время, карта, cvar'ы, консоль |
-| [`db`](db/index.md) | SQLite |
-| [`store`](store/index.md) | key-value на SQLite и `datafile` |
-| [`http`](http/index.md) | исходящие запросы, не блокирующие кадр |
-| [`menu`](menu/index.md) | меню |
-| [`ui`](ui/index.md) | цвета, лимиты длины строк, кириллица |
-| [`access`](access/index.md) | права, группы, иммунитет |
-| [`plugin`](plugin/index.md) | манифест, пути, выгрузка |
-| [`export` / `import`](exports/index.md) | вызов функций чужого плагина |
+| `store` | Key-value хранилище на SQLite |
+| `datafile` | Чтение и запись файлов `data/*.lua` |
+| `json` | Разбор и сборка JSON |
+| `color` | Разбор цветов |
+| `text` | Работа с длиной строк в формате клиента |
+| `class` | Классы с наследованием |
 
-Плюс [консольные команды](console.md) модуля.
+Подробнее о подключении модулей — в разделе
+[Структура плагина](/guides/plugin-structure).
 
-## Модули под require
+## Консольные команды
 
-| модуль | что даёт |
-|---|---|
-| [`store`](store/kv.md#open) | key-value на SQLite |
-| [`datafile`](store/datafile.md#at) | чтение и запись `data/*.lua` |
-| [`json`](http/index.md) | разбор и сборка JSON |
-| [`color`](ui/index.md#color) | разбор цвета |
-| [`text`](ui/index.md#длина-строки) | длина строки как её считает клиент |
-| `class` | класс с наследованием |
+`cs-lua` также предоставляет несколько консольных команд для управления
+модулем и плагинами.
 
-## Соглашения
-
-| | |
-|---|---|
-| `p:health()` | без аргумента читает |
-| `p:health(100)` | с аргументом пишет |
-| `p:money(500, { hud = true })` | всё необязательное — таблицей опций, а не позиционным флагом |
-| `hook.add(event, id, fn)` | id уникален внутри плагина: делает регистрацию заменяемой и снимаемой |
-| `nil, "причина"` | функции, которые могут не найти, возвращают текст вторым значением |
-
-Объекты игрока и сущности защищены от записи: `p.foo = 1` бросит ошибку. Своё
-состояние держи в таблице плагина, ключом — `p.id` или `e.index`.
+Полный список доступен в [консольных командах](/api/console).
