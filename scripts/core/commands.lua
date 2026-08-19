@@ -198,7 +198,7 @@ local function strip_prefix(text)
 	return nil
 end
 
-hook.add("player_chat", "core.command_router", function(e)
+hook.add("player:chat", "core.command_router", function(e)
 	local body = strip_prefix(e.text)
 	if not body then
 		return

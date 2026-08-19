@@ -27,7 +27,7 @@ msg.send(dest, name, target, ...)
 ### Пример
 
 ```lua
-hook.add("player_death", "myplugin.fade", function(e)
+hook.add("player:death", "myplugin.fade", function(e)
   msg.send("one", "ScreenFade", e.player,
     msg.short(1000),   -- duration
     msg.short(0),      -- hold

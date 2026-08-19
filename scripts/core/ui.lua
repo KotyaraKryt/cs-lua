@@ -250,7 +250,7 @@ function Menu:close(p)
 	close_panel(p.id)
 end
 
-hook.add("menu_select", "core.menu_select", function(e)
+hook.add("menu:select", "core.menu_select", function(e)
 	local p = e.player
 	local state = open[p.id]
 	if not state then
@@ -292,6 +292,6 @@ hook.add("menu_select", "core.menu_select", function(e)
 end)
 
 -- A player who leaves takes their menu state with them.
-hook.add("client_disconnect", "core.menu_cleanup", function(e)
+hook.add("client:disconnect", "core.menu_cleanup", function(e)
 	open[e.player.id] = nil
 end)

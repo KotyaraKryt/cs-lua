@@ -28,7 +28,7 @@ hook.add(event, id, fn)
 ### Пример
 
 ```lua
-hook.add("player_spawn", "myplugin.armor", function(e)
+hook.add("player:spawn", "myplugin.armor", function(e)
 	e.player:armor(100)
 end)
 ```

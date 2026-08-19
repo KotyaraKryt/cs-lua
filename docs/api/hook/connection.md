@@ -12,7 +12,7 @@ description: "Порядок: `client_connect` → `player_authorized` → `play
 Игрок стучится на сервер; его ещё можно не пустить.
 
 ```lua
-hook.add("client_connect", id, function(e)
+hook.add("client:connect", id, function(e)
 	...
 end)
 ```
@@ -29,7 +29,7 @@ end)
 ### Пример
 
 ```lua
-hook.add("client_connect", "bans.check", function(e)
+hook.add("client:connect", "bans.check", function(e)
 	if banned[e.ip] then
 		e.reason = "Вы забанены"
 		e:cancel()
@@ -50,7 +50,7 @@ end)
 Игрок отключился.
 
 ```lua
-hook.add("client_disconnect", id, function(e)
+hook.add("client:disconnect", id, function(e)
 	...
 end)
 ```
@@ -69,7 +69,7 @@ end)
 Steam ответил, steamid наконец известен.
 
 ```lua
-hook.add("player_authorized", id, function(e)
+hook.add("client:authorized", id, function(e)
 	...
 end)
 ```
@@ -88,7 +88,7 @@ end)
 Игрок в игре, сообщения до него доходят.
 
 ```lua
-hook.add("player_ready", id, function(e)
+hook.add("client:connected", id, function(e)
 	...
 end)
 ```
@@ -106,7 +106,7 @@ end)
 Игрок написал в чат.
 
 ```lua
-hook.add("player_chat", id, function(e)
+hook.add("player:chat", id, function(e)
 	...
 end)
 ```
@@ -122,7 +122,7 @@ end)
 ### Пример
 
 ```lua
-hook.add("player_chat", "myplugin.mute", function(e)
+hook.add("player:chat", "myplugin.mute", function(e)
 	if muted[e.player.id] then
 		e.player:chat("Ты в муте")
 		e:cancel()
@@ -137,7 +137,7 @@ end)
 Игрок нажал клавишу в меню, открытом из Lua.
 
 ```lua
-hook.add("menu_select", id, function(e)
+hook.add("menu:select", id, function(e)
 	...
 end)
 ```

@@ -112,7 +112,7 @@ end
 --
 -- e.plugin is nil when the whole state is going away; there is nothing to
 -- clean up in that case, the registry dies with it.
-hook.add("plugin_unload", "core.exports_cleanup", function(e)
+hook.add("module:plugin_unload", "core.exports_cleanup", function(e)
 	if e.plugin then
 		exports_registry[e.plugin] = nil
 	end

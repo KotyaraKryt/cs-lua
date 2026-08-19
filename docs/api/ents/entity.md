@@ -195,7 +195,7 @@ e:detonate_on_touch()
 ### Пример
 
 ```lua
-hook.add("grenade_thrown", "myplugin.instant", function(e)
+hook.add("grenade:thrown", "myplugin.instant", function(e)
 	if e.entity then
 		e.entity:detonate_on_touch()
 	end

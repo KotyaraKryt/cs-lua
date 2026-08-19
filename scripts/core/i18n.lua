@@ -145,14 +145,14 @@ function lang.bind()
 	end
 end
 
-hook.add("client_disconnect", "core.lang_cleanup", function(e)
+hook.add("client:disconnect", "core.lang_cleanup", function(e)
 	override[e.player.id] = nil
 	guessed[e.player.id] = nil
 end)
 
 -- e.plugin is nil when the whole state goes away; nothing to clean up then,
 -- the registry dies with it (same reasoning as exports.lua).
-hook.add("plugin_unload", "core.lang_cleanup_plugin", function(e)
+hook.add("module:plugin_unload", "core.lang_cleanup_plugin", function(e)
 	if e.plugin then
 		registry[e.plugin] = nil
 	end

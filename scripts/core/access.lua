@@ -855,11 +855,11 @@ end)
 -- The steamid is worthless at connect time (Steam answers a moment later), so
 -- rights are built from player_authorized onward. Anything before that sees
 -- the default group only.
-hook.add("player_authorized", "core.access_refresh", function(e)
+hook.add("client:authorized", "core.access_refresh", function(e)
 	access.invalidate(e.player)
 end)
 
-hook.add("client_disconnect", "core.access_cleanup", function(e)
+hook.add("client:disconnect", "core.access_cleanup", function(e)
 	cache[e.player.id] = nil
 end)
 

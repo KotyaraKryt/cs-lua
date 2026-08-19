@@ -10,7 +10,7 @@ description: "Одна система на движковые события и 
 Игрок покупает оружие в магазине.
 
 ```lua
-hook.add("weapon_buy", id, function(e)
+hook.add("weapon:buy", id, function(e)
 	...
 end)
 ```
@@ -25,7 +25,7 @@ end)
 ### Пример
 
 ```lua
-hook.add("weapon_buy", "myplugin.no_awp", function(e)
+hook.add("weapon:buy", "myplugin.no_awp", function(e)
 	if e.weapon == "weapon_awp" then
 		e.player:hud("AWP запрещён на этой карте")
 		e:cancel()
@@ -52,7 +52,7 @@ end)
 Игрок покупает патроны для оружия в руках.
 
 ```lua
-hook.add("ammo_buy", id, function(e)
+hook.add("ammo:buy", id, function(e)
 	...
 end)
 ```
@@ -80,7 +80,7 @@ end)
 Игрок покупает не-оружие в магазине: броню, прибор ночного видения, набор для разминирования, щит или гранату.
 
 ```lua
-hook.add("item_buy", id, function(e)
+hook.add("item:buy", id, function(e)
 	...
 end)
 ```
@@ -95,7 +95,7 @@ end)
 ### Пример
 
 ```lua
-hook.add("item_buy", "myplugin.no_defuse_for_t", function(e)
+hook.add("item:buy", "myplugin.no_defuse_for_t", function(e)
 	if e.item == "defusekit" and e.player:team() == "t" then
 		e:cancel()
 	end

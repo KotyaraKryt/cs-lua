@@ -12,7 +12,7 @@ description: "Всё в этом разделе приходит из ReGameDLL"
 Игрок появился в раунде живым.
 
 ```lua
-hook.add("player_spawn", id, function(e)
+hook.add("player:spawn", id, function(e)
 	...
 end)
 ```
@@ -35,7 +35,7 @@ end)
 Игроку наносят урон; урон можно изменить или погасить.
 
 ```lua
-hook.add("player_hurt", id, function(e)
+hook.add("player:hurt", id, function(e)
 	...
 end)
 ```
@@ -53,7 +53,7 @@ end)
 ### Пример
 
 ```lua
-hook.add("player_hurt", "myplugin.double", function(e)
+hook.add("player:hurt", "myplugin.double", function(e)
 	e.damage = e.damage * 2
 end)
 ```
@@ -81,7 +81,7 @@ end)
 Урон уже применён; только для наблюдателей.
 
 ```lua
-hook.add("player_hurt_post", id, function(e)
+hook.add("player:hurt_post", id, function(e)
 	...
 end)
 ```
@@ -108,7 +108,7 @@ end)
 Игрок погиб.
 
 ```lua
-hook.add("player_death", id, function(e)
+hook.add("player:death", id, function(e)
 	...
 end)
 ```
@@ -126,7 +126,7 @@ end)
 ### Пример
 
 ```lua
-hook.add("player_death", "myplugin.bounty", function(e)
+hook.add("player:death", "myplugin.bounty", function(e)
 	if not e.killer or e.killer.id == e.victim.id then return end
 	e.killer:money(e.killer:money() + (e.headshot and 600 or 300), { hud = true })
 end)
@@ -149,7 +149,7 @@ end)
 Игрок сменил сторону.
 
 ```lua
-hook.add("player_team_change", id, function(e)
+hook.add("player:team_change", id, function(e)
 	...
 end)
 ```
@@ -174,7 +174,7 @@ end)
 Из ствола вышел выстрел.
 
 ```lua
-hook.add("weapon_fire", id, function(e)
+hook.add("weapon:fire", id, function(e)
 	...
 end)
 ```
@@ -199,7 +199,7 @@ end)
 Оружие вот-вот покажет вьюмодель и модель в руках.
 
 ```lua
-hook.add("weapon_deploy", id, function(e)
+hook.add("weapon:deploy", id, function(e)
 	...
 end)
 ```
@@ -216,7 +216,7 @@ end)
 ### Пример
 
 ```lua
-hook.add("weapon_deploy", "healnade.reskin", function(e)
+hook.add("weapon:deploy", "healnade.reskin", function(e)
 	if e.weapon == "weapon_hegrenade" then
 		e.view_model = "models/reapi_healthnade/v_hegrenade_v1.mdl"
 		e.world_model = "models/reapi_healthnade/p_hegrenade_v1.mdl"
@@ -240,7 +240,7 @@ end)
 Началась настоящая перезарядка.
 
 ```lua
-hook.add("weapon_reload", id, function(e)
+hook.add("weapon:reload", id, function(e)
 	...
 end)
 ```
@@ -258,7 +258,7 @@ end)
 ### Пример
 
 ```lua
-hook.add("weapon_reload", "myplugin.reload_log", function(e)
+hook.add("weapon:reload", "myplugin.reload_log", function(e)
 	e.player:hud(("перезаряжаешь %s (%d/%s патронов), готово через %.1fс")
 		:format(e.weapon, e.clip, e.max_clip or "?", e.delay))
 end)
@@ -286,7 +286,7 @@ end)
 HE, дымовая или флешка вот-вот покинёт руку.
 
 ```lua
-hook.add("grenade_throw", id, function(e)
+hook.add("grenade:throw", id, function(e)
 	...
 end)
 ```
@@ -302,7 +302,7 @@ end)
 ### Пример
 
 ```lua
-hook.add("grenade_throw", "healnade.instant", function(e)
+hook.add("grenade:throw", "healnade.instant", function(e)
 	if e.weapon == "weapon_smokegrenade" then
 		e.fuse = 0.05
 	end
@@ -325,7 +325,7 @@ end)
 HE, дымовая или флешка только что покинула руку.
 
 ```lua
-hook.add("grenade_thrown", id, function(e)
+hook.add("grenade:thrown", id, function(e)
 	...
 end)
 ```
@@ -341,7 +341,7 @@ end)
 ### Пример
 
 ```lua
-hook.add("grenade_thrown", "healnade.reskin", function(e)
+hook.add("grenade:thrown", "healnade.reskin", function(e)
 	if e.weapon == "weapon_smokegrenade" and e.entity then
 		e.entity:model("models/reapi_healthnade/w_hegrenade_v1.mdl")
 		e.entity:detonate_on_touch()
@@ -366,7 +366,7 @@ end)
 HE, дымовая или флешка вот-вот взорвётся.
 
 ```lua
-hook.add("grenade_explode", id, function(e)
+hook.add("grenade:explode", id, function(e)
 	...
 end)
 ```
@@ -383,7 +383,7 @@ end)
 ### Пример
 
 ```lua
-hook.add("grenade_explode", "healnade.explode", function(e)
+hook.add("grenade:explode", "healnade.explode", function(e)
 	if e.weapon ~= "weapon_smokegrenade" or not e.player then return end
 	e:cancel()
 	for _, p in ipairs(players.list{ alive = true, team = e.player:team() }) do
@@ -408,7 +408,7 @@ end)
 действие с заложником и т.д.
 
 ```lua
-hook.add("money_change", id, function(e)
+hook.add("player:money_change", id, function(e)
 	...
 end)
 ```
@@ -438,7 +438,7 @@ end)
 через магазин (отдельно от `ammo_buy`, которое про сам факт покупки).
 
 ```lua
-hook.add("ammo_pickup", id, function(e)
+hook.add("ammo:pickup", id, function(e)
 	...
 end)
 ```
@@ -465,7 +465,7 @@ end)
 при потере слота.
 
 ```lua
-hook.add("weapon_drop", id, function(e)
+hook.add("weapon:drop", id, function(e)
 	...
 end)
 ```
@@ -489,7 +489,7 @@ end)
 Игрок прыгнул.
 
 ```lua
-hook.add("player_jump", id, function(e)
+hook.add("player:jump", id, function(e)
 	...
 end)
 ```
@@ -513,7 +513,7 @@ end)
 Игрок присел.
 
 ```lua
-hook.add("player_duck", id, function(e)
+hook.add("player:duck", id, function(e)
 	...
 end)
 ```
@@ -536,7 +536,7 @@ end)
 Игрок перешёл в режим наблюдателя.
 
 ```lua
-hook.add("player_spectate", id, function(e)
+hook.add("player:spectate", id, function(e)
 	...
 end)
 ```
@@ -557,7 +557,7 @@ end)
 Игрок использовал радиокоманду.
 
 ```lua
-hook.add("player_radio", id, function(e)
+hook.add("player:radio", id, function(e)
 	...
 end)
 ```
@@ -583,7 +583,7 @@ end)
 Игра вот-вот решит, можно ли игроку возродиться.
 
 ```lua
-hook.add("player_can_respawn", id, function(e)
+hook.add("player:respawn_check", id, function(e)
 	...
 end)
 ```

@@ -24,7 +24,7 @@ file.append(name, content)
 ### Пример
 
 ```lua
-hook.add("player_death", "myplugin.kills_log", function(e)
+hook.add("player:death", "myplugin.kills_log", function(e)
   file.append("kills.csv", ("%s,%s\n"):format(e.attacker and e.attacker:name() or "world", e.player:name()))
 end)
 ```

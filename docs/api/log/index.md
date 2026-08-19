@@ -29,7 +29,7 @@ log.write(msg[, opts])
 ### Пример
 
 ```lua
-hook.add("player_death", "myplugin.kills_log", function(e)
+hook.add("player:death", "myplugin.kills_log", function(e)
   log.write(("%s killed %s"):format(
     e.attacker and e.attacker:name() or "world", e.player:name()))
 end)

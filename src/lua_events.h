@@ -67,9 +67,9 @@ struct RejectInfo
 
 // One hook system for everything.
 //
-//   hook.add("player_hurt", "god.block", function(e) e:cancel() end)
+//   hook.add("player:hurt", "god.block", function(e) e:cancel() end)
 //   hook.add("shop.bought", "stats.count", function(e) ... end)
-//   hook.remove("player_hurt", "god.block")
+//   hook.remove("player:hurt", "god.block")
 //   local e = hook.run("shop.bought", { player = p, item = it })
 //
 // Engine events (the enum above) and plugin events share one registry, one

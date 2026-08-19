@@ -10,7 +10,7 @@ description: "Одна система на движковые события и 
 Карта заканчивается.
 
 ```lua
-hook.add("map_change", id, function(e)
+hook.add("server:map_change", id, function(e)
 	...
 end)
 ```
@@ -28,7 +28,7 @@ Lua-состояние живёт дальше. Место, где пишут д
 Плагин или всё состояние уходит.
 
 ```lua
-hook.add("plugin_unload", id, function(e)
+hook.add("module:plugin_unload", id, function(e)
 	...
 end)
 ```

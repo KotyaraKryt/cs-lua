@@ -10,7 +10,7 @@ description: "Одна система на движковые события и 
 Раунд начался.
 
 ```lua
-hook.add("round_start", id, function(e)
+hook.add("round:start", id, function(e)
 	...
 end)
 ```
@@ -31,7 +31,7 @@ end)
 Раунд закончился.
 
 ```lua
-hook.add("round_end", id, function(e)
+hook.add("round:end", id, function(e)
 	...
 end)
 ```
@@ -52,7 +52,7 @@ end)
 Заморозка кончилась, игроки могут двигаться.
 
 ```lua
-hook.add("round_freeze_end", id, function(e)
+hook.add("round:freeze_end", id, function(e)
 	...
 end)
 ```
@@ -73,7 +73,7 @@ end)
 Бомба заложена.
 
 ```lua
-hook.add("bomb_planted", id, function(e)
+hook.add("bomb:planted", id, function(e)
 	...
 end)
 ```
@@ -95,7 +95,7 @@ end)
 раз в конце, успешно или нет; это — в момент начала попытки.
 
 ```lua
-hook.add("bomb_defuse_start", id, function(e)
+hook.add("bomb:defusing", id, function(e)
 	...
 end)
 ```
@@ -117,7 +117,7 @@ end)
 Попытка разминирования завершилась.
 
 ```lua
-hook.add("bomb_defused", id, function(e)
+hook.add("bomb:defused", id, function(e)
 	...
 end)
 ```
@@ -141,7 +141,7 @@ end)
 Бомба взорвалась.
 
 ```lua
-hook.add("bomb_exploded", id, function(e)
+hook.add("bomb:exploded", id, function(e)
 	...
 end)
 ```

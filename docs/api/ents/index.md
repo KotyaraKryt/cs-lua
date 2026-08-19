@@ -8,7 +8,7 @@ description: "Сущности: дропы, точки интереса, зон�
 Сущности: дропы, точки интереса, зоны, маркеры.
 
 ```lua
-hook.add("round_start", "drops.spawn", function()
+hook.add("round:start", "drops.spawn", function()
 	local e = ents.create("info_target")
 	e:model("models/w_ak47.mdl")
 	e:origin(0, 0, 0)
