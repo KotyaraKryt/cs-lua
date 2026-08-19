@@ -8,6 +8,7 @@
 #include "lua_sound.h"
 #include "regamedll.h"
 #include "players.h"
+#include "lua_pev.h"
 
 // Registry refs to the cached objects: one per slot plus the broadcast target.
 static int s_player_ref[CSLUA_MAXPLAYERS];
@@ -225,10 +226,18 @@ static int l_aim(lua_State *L)
 	return 3;
 }
 
+// p:pev(name[, v...]) - generic read/write for any entvars_t field by its
+// real name, sharing the field table and dispatch in lua_pev.cpp with
+// e:pev() in lua_entity.cpp so both objects agree on it byte for byte.
+static int l_pev(lua_State *L)
+{
+	return cslua_pev_call(L, self_pev(L), 2);
+}
+
 // Shared by l_trace and l_trace_to: turns a finished TraceResult into the
 // { kind, player, classname, x, y, z, distance, hitgroup } table both hand
 // back. `start` is only needed to compute distance.
-static void push_trace_result(lua_State *L, const TraceResult &tr, const Vector &start)
+void cslua_push_trace_result(lua_State *L, const TraceResult &tr, const Vector &start)
 {
 	lua_newtable(L);
 
@@ -296,7 +305,7 @@ static int l_trace(lua_State *L)
 	TraceResult tr;
 	TRACE_LINE(start, end, dont_ignore_monsters, g_engfuncs.pfnPEntityOfEntIndex(id), &tr);
 
-	push_trace_result(L, tr, start);
+	cslua_push_trace_result(L, tr, start);
 	return 1;
 }
 
@@ -334,7 +343,7 @@ static int l_trace_to(lua_State *L)
 	TraceResult tr;
 	TRACE_LINE(start, end, dont_ignore_monsters, g_engfuncs.pfnPEntityOfEntIndex(id), &tr);
 
-	push_trace_result(L, tr, start);
+	cslua_push_trace_result(L, tr, start);
 	return 1;
 }
 
@@ -908,6 +917,23 @@ static int l_deaths(lua_State *L)
 	return 0;
 }
 
+// p:defuser([bool]) - whether the player is carrying a defuse kit. A plain
+// public bool on CBasePlayer (player.h), the same GiveDefuser/CS_DropWeapon
+// logic already checks - setting it here is exactly what buying one does to
+// this field, just without paying for it.
+static int l_defuser(lua_State *L)
+{
+	CBasePlayer *player = self_cbase(L);
+
+	if (lua_isnoneornil(L, 2)) {
+		lua_pushboolean(L, player->m_bHasDefuser);
+		return 1;
+	}
+
+	player->m_bHasDefuser = lua_toboolean(L, 2) != 0;
+	return 0;
+}
+
 // p:give("weapon_ak47"[, opts]) - GiveNamedItemEx does the full pickup (ammo
 // included), same as walking over the weapon.
 //
@@ -1357,6 +1383,7 @@ static const luaL_Reg s_queries[] =
 	{ "velocity",  l_velocity },
 	{ "punchangle", l_punchangle },
 	{ "aim",       l_aim },
+	{ "pev",       l_pev },
 	{ "trace",     l_trace },
 	{ "trace_to",  l_trace_to },
 	{ "alive",     l_alive },
@@ -1384,6 +1411,7 @@ static const luaL_Reg s_queries[] =
 	{ "spawn",     l_spawn },
 	{ "money",     l_money },
 	{ "deaths",    l_deaths },
+	{ "defuser",   l_defuser },
 	{ "give",      l_give },
 	{ "strip",     l_strip },
 	{ "weapon",    l_weapon },

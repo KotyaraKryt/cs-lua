@@ -21,6 +21,7 @@ description: "Плоский список всех функций и метод�
 | [`access.all_groups`](access/read.md#all_groups) | access | Все группы |
 | [`p:ammo`](players/cs-state.md#ammo) | players | Читает или задаёт патроны в запасе |
 | [`ammo_buy`](hook/shop.md#ammo_buy) | hook | Игрок покупает патроны для оружия в руках |
+| [`vec.angle_vector`](vec/index.md#angle_vector) | vec | Единичный вектор направления взгляда для заданных углов |
 | [`e:angles`](ents/entity.md#angles) | ents | Читает или задаёт поворот сущности |
 | [`p:angles`](players/state.md#angles) | players | Поворот модели игрока |
 | [`p:armor`](players/state.md#armor) | players | Броня игрока |
@@ -60,12 +61,14 @@ description: "Плоский список всех функций и метод�
 | [`plugin.data_dir`](plugin/index.md#data_dir) | plugin | Каталог плагина под данные, переживающий обновление |
 | [`p:deaths`](players/cs-state.md#deaths) | players | Счётчик смертей |
 | [`access.declare`](access/declare.md#declare) | access | Объявляет ноду прав |
+| [`p:defuser`](players/cs-state.md#defuser) | players | Есть ли у игрока дефузер |
 | [`s:delete`](store/kv.md#delete) | store | Удаляет ключ |
 | [`timer.destroy`](timer/named.md#destroy) | timer | Снимает именованный таймер этого плагина |
 | [`e:detonate_on_touch`](ents/entity.md#detonate_on_touch) | ents | Следующее касание сразу запускает think сущности |
 | [`p:dhud`](players/messages.md#dhud) | players | То же через `SVC_DIRECTOR` — directed HUD |
 | [`datafile.dir`](store/datafile.md#dir) | store | Каталог, к которому привязан модуль |
 | [`plugin.dir`](plugin/index.md#dir) | plugin | Абсолютный путь к папке плагина |
+| [`vec.distance`](vec/index.md#distance) | vec | Расстояние между двумя точками |
 | [`p:drop`](players/cs-state.md#drop) | players | Выбрасывает оружие на пол |
 | [`p:ducking`](players/state.md#ducking) | players | Сидит ли игрок |
 | [`timer.every`](timer/anonymous.md#every) | timer | Вызывает функцию каждые N секунд, пока её не снимут |
@@ -114,6 +117,7 @@ description: "Плоский список всех функций и метод�
 | [`e:keyvalue`](ents/entity.md#keyvalue) | ents | Задаёт keyvalue — то же, что делает карта |
 | [`p:kick`](players/admin.md#kick) | players | Отключает игрока от сервера |
 | [`db:last_id`](db/database.md#last_id) | db | Rowid последней вставки |
+| [`vec.length`](vec/index.md#length) | vec | Длина вектора |
 | [`cmd.list`](cmd/index.md#list) | cmd | Возвращает имена зарегистрированных команд |
 | [`hook.list`](hook/namespace.md#list) | hook | Возвращает список подписок в порядке вызова |
 | [`players.list`](players/namespace.md#list) | players | Возвращает массив подключённых игроков |
@@ -132,6 +136,7 @@ description: "Плоский список всех функций и метод�
 | [`p:name`](players/identity.md#name) | players | Ник игрока |
 | [`menu.new`](menu/index.md#new) | menu | Создаёт меню |
 | [`p:noclip`](players/state.md#noclip) | players | Полёт сквозь стены |
+| [`vec.normalize`](vec/index.md#normalize) | vec | Вектор единичной длины в том же направлении |
 | [`p:on_ground`](players/state.md#on_ground) | players | Стоит ли игрок на земле |
 | [`plugin.on_unload`](plugin/index.md#on_unload) | plugin | Регистрирует обработчик выгрузки этого плагина |
 | [`db.open`](db/open.md#open) | db | Открывает базу в каталоге плагина |
@@ -143,6 +148,8 @@ description: "Плоский список всех функций и метод�
 | [`db:path`](db/database.md#path) | db | Путь к файлу базы |
 | [`s:pending`](store/kv.md#pending) | store | Сколько записей ждёт в очереди |
 | [`access.permissions`](access/read.md#permissions) | access | Все объявленные ноды |
+| [`e:pev`](ents/entity.md#pev) | ents | Читает или задаёт произвольное поле `entvars_t` по имени |
+| [`p:pev`](players/state.md#pev) | players | Читает или задаёт произвольное поле `entvars_t` по имени |
 | [`p:play_sound`](players/messages.md#play_sound) | players | Проигрывает игроку звук |
 | [`player_authorized`](hook/connection.md#player_authorized) | hook | Steam ответил, steamid наконец известен |
 | [`player_chat`](hook/connection.md#player_chat) | hook | Игрок написал в чат |
@@ -192,7 +199,10 @@ description: "Плоский список всех функций и метод�
 | [`p:strip`](players/cs-state.md#strip) | players | Забирает у игрока всё оружие |
 | [`p:team`](players/cs-state.md#team) | players | Читает или меняет сторону игрока |
 | [`sv.time`](sv/server.md#time) | sv | Серверные часы в секундах |
+| [`vec.to_angle`](vec/index.md#to_angle) | vec | Углы, которые смотрят вдоль вектора |
 | [`p:trace`](players/state.md#trace) | players | Пускает луч из глаз игрока туда, куда он смотрит |
+| [`ents.trace_hull`](ents/namespace.md#trace_hull) | ents | Пускает объём между двумя точками |
+| [`ents.trace_line`](ents/namespace.md#trace_line) | ents | Пускает луч между двумя произвольными точками |
 | [`p:trace_to`](players/state.md#trace_to) | players | Пускает луч из глаз игрока прямо к другому игроку |
 | [`db:transaction`](db/database.md#transaction) | db | Выполняет блок одной транзакцией |
 | [`access.user`](access/read.md#user) | access | Одна запись из `users.lua` |
@@ -208,4 +218,4 @@ description: "Плоский список всех функций и метод�
 | [`p:weapons`](players/cs-state.md#weapons) | players | Массив classname всего, что несёт игрок |
 | [`p:weight`](players/access.md#weight) | players | Вес игрока для иммунитета |
 
-Всего: 196.
+Всего: 206.

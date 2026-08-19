@@ -4,6 +4,8 @@
 #include "lua_natives.h"
 #include "lua_sound.h"
 #include "cslua_corpse.h"
+#include "lua_pev.h"
+#include "lua_player.h"
 
 #include <string.h>
 #include <vector>
@@ -337,6 +339,95 @@ static int l_find_in_sphere(lua_State *L)
 	return 1;
 }
 
+// Reads a {x, y, z} table, the same positional shape e:render's `color`
+// already uses - two of these back to back read better than six loose
+// numbers for ents.trace_line(a, b).
+static Vector read_point(lua_State *L, int idx)
+{
+	luaL_checktype(L, idx, LUA_TTABLE);
+
+	Vector v;
+	lua_rawgeti(L, idx, 1); v.x = (float)luaL_checknumber(L, -1); lua_pop(L, 1);
+	lua_rawgeti(L, idx, 2); v.y = (float)luaL_checknumber(L, -1); lua_pop(L, 1);
+	lua_rawgeti(L, idx, 3); v.z = (float)luaL_checknumber(L, -1); lua_pop(L, 1);
+	return v;
+}
+
+// Shared by ents.trace_line/ents.trace_hull: `opts.skip` (entity or player to
+// ignore) and `opts.ignore_monsters` (the engine's fNoMonsters), read out of
+// an optional table at stack index `idx`.
+static void read_trace_opts(lua_State *L, int idx, edict_t **skip, int *no_monsters)
+{
+	*skip = NULL;
+	*no_monsters = dont_ignore_monsters;
+
+	if (lua_isnoneornil(L, idx))
+		return;
+	luaL_checktype(L, idx, LUA_TTABLE);
+
+	lua_getfield(L, idx, "skip");
+	*skip = cslua_arg_to_edict(L, -1);
+	lua_pop(L, 1);
+
+	lua_getfield(L, idx, "ignore_monsters");
+	if (lua_toboolean(L, -1))
+		*no_monsters = ignore_monsters;
+	lua_pop(L, 1);
+}
+
+// ents.trace_line(a, b[, opts]) - a ray between two arbitrary points, not
+// tied to any player's eyes. p:trace()/p:trace_to() answer "what is this
+// player looking at"; this is the general-purpose version for effects,
+// custom projectiles, line-of-sight checks between two entities, and
+// anything else that needs a trace with nobody's eyes involved.
+static int l_trace_line(lua_State *L)
+{
+	require_world(L, "ents.trace_line");
+
+	Vector start = read_point(L, 1);
+	Vector end = read_point(L, 2);
+
+	edict_t *skip;
+	int ignore_monsters_val;
+	read_trace_opts(L, 3, &skip, &ignore_monsters_val);
+
+	TraceResult tr;
+	TRACE_LINE(start, end, ignore_monsters_val, skip, &tr);
+
+	cslua_push_trace_result(L, tr, start);
+	return 1;
+}
+
+// ents.trace_hull(a, b[, opts]) - like trace_line, but sweeps a hitbox-sized
+// box instead of an infinitesimal ray. `opts.hull` picks which one: 0 point
+// (same as trace_line), 1 human-sized (the default), 2 large, 3 head - the
+// same point_hull/human_hull/large_hull/head_hull values the engine uses.
+static int l_trace_hull(lua_State *L)
+{
+	require_world(L, "ents.trace_hull");
+
+	Vector start = read_point(L, 1);
+	Vector end = read_point(L, 2);
+
+	edict_t *skip;
+	int ignore_monsters_val;
+	read_trace_opts(L, 3, &skip, &ignore_monsters_val);
+
+	int hull = human_hull;
+	if (!lua_isnoneornil(L, 3)) {
+		lua_getfield(L, 3, "hull");
+		if (lua_isnumber(L, -1))
+			hull = (int)lua_tointeger(L, -1);
+		lua_pop(L, 1);
+	}
+
+	TraceResult tr;
+	TRACE_HULL(start, end, ignore_monsters_val, hull, skip, &tr);
+
+	cslua_push_trace_result(L, tr, start);
+	return 1;
+}
+
 // e:keyvalue("targetname", "door1") - the same channel the map file uses, so
 // anything a level designer can set on an entity is reachable here. Has to
 // happen before e:spawn(): Spawn is what reads the values.
@@ -597,9 +688,20 @@ static int l_render(lua_State *L)
 	return 0;
 }
 
+// e:pev(name[, v...]) - generic read/write for any entvars_t field by its
+// real name (see lua_pev.cpp for the field table and p:pev for the player
+// object's copy of this same method). Covers everything the typed methods
+// above don't: `e:pev("origin")` and `e:origin()` read the same bytes.
+static int l_pev(lua_State *L)
+{
+	edict_t *e = self_edict(L);
+	return cslua_pev_call(L, &e->v, 2);
+}
+
 static const luaL_Reg s_methods[] =
 {
 	{ "origin",    l_origin },
+	{ "pev",       l_pev },
 	{ "angles",    l_angles },
 	{ "velocity",  l_velocity },
 	{ "model",     l_model },
@@ -642,6 +744,8 @@ static const luaL_Reg s_api[] =
 	{ "create",       l_create_entity },
 	{ "find",         l_entities },
 	{ "in_sphere",    l_find_in_sphere },
+	{ "trace_line",   l_trace_line },
+	{ "trace_hull",   l_trace_hull },
 	{ "hide_corpses", l_hide_corpses },
 	{ NULL, NULL }
 };
