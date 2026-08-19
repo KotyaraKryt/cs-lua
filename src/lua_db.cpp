@@ -138,12 +138,12 @@ static OpenDb *self_db(lua_State *L, int index = 1)
 
 	lua_getfield(L, index, "id");
 	if (!lua_isnumber(L, -1))
-		luaL_error(L, "expected a database object, use db:method() and not db.method()");
+		luaL_error(L, "db: expected a database object, use db:method() and not db.method()");
 	int id = (int)lua_tointeger(L, -1);
 	lua_pop(L, 1);
 
 	if (id <= 0 || id >= (int)s_dbs.size() || !s_dbs[id].handle)
-		luaL_error(L, "this database is closed");
+		luaL_error(L, "db: this database is closed");
 
 	return &s_dbs[id];
 }
@@ -154,16 +154,16 @@ static OpenStmt *self_stmt(lua_State *L)
 
 	lua_getfield(L, 1, "id");
 	if (!lua_isnumber(L, -1))
-		luaL_error(L, "expected a statement object, use s:method() and not s.method()");
+		luaL_error(L, "st: expected a statement object, use s:method() and not s.method()");
 	int id = (int)lua_tointeger(L, -1);
 	lua_pop(L, 1);
 
 	if (id <= 0 || id >= (int)s_stmts.size() || !s_stmts[id].stmt)
-		luaL_error(L, "this statement is closed");
+		luaL_error(L, "st: this statement is closed");
 
 	OpenStmt *s = &s_stmts[id];
 	if (s->db <= 0 || s->db >= (int)s_dbs.size() || !s_dbs[s->db].handle)
-		luaL_error(L, "the database this statement belongs to is closed");
+		luaL_error(L, "st: the database this statement belongs to is closed");
 
 	return s;
 }
@@ -412,7 +412,7 @@ static int db_run(lua_State *L, RunMode mode)
 	}
 
 	if (err[0])
-		return luaL_error(L, "%s", err);
+		return luaL_error(L, "db: %s", err);
 
 	return 1;
 }
@@ -451,7 +451,7 @@ static int l_db_exec(lua_State *L)
 			sqlite3_free(msg);
 
 		if (err[0])
-			return luaL_error(L, "%s", err);
+			return luaL_error(L, "db:exec: %s", err);
 
 		warn_if_slow(ms, db->plugin, sql);
 		lua_pushinteger(L, sqlite3_changes(db->handle));
@@ -485,7 +485,7 @@ static int l_db_prepare(lua_State *L)
 	char err[256] = "";
 	sqlite3_stmt *stmt = prepare_one(db, sql, err, sizeof err);
 	if (!stmt)
-		return luaL_error(L, "%s", err);
+		return luaL_error(L, "db:prepare: %s", err);
 
 	OpenStmt entry;
 	entry.stmt = stmt;
@@ -506,7 +506,7 @@ static int l_db_transaction(lua_State *L)
 	luaL_checktype(L, 2, LUA_TFUNCTION);
 
 	if (db->in_transaction)
-		return luaL_error(L, "already inside db:transaction()");
+		return luaL_error(L, "db:transaction: already inside db:transaction()");
 
 	// Keep the id, not the pointer: the callback may open another database and
 	// grow the vector, which moves every element of it.
@@ -518,7 +518,7 @@ static int l_db_transaction(lua_State *L)
 		char err[256];
 		cslua_snprintf(err, sizeof err, "%s", sqlite3_errmsg(db->handle));
 		err[sizeof err - 1] = '\0';
-		return luaL_error(L, "%s", err);
+		return luaL_error(L, "db:transaction: %s", err);
 	}
 
 	s_dbs[db_id].in_transaction = true;
@@ -545,7 +545,7 @@ static int l_db_transaction(lua_State *L)
 		cslua_snprintf(err, sizeof err, "commit failed: %s", sqlite3_errmsg(handle));
 		err[sizeof err - 1] = '\0';
 		sqlite3_exec(handle, "ROLLBACK", NULL, NULL, NULL);
-		return luaL_error(L, "%s", err);
+		return luaL_error(L, "db:transaction: %s", err);
 	}
 
 	return 1;
@@ -624,7 +624,7 @@ static int stmt_run(lua_State *L, RunMode mode)
 	sqlite3_reset(s->stmt);
 
 	if (err[0])
-		return luaL_error(L, "%s", err);
+		return luaL_error(L, "st: %s", err);
 
 	return 1;
 }

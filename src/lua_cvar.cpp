@@ -38,7 +38,7 @@ static const char *cvar_object_name(lua_State *L)
 	lua_getfield(L, 1, "name");
 	const char *name = lua_tostring(L, -1);
 	if (!name)
-		luaL_error(L, "expected a cvar object, use c:method() not c.method()");
+		luaL_error(L, "c: expected a cvar object, use c:method() not c.method()");
 	lua_pop(L, 1);
 	return name;
 }

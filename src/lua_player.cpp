@@ -25,13 +25,13 @@ static int self_id(lua_State *L)
 
 	lua_getfield(L, 1, "id");
 	if (!lua_isnumber(L, -1))
-		return luaL_error(L, "expected a player object, use p:method() and not p.method()");
+		return luaL_error(L, "p: expected a player object, use p:method() and not p.method()");
 
 	int id = (int)lua_tointeger(L, -1);
 	lua_pop(L, 1);
 
 	if (id < 0 || id >= CSLUA_MAXPLAYERS)
-		return luaL_error(L, "player index %d out of range", id);
+		return luaL_error(L, "p: player index %d out of range", id);
 
 	return id;
 }
@@ -41,7 +41,7 @@ static int self_player_id(lua_State *L)
 {
 	int id = self_id(L);
 	if (id == 0)
-		return luaL_error(L, "this method is not available on 'all'");
+		return luaL_error(L, "p: this method is not available on 'all'");
 	return id;
 }
 
@@ -116,11 +116,11 @@ static entvars_t *self_pev(lua_State *L)
 	int id = self_player_id(L);
 
 	if (!g_players.is_connected(id))
-		luaL_error(L, "player #%d is not connected", id);
+		luaL_error(L, "p: player #%d is not connected", id);
 
 	edict_t *e = g_engfuncs.pfnPEntityOfEntIndex(id);
 	if (!e || e->free)
-		luaL_error(L, "player #%d has no valid entity", id);
+		luaL_error(L, "p: player #%d has no valid entity", id);
 
 	return &e->v;
 }
@@ -324,16 +324,16 @@ static int l_trace_to(lua_State *L)
 	luaL_checktype(L, 2, LUA_TTABLE);
 	lua_getfield(L, 2, "id");
 	if (!lua_isnumber(L, -1))
-		return luaL_error(L, "trace_to: expected a player object");
+		return luaL_error(L, "p:trace_to: expected a player object");
 	int other_id = (int)lua_tointeger(L, -1);
 	lua_pop(L, 1);
 
 	if (other_id <= 0 || other_id >= CSLUA_MAXPLAYERS || !g_players.is_connected(other_id))
-		return luaL_error(L, "trace_to: target player is not connected");
+		return luaL_error(L, "p:trace_to: target player is not connected");
 
 	edict_t *other_edict = g_engfuncs.pfnPEntityOfEntIndex(other_id);
 	if (!other_edict || other_edict->free)
-		return luaL_error(L, "trace_to: target player has no valid entity");
+		return luaL_error(L, "p:trace_to: target player has no valid entity");
 
 	entvars_t *other_pev = &other_edict->v;
 
@@ -417,7 +417,7 @@ static int l_button(lua_State *L)
 	const char *name = luaL_checkstring(L, 2);
 	int bit = button_bit(name);
 	if (!bit)
-		return luaL_error(L, "button: unknown button '%s'", name);
+		return luaL_error(L, "p:button: unknown button '%s'", name);
 
 	lua_pushboolean(L, (self_pev(L)->button & bit) != 0);
 	return 1;
@@ -577,11 +577,11 @@ static CBasePlayer *self_cbase(lua_State *L)
 	int id = self_player_id(L);
 
 	if (!cslua_regamedll_ready())
-		luaL_error(L, "%s requires ReGameDLL, which is not loaded", "this method");
+		luaL_error(L, "p: %s requires ReGameDLL, which is not loaded", "this method");
 
 	CBasePlayer *player = cslua_player_entity(id);
 	if (!player)
-		luaL_error(L, "player #%d is not in the game yet", id);
+		luaL_error(L, "p: player #%d is not in the game yet", id);
 
 	return player;
 }
@@ -599,7 +599,7 @@ static bool opt_flag(lua_State *L, int index, const char *key, const char *metho
 		return false;
 
 	if (!lua_istable(L, index)) {
-		luaL_error(L, "%s: options must be a table, like { %s = true }", method, key);
+		luaL_error(L, "p:%s: options must be a table, like { %s = true }", method, key);
 		return false;			// luaL_error does not return
 	}
 
@@ -657,7 +657,7 @@ static int l_team(lua_State *L)
 	if (!strcmp(want, "CT"))        team = CT;
 	else if (!strcmp(want, "T"))    team = TERRORIST;
 	else if (!strcmp(want, "SPEC")) team = SPECTATOR;
-	else return luaL_error(L, "team: expected 'CT', 'T' or 'SPEC', got '%s'", want);
+	else return luaL_error(L, "p:team: expected 'CT', 'T' or 'SPEC', got '%s'", want);
 
 	bool force = opt_flag(L, 3, "force", "team");
 	bool from_limbo = player->m_iTeam == SPECTATOR || player->m_iTeam == UNASSIGNED;
@@ -772,7 +772,7 @@ static int l_exec(lua_State *L)
 	// The engine's buffer for this is 128 bytes and it does not truncate
 	// politely, so refuse anything that would not fit.
 	if (strlen(cmd) > 120)
-		return luaL_error(L, "exec: command is too long (%d chars, 120 max)", (int)strlen(cmd));
+		return luaL_error(L, "p:exec: command is too long (%d chars, 120 max)", (int)strlen(cmd));
 
 	CLIENT_COMMAND(e, "%s\n", cmd);
 	return 0;
@@ -1507,13 +1507,13 @@ static int l_player_method(lua_State *L)
 	luaL_checktype(L, 2, LUA_TFUNCTION);
 
 	if (s_methods_ref == LUA_NOREF)
-		return luaL_error(L, "players.method() called before the player API was set up");
+		return luaL_error(L, "players.method: called before the player API was set up");
 
 	lua_rawgeti(L, LUA_REGISTRYINDEX, s_methods_ref);
 
 	lua_getfield(L, -1, name);
 	if (!lua_isnil(L, -1))
-		return luaL_error(L, "player method '%s' already exists", name);
+		return luaL_error(L, "players.method: player method '%s' already exists", name);
 	lua_pop(L, 1);
 
 	lua_pushvalue(L, 2);

@@ -179,11 +179,11 @@ edict_t *cslua_arg_to_edict(lua_State *L, int idx)
 	}
 
 	if (!has_field)
-		luaL_error(L, "pev: expected an entity or player object, or nil");
+		luaL_error(L, "e:pev: expected an entity or player object, or nil");
 
 	edict_t *e = g_engfuncs.pfnPEntityOfEntIndex(n);
 	if (!e || e->free)
-		luaL_error(L, "pev: target has no valid entity");
+		luaL_error(L, "e:pev: target has no valid entity");
 	return e;
 }
 
@@ -192,7 +192,7 @@ int cslua_pev_call(lua_State *L, entvars_t *pev, int name_arg)
 	const char *name = luaL_checkstring(L, name_arg);
 	const PevField *field = find_pev_field(name);
 	if (!field)
-		return luaL_error(L, "pev: unknown field '%s'", name);
+		return luaL_error(L, "e:pev: unknown field '%s'", name);
 
 	int value_arg = name_arg + 1;
 
@@ -256,5 +256,5 @@ int cslua_pev_call(lua_State *L, entvars_t *pev, int name_arg)
 	}
 	}
 
-	return luaL_error(L, "pev: unhandled field type for '%s'", name);
+	return luaL_error(L, "e:pev: unhandled field type for '%s'", name);
 }

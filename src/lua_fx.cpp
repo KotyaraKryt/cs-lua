@@ -42,7 +42,7 @@ static const char *require_sprite(lua_State *L, int table)
 {
 	lua_getfield(L, table, "sprite");
 	if (!lua_isstring(L, -1))
-		luaL_error(L, "opts.sprite is required and must be a path already precached with res.model");
+		luaL_error(L, "fx: opts.sprite is required and must be a path already precached with res.model");
 	const char *s = lua_tostring(L, -1);
 	lua_pop(L, 1);
 	return s;

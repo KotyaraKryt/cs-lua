@@ -204,7 +204,7 @@ int LuaEngine::l_require(lua_State *L)
 	int index = (int)lua_tointeger(L, lua_upvalueindex(1));
 
 	if (index < 0 || index >= (int)g_lua.m_plugins.size())
-		return luaL_error(L, "require() called outside of a plugin");
+		return luaL_error(L, "require: require() called outside of a plugin");
 
 	LuaPlugin &plugin = g_lua.m_plugins[index];
 
@@ -212,7 +212,7 @@ int LuaEngine::l_require(lua_State *L)
 	lua_getfield(L, -1, modname);
 	if (!lua_isnil(L, -1)) {
 		if (lua_isboolean(L, -1) && !lua_toboolean(L, -1))
-			return luaL_error(L, "circular require of '%s' in plugin '%s'", modname, plugin.id.c_str());
+			return luaL_error(L, "require: circular require of '%s' in plugin '%s'", modname, plugin.id.c_str());
 		return 1;
 	}
 	lua_pop(L, 1);
@@ -222,7 +222,7 @@ int LuaEngine::l_require(lua_State *L)
 		// Say where we looked: nine times out of ten the fix is visible right
 		// there (a file sitting in lib/ wants require("lib.name")).
 		std::string tried = g_lua.module_candidates(index, modname);
-		return luaL_error(L, "module '%s' not found for plugin '%s'. Looked in:%s",
+		return luaL_error(L, "require: module '%s' not found for plugin '%s'. Looked in:%s",
 			modname, plugin.id.c_str(), tried.c_str());
 	}
 
@@ -231,7 +231,7 @@ int LuaEngine::l_require(lua_State *L)
 	lua_setfield(L, -2, modname);
 
 	if (luaL_loadfile(L, path.c_str()) != 0)
-		return luaL_error(L, "%s", lua_tostring(L, -1));
+		return luaL_error(L, "require: %s", lua_tostring(L, -1));
 
 	// Every file of a plugin shares the plugin's environment.
 	lua_rawgeti(L, LUA_REGISTRYINDEX, plugin.env_ref);

@@ -46,7 +46,7 @@ static int l_print(lua_State *L)
 
 		const char *s = lua_tostring(L, -1);
 		if (!s)
-			return luaL_error(L, "'tostring' must return a string to 'print'");
+			return luaL_error(L, "print: 'tostring' must return a string to 'print'");
 
 		if (i > 1)
 			out += '\t';
@@ -101,7 +101,7 @@ static int l_plugin_call(lua_State *L)
 
 	LuaPlugin *plugin = g_lua.loading_plugin();
 	if (!plugin)
-		return luaL_error(L, "plugin{} can only be called while a plugin is loading");
+		return luaL_error(L, "plugin: plugin{} can only be called while a plugin is loading");
 
 	plugin->declared = true;
 
@@ -123,7 +123,7 @@ static int l_plugin_call(lua_State *L)
 		lua_pop(L, 1);
 
 		if (want > CSLUA_API_VERSION)
-			return luaL_error(L, "plugin '%s' needs cs-lua API v%d, this build is v%d - update cs-lua",
+			return luaL_error(L, "plugin: '%s' needs cs-lua API v%d, this build is v%d - update cs-lua",
 				plugin->id.c_str(), want, CSLUA_API_VERSION);
 	} else {
 		lua_pop(L, 1);
@@ -140,7 +140,7 @@ static int l_plugin_call(lua_State *L)
 		std::string want = lua_tostring(L, -1);
 		lua_pop(L, 1);
 		if (cslua_version_less(CSLUA_VERSION, want.c_str()))
-			return luaL_error(L, "plugin '%s' needs cs-lua v%s or newer, this build is v%s",
+			return luaL_error(L, "plugin: '%s' needs cs-lua v%s or newer, this build is v%s",
 				plugin->id.c_str(), want.c_str(), CSLUA_VERSION);
 	} else {
 		lua_pop(L, 1);
@@ -151,7 +151,7 @@ static int l_plugin_call(lua_State *L)
 		std::string want = lua_tostring(L, -1);
 		lua_pop(L, 1);
 		if (cslua_version_less(want.c_str(), CSLUA_VERSION))
-			return luaL_error(L, "plugin '%s' targets cs-lua up to v%s, this build is v%s - "
+			return luaL_error(L, "plugin: '%s' targets cs-lua up to v%s, this build is v%s - "
 				"it may rely on behavior that changed since", plugin->id.c_str(), want.c_str(), CSLUA_VERSION);
 	} else {
 		lua_pop(L, 1);
@@ -170,7 +170,7 @@ static int l_plugin_call(lua_State *L)
 				const char *mod = lua_tostring(L, -1);
 				if (g_lua.resolve_module(g_lua.loading_index(), mod).empty()) {
 					lua_pop(L, 2);
-					return luaL_error(L, "plugin '%s' requires module '%s', which was not found",
+					return luaL_error(L, "plugin: '%s' requires module '%s', which was not found",
 						plugin->id.c_str(), mod);
 				}
 				plugin->required_modules.push_back(mod);

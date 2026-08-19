@@ -35,7 +35,7 @@ static edict_t *self_edict(lua_State *L, bool required = true)
 
 	lua_getfield(L, 1, "index");
 	if (!lua_isnumber(L, -1))
-		luaL_error(L, "expected an entity object, use e:method() and not e.method()");
+		luaL_error(L, "e: expected an entity object, use e:method() and not e.method()");
 	int index = (int)lua_tointeger(L, -1);
 	lua_pop(L, 1);
 
@@ -47,14 +47,14 @@ static edict_t *self_edict(lua_State *L, bool required = true)
 	// engine about them would be the same crash as touching one too early.
 	if (!cslua_world_ready()) {
 		if (required)
-			luaL_error(L, "entity #%d is gone (the map it belonged to has ended)", index);
+			luaL_error(L, "e: entity #%d is gone (the map it belonged to has ended)", index);
 		return NULL;
 	}
 
 	edict_t *e = g_engfuncs.pfnPEntityOfEntIndex(index);
 	if (!e || e->free || e->serialnumber != serial) {
 		if (required)
-			luaL_error(L, "entity #%d is gone", index);
+			luaL_error(L, "e: entity #%d is gone", index);
 		return NULL;
 	}
 
@@ -258,7 +258,7 @@ static int l_tostring(lua_State *L)
 
 static int l_readonly(lua_State *L)
 {
-	return luaL_error(L, "entity objects are read-only, keep your own state in a table");
+	return luaL_error(L, "e: entity objects are read-only, keep your own state in a table");
 }
 
 // ents.create("info_target") -> a bare entity at the world origin, or nil if
@@ -497,16 +497,16 @@ static int l_attach(lua_State *L)
 	luaL_checktype(L, 2, LUA_TTABLE);
 	lua_getfield(L, 2, "id");
 	if (!lua_isnumber(L, -1))
-		return luaL_error(L, "attach: expected a player object");
+		return luaL_error(L, "e:attach: expected a player object");
 	int id = (int)lua_tointeger(L, -1);
 	lua_pop(L, 1);
 
 	if (id <= 0 || id >= CSLUA_MAXPLAYERS)
-		return luaL_error(L, "attach: invalid player");
+		return luaL_error(L, "e:attach: invalid player");
 
 	edict_t *parent = g_engfuncs.pfnPEntityOfEntIndex(id);
 	if (!parent || parent->free)
-		return luaL_error(L, "attach: target player has no valid entity");
+		return luaL_error(L, "e:attach: target player has no valid entity");
 
 	Vector offset(
 		(float)luaL_optnumber(L, 3, 0),

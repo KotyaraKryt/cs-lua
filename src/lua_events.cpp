@@ -129,7 +129,7 @@ static int l_event_cancel_refused(lua_State *L)
 	lua_getfield(L, 1, "name");
 	const char *name = lua_tostring(L, -1);
 
-	return luaL_error(L, "event '%s' cannot be cancelled - it reports something "
+	return luaL_error(L, "e:cancel: event '%s' cannot be cancelled - it reports something "
 		"that already happened", name ? name : "?");
 }
 
@@ -190,7 +190,7 @@ int LuaEvents::l_add(lua_State *L)
 		// No dot, and not a msg:Name receive hook either: this is a
 		// misspelled engine event, not somebody's own. Registering it would
 		// hand back a handler that never fires and never complains.
-		return luaL_error(L, "unknown event '%s'. Engine events: %s. "
+		return luaL_error(L, "hook.add: unknown event '%s'. Engine events: %s. "
 			"A plugin's own event needs a dot in the name, like 'shop.bought'. "
 			"To receive a network message, use 'msg:Name', like 'msg:TextMsg'",
 			name, known_events().c_str());

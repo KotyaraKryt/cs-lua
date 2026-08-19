@@ -91,7 +91,7 @@ static int l_show_menu(lua_State *L)
 	const char *text = luaL_checkstring(L, 4);
 
 	if (id < 1 || id >= CSLUA_MAXPLAYERS)
-		return luaL_error(L, "show_menu: player index %d out of range", id);
+		return luaL_error(L, "menu._show: player index %d out of range", id);
 
 	if (!g_players.is_connected(id))
 		return 0;
@@ -112,7 +112,7 @@ static int l_close_menu(lua_State *L)
 	int id = (int)luaL_checkinteger(L, 1);
 
 	if (id < 1 || id >= CSLUA_MAXPLAYERS)
-		return luaL_error(L, "close_menu: player index %d out of range", id);
+		return luaL_error(L, "menu._close: player index %d out of range", id);
 
 	if (g_players.is_connected(id))
 		send_menu(id, 0, 0, " ");

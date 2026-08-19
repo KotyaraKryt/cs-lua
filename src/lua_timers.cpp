@@ -89,7 +89,7 @@ static int l_every(lua_State *L)
 	luaL_checktype(L, 2, LUA_TFUNCTION);
 
 	if (interval <= 0.0f)
-		return luaL_error(L, "timer.every needs a positive interval, got %f", interval);
+		return luaL_error(L, "timer.every: needs a positive interval, got %f", interval);
 
 	lua_pushinteger(L, add_timer(L, interval, interval, opt_persist(L, 3)));
 	return 1;
@@ -143,7 +143,7 @@ static int l_create(lua_State *L)
 	bool persist = opt_persist(L, 4);
 
 	if (seconds <= 0.0f)
-		return luaL_error(L, "timer.create('%s') needs a positive interval, got %f",
+		return luaL_error(L, "timer.create: '%s' needs a positive interval, got %f",
 			name, seconds);
 
 	int plugin = g_lua.current_index();

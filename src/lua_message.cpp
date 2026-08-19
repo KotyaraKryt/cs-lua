@@ -316,7 +316,7 @@ static void opt_color(lua_State *L, int table, const char *key,
 		const char *name = lua_tostring(L, -1);
 		if (!parse_color_name(name, r, g, b)) {
 			lua_pop(L, 1);
-			luaL_error(L, "unknown colour '%s' - use a palette name, "
+			luaL_error(L, "p: unknown colour '%s' - use a palette name, "
 				"\"#rrggbb\" or { r, g, b }", name);
 			return;
 		}

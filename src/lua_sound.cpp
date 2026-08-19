@@ -208,7 +208,7 @@ static int add_resource(lua_State *L, std::vector<Entry> &list, bool models)
 	if (!has_room(used)) {
 		disable_plugin(g_lua.current_index(),
 			models ? "model table is full" : "sound table is full", name);
-		return luaL_error(L, "precache limit reached (%d/%d)", used + 1, PRECACHE_LIMIT);
+		return luaL_error(L, "res: precache limit reached (%d/%d)", used + 1, PRECACHE_LIMIT);
 	}
 
 	int slot = models ? PRECACHE_MODEL(name) : PRECACHE_SOUND(name);

@@ -415,13 +415,13 @@ Conn *self_conn(lua_State *L, int index = 1)
 
 	lua_getfield(L, index, "id");
 	if (!lua_isnumber(L, -1))
-		luaL_error(L, "expected a mysql connection, use conn:method() and not conn.method()");
+		luaL_error(L, "conn: expected a mysql connection, use conn:method() and not conn.method()");
 	int id = (int)lua_tointeger(L, -1);
 	lua_pop(L, 1);
 
 	Conn *conn = lookup_conn(id);
 	if (!conn)
-		luaL_error(L, "invalid mysql connection");
+		luaL_error(L, "conn: invalid mysql connection");
 
 	return conn;
 }
@@ -456,7 +456,7 @@ Param to_param(lua_State *L, int index)
 		break;
 	}
 	default:
-		luaL_error(L, "cannot bind a %s as a mysql parameter (argument %d)",
+		luaL_error(L, "conn: cannot bind a %s as a mysql parameter (argument %d)",
 			luaL_typename(L, index), index);
 	}
 	return p;
@@ -478,7 +478,7 @@ int l_query(lua_State *L)
 
 	int wanted = count_placeholders(sql);
 	if (given != wanted)
-		return luaL_error(L, "query takes %d parameter(s), %d given", wanted, given);
+		return luaL_error(L, "conn: query takes %d parameter(s), %d given", wanted, given);
 
 	Request req;
 	req.id = s_next_id++;
@@ -522,7 +522,7 @@ int l_close(lua_State *L)
 
 int l_readonly(lua_State *L)
 {
-	return luaL_error(L, "mysql connections are read-only, keep your own state in a table");
+	return luaL_error(L, "conn: mysql connections are read-only, keep your own state in a table");
 }
 
 const char *opt_field_str(lua_State *L, int index, const char *key, const char *def)
