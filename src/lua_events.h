@@ -47,6 +47,15 @@ enum CsLuaEvent
 	CSLUA_EVENT_WEAPON_BUY,			// buy menu bought a weapon; cancel to block it
 	CSLUA_EVENT_AMMO_BUY,			// buy menu bought ammo for the held weapon; cancel to block it
 	CSLUA_EVENT_ITEM_BUY,			// buy menu bought armor/nvg/defuser/shield/a grenade; cancel to block it
+	CSLUA_EVENT_MONEY_CHANGE,		// AddAccount is about to add/subtract money; cancel to block it
+	CSLUA_EVENT_AMMO_PICKUP,			// GiveAmmo is about to top up a reserve; cancel to block it
+	CSLUA_EVENT_WEAPON_DROP,			// about to drop a weapon to the ground; cancel to block it
+	CSLUA_EVENT_PLAYER_JUMP,
+	CSLUA_EVENT_PLAYER_DUCK,
+	CSLUA_EVENT_PLAYER_SPECTATE,		// entered observer mode
+	CSLUA_EVENT_PLAYER_RADIO,		// a radio command was used; cancel to block the sound/message
+	CSLUA_EVENT_PLAYER_CAN_RESPAWN,	// pre: cancel to block a respawn the game would otherwise allow
+	CSLUA_EVENT_BOMB_DEFUSE_START,	// defusing just started (not yet finished - see bomb_defused)
 
 	CSLUA_EVENT_COUNT
 };
@@ -265,6 +274,43 @@ public:
 	// "defusekit", "shield" - see BuyItemMenuSlot in the SDK. Same cancel
 	// contract as fire_weapon_buy.
 	bool fire_item_buy(int player, const char *item);
+
+	// AddAccount is about to change a player's money - round bonus, a kill
+	// reward, a hostage action, buying something (see reason). amount can be
+	// negative (spending). Cancel to block the change entirely; the caller
+	// must then skip AddAccount's own chain.
+	bool fire_money_change(int player, int amount, const char *reason);
+
+	// GiveAmmo is about to top up weapon's reserve by count, capped at max.
+	// Cancel to block it - the caller returns -1 (GiveAmmo's own "failed"
+	// value) instead of calling the chain.
+	bool fire_ammo_pickup(int player, const char *weapon, int count, int max);
+
+	// DropPlayerItem is about to put weapon on the ground. Cancel to block
+	// the drop entirely.
+	bool fire_weapon_drop(int player, const char *weapon);
+
+	// Player.Jump()/Duck() ran. Notify only - blocking either mid-flight
+	// would leave player movement in a state the engine did not expect.
+	void fire_player_jump(int player);
+	void fire_player_duck(int player);
+
+	// StartObserver just ran - the player is now spectating.
+	void fire_player_spectate(int player);
+
+	// Radio() is about to play sentence/sample to whoever can hear it.
+	// Cancel to block the sound and the "<player> Radio: ..." console line.
+	bool fire_player_radio(int player, const char *sentence, const char *sample);
+
+	// FPlayerCanRespawn's pre-check: the game is about to decide whether
+	// this player may respawn. Cancel to force a "no" regardless of what the
+	// game's own rules would have said - the caller then returns FALSE
+	// without ever asking the chain.
+	bool fire_player_can_respawn(int player);
+
+	// DefuseBombStart just ran - the player began defusing. defuser tells
+	// whether they are using a defuse kit (faster) or bare hands.
+	void fire_bomb_defuse_start(int player, bool defuser);
 
 	// TakeDamage passes damage by reference, so a handler can change it or
 	// zero it out. Returns the final damage the game should apply: whatever

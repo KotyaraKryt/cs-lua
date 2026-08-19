@@ -43,6 +43,15 @@ static const char *const s_event_names[CSLUA_EVENT_COUNT] =
 	"weapon_buy",
 	"ammo_buy",
 	"item_buy",
+	"money_change",
+	"ammo_pickup",
+	"weapon_drop",
+	"player_jump",
+	"player_duck",
+	"player_spectate",
+	"player_radio",
+	"player_can_respawn",
+	"bomb_defuse_start",
 };
 
 static int find_event(const char *name)
@@ -62,7 +71,18 @@ static bool is_cancellable(int ev)
 		|| ev == CSLUA_EVENT_PLAYER_CHAT
 		|| ev == CSLUA_EVENT_PLAYER_HURT
 		|| ev == CSLUA_EVENT_GRENADE_EXPLODE
-		|| ev == CSLUA_EVENT_WEAPON_THROW;
+		|| ev == CSLUA_EVENT_WEAPON_THROW
+		// Bug fix: these three were added (commit cae02d9) without adding
+		// them here, so e:cancel() on any of them raised "event cannot be
+		// cancelled" despite the docs promising it blocks the purchase.
+		|| ev == CSLUA_EVENT_WEAPON_BUY
+		|| ev == CSLUA_EVENT_AMMO_BUY
+		|| ev == CSLUA_EVENT_ITEM_BUY
+		|| ev == CSLUA_EVENT_MONEY_CHANGE
+		|| ev == CSLUA_EVENT_AMMO_PICKUP
+		|| ev == CSLUA_EVENT_WEAPON_DROP
+		|| ev == CSLUA_EVENT_PLAYER_RADIO
+		|| ev == CSLUA_EVENT_PLAYER_CAN_RESPAWN;
 }
 
 static std::string known_events()
@@ -1062,5 +1082,87 @@ bool LuaEvents::fire_item_buy(int player, const char *item)
 	return run(CSLUA_EVENT_ITEM_BUY, [=](lua_State *L) {
 		set_player_or_nil(L, player, "player");
 		set_string(L, iname, "item");
+	});
+}
+
+bool LuaEvents::fire_money_change(int player, int amount, const char *reason)
+{
+	std::string rname = reason ? reason : "";
+
+	return run(CSLUA_EVENT_MONEY_CHANGE, [=](lua_State *L) {
+		set_player_or_nil(L, player, "player");
+		set_number(L, amount, "amount");
+		set_string(L, rname, "reason");
+	});
+}
+
+bool LuaEvents::fire_ammo_pickup(int player, const char *weapon, int count, int max)
+{
+	std::string wname = weapon ? weapon : "";
+
+	return run(CSLUA_EVENT_AMMO_PICKUP, [=](lua_State *L) {
+		set_player_or_nil(L, player, "player");
+		set_string(L, wname, "weapon");
+		set_number(L, count, "count");
+		set_number(L, max, "max");
+	});
+}
+
+bool LuaEvents::fire_weapon_drop(int player, const char *weapon)
+{
+	std::string wname = weapon ? weapon : "";
+
+	return run(CSLUA_EVENT_WEAPON_DROP, [=](lua_State *L) {
+		set_player_or_nil(L, player, "player");
+		set_string(L, wname, "weapon");
+	});
+}
+
+void LuaEvents::fire_player_jump(int player)
+{
+	notify(CSLUA_EVENT_PLAYER_JUMP, [=](lua_State *L) {
+		set_player_or_nil(L, player, "player");
+	});
+}
+
+void LuaEvents::fire_player_duck(int player)
+{
+	notify(CSLUA_EVENT_PLAYER_DUCK, [=](lua_State *L) {
+		set_player_or_nil(L, player, "player");
+	});
+}
+
+void LuaEvents::fire_player_spectate(int player)
+{
+	notify(CSLUA_EVENT_PLAYER_SPECTATE, [=](lua_State *L) {
+		set_player_or_nil(L, player, "player");
+	});
+}
+
+bool LuaEvents::fire_player_radio(int player, const char *sentence, const char *sample)
+{
+	std::string sen = sentence ? sentence : "";
+	std::string samp = sample ? sample : "";
+
+	return run(CSLUA_EVENT_PLAYER_RADIO, [=](lua_State *L) {
+		set_player_or_nil(L, player, "player");
+		set_string(L, sen, "sentence");
+		set_string(L, samp, "sample");
+	});
+}
+
+bool LuaEvents::fire_player_can_respawn(int player)
+{
+	return run(CSLUA_EVENT_PLAYER_CAN_RESPAWN, [=](lua_State *L) {
+		set_player_or_nil(L, player, "player");
+	});
+}
+
+void LuaEvents::fire_bomb_defuse_start(int player, bool defuser)
+{
+	notify(CSLUA_EVENT_BOMB_DEFUSE_START, [=](lua_State *L) {
+		set_player_or_nil(L, player, "player");
+		lua_pushboolean(L, defuser);
+		lua_setfield(L, -2, "defuser");
 	});
 }

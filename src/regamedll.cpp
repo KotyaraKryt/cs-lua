@@ -514,6 +514,128 @@ static void hook_buy_item(IReGameHook_BuyItem *chain, CBasePlayer *player, int i
 	chain->callNext(player, item);
 }
 
+// player.h's RewardType, named for Lua the same way buy_item_name() names
+// BuyItemMenuSlot - a plugin sees why the money moved, not a raw enum.
+static const char *reward_type_name(RewardType type)
+{
+	switch (type) {
+	case RT_ROUND_BONUS:             return "round_bonus";
+	case RT_PLAYER_RESET:            return "player_reset";
+	case RT_PLAYER_JOIN:             return "player_join";
+	case RT_PLAYER_SPEC_JOIN:        return "player_spec_join";
+	case RT_PLAYER_BOUGHT_SOMETHING: return "bought_something";
+	case RT_HOSTAGE_TOOK:            return "hostage_took";
+	case RT_HOSTAGE_RESCUED:         return "hostage_rescued";
+	case RT_HOSTAGE_DAMAGED:         return "hostage_damaged";
+	case RT_HOSTAGE_KILLED:          return "hostage_killed";
+	case RT_TEAMMATES_KILLED:        return "teammates_killed";
+	case RT_ENEMY_KILLED:            return "enemy_killed";
+	case RT_INTO_GAME:               return "into_game";
+	case RT_VIP_KILLED:              return "vip_killed";
+	case RT_VIP_RESCUED_MYSELF:      return "vip_rescued_myself";
+	default:                         return "none";
+	}
+}
+
+static void hook_add_account(IReGameHook_CBasePlayer_AddAccount *chain, CBasePlayer *player,
+	int amount, RewardType type, bool bTrackChange)
+{
+	int slot = (player && player->IsPlayer()) ? player->entindex() : 0;
+
+	bool cancelled = g_events.fire_money_change(slot, amount, reward_type_name(type));
+	if (cancelled)
+		return;					// balance untouched
+
+	chain->callNext(player, amount, type, bTrackChange);
+}
+
+static int hook_give_ammo(IReGameHook_CBasePlayer_GiveAmmo *chain, CBasePlayer *player,
+	int iCount, const char *pszName, int iMax)
+{
+	int slot = (player && player->IsPlayer()) ? player->entindex() : 0;
+
+	bool cancelled = g_events.fire_ammo_pickup(slot, pszName ? pszName : "", iCount, iMax);
+	if (cancelled)
+		return -1;				// GiveAmmo's own "nothing given" return
+
+	return chain->callNext(player, iCount, pszName, iMax);
+}
+
+static CBaseEntity *hook_drop_item(IReGameHook_CBasePlayer_DropPlayerItem *chain, CBasePlayer *player,
+	const char *pszItemName)
+{
+	int slot = (player && player->IsPlayer()) ? player->entindex() : 0;
+
+	bool cancelled = g_events.fire_weapon_drop(slot, pszItemName ? pszItemName : "");
+	if (cancelled)
+		return NULL;			// weapon stays in the player's hands
+
+	return chain->callNext(player, pszItemName);
+}
+
+// Jump/Duck can't be blocked here - by the time this fires the engine has
+// already committed to the frame's movement, and skipping the chain would
+// leave player physics half-applied. Notify only.
+static void hook_jump(IReGameHook_CBasePlayer_Jump *chain, CBasePlayer *player)
+{
+	chain->callNext(player);
+
+	if (player && player->IsPlayer())
+		g_events.fire_player_jump(player->entindex());
+}
+
+static void hook_duck(IReGameHook_CBasePlayer_Duck *chain, CBasePlayer *player)
+{
+	chain->callNext(player);
+
+	if (player && player->IsPlayer())
+		g_events.fire_player_duck(player->entindex());
+}
+
+static void hook_start_observer(IReGameHook_CBasePlayer_StartObserver *chain, CBasePlayer *player,
+	Vector &vecPosition, Vector &vecViewAngle)
+{
+	chain->callNext(player, vecPosition, vecViewAngle);
+
+	if (player && player->IsPlayer())
+		g_events.fire_player_spectate(player->entindex());
+}
+
+static void hook_radio(IReGameHook_CBasePlayer_Radio *chain, CBasePlayer *player,
+	const char *radio_sentence, const char *sample, short pitch, bool bSpecific)
+{
+	int slot = (player && player->IsPlayer()) ? player->entindex() : 0;
+
+	bool cancelled = g_events.fire_player_radio(slot, radio_sentence ? radio_sentence : "",
+		sample ? sample : "");
+	if (cancelled)
+		return;					// no sound, no "Radio:" console line
+
+	chain->callNext(player, radio_sentence, sample, pitch, bSpecific);
+}
+
+static BOOL hook_can_respawn(IReGameHook_CSGameRules_FPlayerCanRespawn *chain, CBasePlayer *player)
+{
+	int slot = (player && player->IsPlayer()) ? player->entindex() : 0;
+
+	// Pre-check only: cancelling forces "no" without ever asking the game's
+	// own rules. There is no way to force a "yes" the game would not have
+	// given on its own - this can only take away permission, not grant it.
+	if (g_events.fire_player_can_respawn(slot))
+		return FALSE;
+
+	return chain->callNext(player);
+}
+
+static void hook_defuse_start(IReGameHook_CGrenade_DefuseBombStart *chain, CGrenade *grenade,
+	CBasePlayer *player)
+{
+	chain->callNext(grenade, player);
+
+	if (player && player->IsPlayer())
+		g_events.fire_bomb_defuse_start(player->entindex(), player->m_bHasDefuser);
+}
+
 static CGrenade *hook_throw_smoke_grenade(IReGameHook_ThrowSmokeGrenade *chain, entvars_t *pevOwner,
 	Vector &vecStart, Vector &vecVelocity, float time, unsigned short usEvent)
 {
@@ -674,6 +796,15 @@ enum HookSlot
 	HOOK_BUY_WEAPON,
 	HOOK_BUY_AMMO,
 	HOOK_BUY_ITEM,
+	HOOK_ADD_ACCOUNT,
+	HOOK_GIVE_AMMO,
+	HOOK_DROP_ITEM,
+	HOOK_JUMP,
+	HOOK_DUCK,
+	HOOK_START_OBSERVER,
+	HOOK_RADIO,
+	HOOK_CAN_RESPAWN,
+	HOOK_DEFUSE_START,
 	HOOK_COUNT
 };
 
@@ -766,6 +897,33 @@ void cslua_regamedll_install_hooks()
 
 	sync_hook(HOOK_BUY_ITEM, s_hooks->BuyItem(), &hook_buy_item,
 		g_events.any(CSLUA_EVENT_ITEM_BUY));
+
+	sync_hook(HOOK_ADD_ACCOUNT, s_hooks->CBasePlayer_AddAccount(), &hook_add_account,
+		g_events.any(CSLUA_EVENT_MONEY_CHANGE));
+
+	sync_hook(HOOK_GIVE_AMMO, s_hooks->CBasePlayer_GiveAmmo(), &hook_give_ammo,
+		g_events.any(CSLUA_EVENT_AMMO_PICKUP));
+
+	sync_hook(HOOK_DROP_ITEM, s_hooks->CBasePlayer_DropPlayerItem(), &hook_drop_item,
+		g_events.any(CSLUA_EVENT_WEAPON_DROP));
+
+	sync_hook(HOOK_JUMP, s_hooks->CBasePlayer_Jump(), &hook_jump,
+		g_events.any(CSLUA_EVENT_PLAYER_JUMP));
+
+	sync_hook(HOOK_DUCK, s_hooks->CBasePlayer_Duck(), &hook_duck,
+		g_events.any(CSLUA_EVENT_PLAYER_DUCK));
+
+	sync_hook(HOOK_START_OBSERVER, s_hooks->CBasePlayer_StartObserver(), &hook_start_observer,
+		g_events.any(CSLUA_EVENT_PLAYER_SPECTATE));
+
+	sync_hook(HOOK_RADIO, s_hooks->CBasePlayer_Radio(), &hook_radio,
+		g_events.any(CSLUA_EVENT_PLAYER_RADIO));
+
+	sync_hook(HOOK_CAN_RESPAWN, s_hooks->CSGameRules_FPlayerCanRespawn(), &hook_can_respawn,
+		g_events.any(CSLUA_EVENT_PLAYER_CAN_RESPAWN));
+
+	sync_hook(HOOK_DEFUSE_START, s_hooks->CGrenade_DefuseBombStart(), &hook_defuse_start,
+		g_events.any(CSLUA_EVENT_BOMB_DEFUSE_START));
 }
 
 void cslua_regamedll_remove_hooks()
@@ -800,6 +958,15 @@ void cslua_regamedll_remove_hooks()
 	s_hooks->BuyWeaponByWeaponID()->unregisterHook(&hook_buy_weapon);
 	s_hooks->BuyGunAmmo()->unregisterHook(&hook_buy_gun_ammo);
 	s_hooks->BuyItem()->unregisterHook(&hook_buy_item);
+	s_hooks->CBasePlayer_AddAccount()->unregisterHook(&hook_add_account);
+	s_hooks->CBasePlayer_GiveAmmo()->unregisterHook(&hook_give_ammo);
+	s_hooks->CBasePlayer_DropPlayerItem()->unregisterHook(&hook_drop_item);
+	s_hooks->CBasePlayer_Jump()->unregisterHook(&hook_jump);
+	s_hooks->CBasePlayer_Duck()->unregisterHook(&hook_duck);
+	s_hooks->CBasePlayer_StartObserver()->unregisterHook(&hook_start_observer);
+	s_hooks->CBasePlayer_Radio()->unregisterHook(&hook_radio);
+	s_hooks->CSGameRules_FPlayerCanRespawn()->unregisterHook(&hook_can_respawn);
+	s_hooks->CGrenade_DefuseBombStart()->unregisterHook(&hook_defuse_start);
 
 	for (int i = 0; i < HOOK_COUNT; i++)
 		s_installed[i] = false;

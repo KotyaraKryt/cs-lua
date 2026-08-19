@@ -21,6 +21,7 @@ description: "Плоский список всех функций и метод�
 | [`access.all_groups`](access/read.md#all_groups) | access | Все группы |
 | [`p:ammo`](players/cs-state.md#ammo) | players | Читает или задаёт патроны в запасе |
 | [`ammo_buy`](hook/shop.md#ammo_buy) | hook | Игрок покупает патроны для оружия в руках |
+| [`ammo_pickup`](hook/gameplay.md#ammo_pickup) | hook | Игроку вот-вот добавят патронов в запас |
 | [`vec.angle_vector`](vec/index.md#angle_vector) | vec | Единичный вектор направления взгляда для заданных углов |
 | [`e:angles`](ents/entity.md#angles) | ents | Читает или задаёт поворот сущности |
 | [`p:angles`](players/state.md#angles) | players | Поворот модели игрока |
@@ -28,6 +29,7 @@ description: "Плоский список всех функций и метод�
 | [`datafile.at`](store/datafile.md#at) | store | Привязывает модуль к своему каталогу |
 | [`p:ban`](players/admin.md#ban) | players | Банит игрока |
 | [`fx.beam_cylinder`](fx/index.md#beam_cylinder) | fx | Кольцо луча, расширяющееся от точки |
+| [`bomb_defuse_start`](hook/round.md#bomb_defuse_start) | hook | Игрок начал разминирование |
 | [`bomb_defused`](hook/round.md#bomb_defused) | hook | Попытка разминирования завершилась |
 | [`bomb_exploded`](hook/round.md#bomb_exploded) | hook | Бомба взорвалась |
 | [`bomb_planted`](hook/round.md#bomb_planted) | hook | Бомба заложена |
@@ -132,6 +134,7 @@ description: "Плоский список всех функций и метод�
 | [`e:model`](ents/entity.md#model) | ents | Читает или задаёт модель сущности |
 | [`res.model`](res/index.md#model) | res | Регистрирует модель для прекеша |
 | [`p:money`](players/cs-state.md#money) | players | Читает или задаёт деньги игрока |
+| [`money_change`](hook/gameplay.md#money_change) | hook | У игрока вот-вот изменятся деньги |
 | [`p:motd`](players/messages.md#motd) | players | Открывает игроку панель MOTD |
 | [`e:movetype`](ents/entity.md#movetype) | ents | Читает или задаёт, как движок двигает сущность |
 | [`c:name`](sv/cvar.md#name) | sv | Имя переменной |
@@ -154,12 +157,17 @@ description: "Плоский список всех функций и метод�
 | [`p:pev`](players/state.md#pev) | players | Читает или задаёт произвольное поле `entvars_t` по имени |
 | [`p:play_sound`](players/messages.md#play_sound) | players | Проигрывает игроку звук |
 | [`player_authorized`](hook/connection.md#player_authorized) | hook | Steam ответил, steamid наконец известен |
+| [`player_can_respawn`](hook/gameplay.md#player_can_respawn) | hook | Игра вот-вот решит, можно ли игроку возродиться |
 | [`player_chat`](hook/connection.md#player_chat) | hook | Игрок написал в чат |
 | [`player_death`](hook/gameplay.md#player_death) | hook | Игрок погиб |
+| [`player_duck`](hook/gameplay.md#player_duck) | hook | Игрок присел |
 | [`player_hurt`](hook/gameplay.md#player_hurt) | hook | Игроку наносят урон; урон можно изменить или погасить |
 | [`player_hurt_post`](hook/gameplay.md#player_hurt_post) | hook | Урон уже применён; только для наблюдателей |
+| [`player_jump`](hook/gameplay.md#player_jump) | hook | Игрок прыгнул |
+| [`player_radio`](hook/gameplay.md#player_radio) | hook | Игрок использовал радиокоманду |
 | [`player_ready`](hook/connection.md#player_ready) | hook | Игрок в игре, сообщения до него доходят |
 | [`player_spawn`](hook/gameplay.md#player_spawn) | hook | Игрок появился в раунде живым |
+| [`player_spectate`](hook/gameplay.md#player_spectate) | hook | Игрок перешёл в режим наблюдателя |
 | [`player_team_change`](hook/gameplay.md#player_team_change) | hook | Игрок сменил сторону |
 | [`plugin_unload`](hook/lifecycle.md#plugin_unload) | hook | Плагин или всё состояние уходит |
 | [`plugin{}`](plugin/index.md#manifest) | plugin | Объявляет метаданные и требования плагина |
@@ -216,9 +224,10 @@ description: "Плоский список всех функций и метод�
 | [`p:weapon`](players/cs-state.md#weapon) | players | Classname оружия в руках |
 | [`weapon_buy`](hook/shop.md#weapon_buy) | hook | Игрок покупает оружие в магазине |
 | [`weapon_deploy`](hook/gameplay.md#weapon_deploy) | hook | Оружие вот-вот покажет вьюмодель и модель в руках |
+| [`weapon_drop`](hook/gameplay.md#weapon_drop) | hook | Игрок вот-вот выбросит оружие на пол |
 | [`weapon_fire`](hook/gameplay.md#weapon_fire) | hook | Из ствола вышел выстрел |
 | [`weapon_reload`](hook/gameplay.md#weapon_reload) | hook | Началась настоящая перезарядка |
 | [`p:weapons`](players/cs-state.md#weapons) | players | Массив classname всего, что несёт игрок |
 | [`p:weight`](players/access.md#weight) | players | Вес игрока для иммунитета |
 
-Всего: 209.
+Всего: 219.
