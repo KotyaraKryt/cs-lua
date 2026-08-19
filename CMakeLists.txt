@@ -191,6 +191,7 @@ add_library(lua_mm SHARED
 	src/lua_entity.cpp
 	src/lua_pev.cpp
 	src/lua_vector.cpp
+	src/lua_regex.cpp
 	src/lua_fx.cpp
 	src/lua_db.cpp
 	src/lua_file.cpp

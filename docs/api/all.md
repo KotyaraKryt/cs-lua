@@ -79,6 +79,7 @@ description: "Плоский список всех функций и метод�
 | [`export`](exports/index.md#export) | export / import | Публикует функцию плагина наружу |
 | [`ents.find`](ents/namespace.md#find) | ents | Находит все сущности с заданным classname |
 | [`players.find`](players/namespace.md#find) | players | Ищет игрока по слоту, userid или части ника |
+| [`regex.find`](regex/index.md#find) | regex | Ищет совпадение и возвращает его границы |
 | [`db:first`](db/database.md#first) | db | Выполняет запрос и возвращает первую строку |
 | [`st:first`](db/statement.md#stmt_first) | db | Выполняет выражение и возвращает первую строку |
 | [`c:float`](sv/cvar.md#float) | sv | Значение переменной как число |
@@ -124,6 +125,7 @@ description: "Плоский список всех функций и метод�
 | [`datafile.load`](store/datafile.md#load) | store | Читает таблицу из `<dir>/<name>.lua` |
 | [`sv.map`](sv/server.md#map) | sv | Имя текущей карты |
 | [`map_change`](hook/lifecycle.md#map_change) | hook | Карта заканчивается |
+| [`regex.match`](regex/index.md#match) | regex | Ищет совпадение и возвращает захваченные группы |
 | [`p:maxspeed`](players/state.md#maxspeed) | players | Максимальная скорость движения |
 | [`menu_select`](hook/connection.md#menu_select) | hook | Игрок нажал клавишу в меню, открытом из Lua |
 | [`players.method`](players/namespace.md#method) | players | Добавляет свой метод всем объектам игроков |
@@ -171,6 +173,7 @@ description: "Плоский список всех функций и метод�
 | [`e:remove`](ents/entity.md#remove) | ents | Убирает сущность из мира |
 | [`hook.remove`](hook/namespace.md#remove) | hook | Снимает подписку по имени события и id |
 | [`e:render`](ents/entity.md#render) | ents | Читает или задаёт прозрачность и свечение |
+| [`regex.replace`](regex/index.md#replace) | regex | Заменяет совпадения |
 | [`http.request`](http/index.md#request) | http | Выполняет запрос произвольным методом |
 | [`access.revoke`](access/grant.md#revoke) | access | Забирает запись, группу или ноду |
 | [`round_end`](hook/round.md#round_end) | hook | Раунд закончился |
@@ -218,4 +221,4 @@ description: "Плоский список всех функций и метод�
 | [`p:weapons`](players/cs-state.md#weapons) | players | Массив classname всего, что несёт игрок |
 | [`p:weight`](players/access.md#weight) | players | Вес игрока для иммунитета |
 
-Всего: 206.
+Всего: 209.

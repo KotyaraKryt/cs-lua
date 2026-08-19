@@ -12,6 +12,7 @@
 #include "lua_msg.h"
 #include "lua_entity.h"
 #include "lua_vector.h"
+#include "lua_regex.h"
 #include "lua_fx.h"
 #include "lua_db.h"
 #include "lua_file.h"
@@ -274,6 +275,7 @@ void LuaEngine::init()
 	cslua_register_menu(m_L);
 	cslua_register_entity(m_L);
 	cslua_register_vector(m_L);
+	cslua_register_regex(m_L);
 	cslua_register_fx(m_L);
 	cslua_register_db(m_L);
 	cslua_register_file(m_L);
