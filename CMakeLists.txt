@@ -193,6 +193,7 @@ add_library(lua_mm SHARED
 	src/lua_vector.cpp
 	src/lua_fx.cpp
 	src/lua_db.cpp
+	src/lua_file.cpp
 	src/lua_http.cpp
 	src/lua_httpserver.cpp
 	src/lua_mysql.cpp
