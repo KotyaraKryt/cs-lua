@@ -314,7 +314,65 @@ void cslua_register_file(lua_State *L)
 	cslua_register_namespace(L, "file", s_file);
 }
 
-// log.write(msg) -> boolean
+// Where log.write() writes, and under what file name. Plugin-owned (the
+// default) is the calling plugin's own logs/, invisible to everyone else -
+// the usual case. `global = true` is addons/lua/logs/, the same directory
+// the module's own internal logging (cslua_netwatch.cpp's log_line())
+// already writes into, for a plugin that specifically wants its record
+// sitting alongside the module's own rather than buried in its private data
+// dir - a shared moderation log several plugins contribute to, say. Filed
+// under the plugin's own id there too, so ten plugins logging global do not
+// interleave into one unreadable file, and none of them can collide with
+// the module's own unprefixed netwatch.log.
+static bool log_target_dir(bool global, std::string &out, std::string &prefix)
+{
+	if (!global) {
+		std::string dir = cslua_plugin_data_dir(g_lua.current_index());
+		if (dir.empty())
+			return false;
+		out = dir + "/logs";
+		prefix = "";
+		return true;
+	}
+
+	const std::vector<LuaPlugin> &plugins = g_lua.plugins();
+	int index = g_lua.current_index();
+	if (index < 0 || index >= (int)plugins.size())
+		return false;
+	out = cslua_base_dir() + "/logs";
+	prefix = plugins[index].id + "-";
+	return true;
+}
+
+enum LogLevel { CSLOG_INFO, CSLOG_WARNING, CSLOG_ERROR, CSLOG_DEBUG, CSLOG_SUCCESS };
+
+static bool log_level_from_string(const char *s, LogLevel &out)
+{
+	if (!strcmp(s, "info"))    { out = CSLOG_INFO;    return true; }
+	if (!strcmp(s, "warning")) { out = CSLOG_WARNING; return true; }
+	if (!strcmp(s, "error"))   { out = CSLOG_ERROR;   return true; }
+	if (!strcmp(s, "debug"))   { out = CSLOG_DEBUG;   return true; }
+	if (!strcmp(s, "success")) { out = CSLOG_SUCCESS; return true; }
+	return false;
+}
+
+static const char *log_level_tag(LogLevel level)
+{
+	switch (level) {
+	case CSLOG_WARNING: return "WARNING";
+	case CSLOG_ERROR:   return "ERROR";
+	case CSLOG_DEBUG:   return "DEBUG";
+	case CSLOG_SUCCESS: return "SUCCESS";
+	default:          return "INFO";
+	}
+}
+
+// log.write(msg[, opts]) -> boolean
+//
+// opts.global (boolean, default false) picks the destination directory - see
+// log_target_dir() above. opts.level (string, default "info"; one of
+// "info"/"warning"/"error"/"debug"/"success") is stamped on the line so a
+// human (or grep) can filter without parsing the message text.
 //
 // Best-effort by design: meant to be sprinkled anywhere without every call
 // site checking two return values, the way file.write() has to be. false is
@@ -327,13 +385,35 @@ static int l_log_write(lua_State *L)
 {
 	const char *msg = luaL_checkstring(L, 1);
 
-	std::string dir = cslua_plugin_data_dir(g_lua.current_index());
-	if (dir.empty()) {
+	bool global = false;
+	LogLevel level = CSLOG_INFO;
+
+	if (!lua_isnoneornil(L, 2)) {
+		luaL_checktype(L, 2, LUA_TTABLE);
+
+		lua_getfield(L, 2, "global");
+		if (!lua_isnil(L, -1))
+			global = lua_toboolean(L, -1) != 0;
+		lua_pop(L, 1);
+
+		lua_getfield(L, 2, "level");
+		if (!lua_isnil(L, -1)) {
+			const char *level_str = luaL_checkstring(L, -1);
+			if (!log_level_from_string(level_str, level)) {
+				lua_pop(L, 1);
+				return luaL_error(L, "log.write: level must be one of "
+					"\"info\", \"warning\", \"error\", \"debug\", \"success\", got '%s'", level_str);
+			}
+		}
+		lua_pop(L, 1);
+	}
+
+	std::string logs_dir, prefix;
+	if (!log_target_dir(global, logs_dir, prefix)) {
 		lua_pushboolean(L, 0);
 		return 1;
 	}
 
-	std::string logs_dir = dir + "/logs";
 	if (!cslua_make_dir(logs_dir)) {
 		lua_pushboolean(L, 0);
 		return 1;
@@ -345,7 +425,7 @@ static int l_log_write(lua_State *L)
 	char datebuf[16];
 	strftime(datebuf, sizeof datebuf, "%Y-%m-%d", lt);
 
-	FILE *fh = fopen((logs_dir + "/" + datebuf + ".log").c_str(), "a");
+	FILE *fh = fopen((logs_dir + "/" + prefix + datebuf + ".log").c_str(), "a");
 	if (!fh) {
 		lua_pushboolean(L, 0);
 		return 1;
@@ -353,7 +433,7 @@ static int l_log_write(lua_State *L)
 
 	char stamp[32];
 	strftime(stamp, sizeof stamp, "%Y-%m-%d %H:%M:%S", lt);
-	fprintf(fh, "[%s] %s\n", stamp, msg);
+	fprintf(fh, "[%s] [%s] %s\n", stamp, log_level_tag(level), msg);
 	fclose(fh);
 
 	lua_pushboolean(L, 1);
