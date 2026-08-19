@@ -40,6 +40,9 @@ static const char *const s_event_names[CSLUA_EVENT_COUNT] =
 	"grenade_explode",
 	"weapon_throw",
 	"weapon_secondary_attack",
+	"weapon_buy",
+	"ammo_buy",
+	"item_buy",
 };
 
 static int find_event(const char *name)
