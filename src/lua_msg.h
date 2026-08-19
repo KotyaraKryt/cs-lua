@@ -15,3 +15,19 @@
 // begin/write/end sequence with no Lua in the loop. Nothing between
 // MESSAGE_BEGIN and MESSAGE_END can fail.
 void cslua_register_msg(lua_State *L);
+
+// Shared with cslua_corpse.cpp's receive-side hook (hook.add("msg:Name",
+// ...)): a Write* call is already typed by which engine callback fired, so
+// the same enum names both the send-side {kind, value} wrapper tables
+// (msg.byte() etc, below) and the receive-side decode.
+enum FieldKind
+{
+	MSGF_BYTE = 1,
+	MSGF_CHAR,
+	MSGF_SHORT,
+	MSGF_LONG,
+	MSGF_ANGLE,
+	MSGF_COORD,
+	MSGF_STRING,
+	MSGF_ENTITY,
+};

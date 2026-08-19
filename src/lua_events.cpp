@@ -165,12 +165,13 @@ int LuaEvents::l_add(lua_State *L)
 
 	if (ev >= 0) {
 		list = &g_events.m_handlers[ev];
-	} else if (!strchr(name, '.')) {
-		// No dot and not an engine event: this is a misspelled engine event,
-		// not somebody's own. Registering it would hand back a handler that
-		// never fires and never complains.
+	} else if (!strchr(name, '.') && strncmp(name, "msg:", 4) != 0) {
+		// No dot, and not a msg:Name receive hook either: this is a
+		// misspelled engine event, not somebody's own. Registering it would
+		// hand back a handler that never fires and never complains.
 		return luaL_error(L, "unknown event '%s'. Engine events: %s. "
-			"A plugin's own event needs a dot in the name, like 'shop.bought'",
+			"A plugin's own event needs a dot in the name, like 'shop.bought'. "
+			"To receive a network message, use 'msg:Name', like 'msg:TextMsg'",
 			name, known_events().c_str());
 	} else {
 		list = &g_events.m_custom[name];
@@ -600,6 +601,42 @@ bool LuaEvents::run(CsLuaEvent ev, const FillFields &fill, const ReadFields &rea
 void LuaEvents::notify(CsLuaEvent ev, const FillFields &fill)
 {
 	run(ev, fill);
+}
+
+bool LuaEvents::any_custom(const std::string &name) const
+{
+	std::map<std::string, HandlerList>::const_iterator it = m_custom.find(name);
+	return it != m_custom.end() && !it->second.empty();
+}
+
+bool LuaEvents::run_custom(const std::string &name, const FillFields &fill)
+{
+	lua_State *L = g_lua.state();
+	if (!L)
+		return false;
+
+	std::map<std::string, HandlerList>::iterator it = m_custom.find(name);
+	if (it == m_custom.end() || it->second.empty())
+		return false;
+
+	bool cancelled = false;
+
+	{
+		DispatchScope walking(m_dispatching);
+
+		push_event(L, name.c_str(), /*cancellable=*/true, fill);
+		int event_index = lua_gettop(L);
+
+		dispatch_list(L, it->second, event_index);
+
+		lua_getfield(L, event_index, "cancelled");
+		cancelled = lua_toboolean(L, -1) != 0;
+
+		lua_settop(L, event_index - 1);
+	}
+
+	sweep();
+	return cancelled;
 }
 
 // ---------------------------------------------------------------------------

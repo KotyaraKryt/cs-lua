@@ -74,6 +74,11 @@ struct RejectInfo
 class LuaEvents
 {
 public:
+	// Fills the event's own fields onto the table sitting on top of the
+	// stack. Public because run_custom() below takes one from callers
+	// outside this class (cslua_corpse.cpp's message hook).
+	typedef std::function<void(lua_State *)> FillFields;
+
 	// Lua entry points, registered as the `hook` namespace.
 	static int l_add(lua_State *L);
 	static int l_remove(lua_State *L);
@@ -108,6 +113,20 @@ public:
 	// True when any script listens for the given event; lets the API skip
 	// installing a hookchain nobody uses.
 	bool any(CsLuaEvent ev) const;
+
+	// Same idea for a custom-named event ("msg:TextMsg" and the like) fired
+	// from C++ rather than from another Lua script via hook.run. Checked on
+	// pfnMessageBegin - every network message to every client - so this has
+	// to stay a cheap map lookup with no event table built.
+	bool any_custom(const std::string &name) const;
+
+	// Fires a custom-named event the same way run(CsLuaEvent) fires an engine
+	// one: builds the table, walks handlers, reports whether a handler
+	// cancelled. Unlike hook.run (Lua-initiated, requires a dot in the name
+	// to keep plugin events apart from typo'd engine ones), this is for
+	// events the engine itself sourced - hook.add("msg:Name", ...) - so the
+	// name is trusted as given, no dot required.
+	bool run_custom(const std::string &name, const FillFields &fill);
 
 	// Returns true if a handler rejected the connection; reason is filled in.
 	bool fire_client_connect(int id, const char *name, const char *ip, RejectInfo &reject);
@@ -278,9 +297,6 @@ private:
 	};
 
 	typedef std::vector<Handler> HandlerList;
-
-	// Fills the event's own fields onto the table sitting on top of the stack.
-	typedef std::function<void(lua_State *)> FillFields;
 
 	// Runs with the finished event table on top of the stack, for events whose
 	// fields the game reads back.

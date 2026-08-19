@@ -94,7 +94,7 @@ static const int BUILTIN_COUNT = sizeof(s_builtin_names) / sizeof(s_builtin_name
 // as a byte, so 256 slots covers every id that can exist.
 static std::string s_custom_names[256];
 
-static const char *msg_name(int msg_type, char *buf, size_t buflen)
+const char *cslua_netwatch_msg_name(int msg_type, char *buf, size_t buflen)
 {
 	if (msg_type >= 0 && msg_type < BUILTIN_COUNT)
 		return s_builtin_names[msg_type];
@@ -441,7 +441,7 @@ static void dump_slot(int id, edict_t *ed, const char *reason)
 
 	for (int i = 0; i < nbuckets; i++) {
 		char namebuf[32];
-		const char *name = msg_name(buckets[i].msg_type, namebuf, sizeof namebuf);
+		const char *name = cslua_netwatch_msg_name(buckets[i].msg_type, namebuf, sizeof namebuf);
 		log_line("    %-24s %5d msgs  %6d bytes", name, buckets[i].messages, buckets[i].bytes);
 	}
 }

@@ -1,8 +1,14 @@
 #include "cslua.h"
 #include "cslua_corpse.h"
 #include "cslua_netwatch.h"
+#include "lua_msg.h"
+#include "lua_events.h"
+#include "lua_player.h"
+#include "players.h"
 
 #include <string.h>
+#include <string>
+#include <vector>
 
 // How many active corpses currently want ClCorpse hidden. Not per-player:
 // MessageBegin's own arguments (msg_dest, pOrigin, the destination edict)
@@ -33,6 +39,33 @@ void cslua_corpse_hide_ref(bool hide)
 // by swallowing the whole call sequence, not just the first call.
 static bool s_suppressing = false;
 
+// hook.add("msg:Name", ...) - backs a plugin's Lua handler by buffering the
+// one message currently between MessageBegin and MessageEnd, the same
+// single-open-message assumption s_suppressing already relies on: the engine
+// never opens a second message before closing the first.
+//
+// `active` is decided once, in MessageBegin, from whether anyone is actually
+// listening for this message's name - the Write* hooks below only pay the
+// cost of recording a value when it is true, which keeps the overwhelming
+// majority of messages (no Lua listener at all) exactly as cheap as before
+// this feature existed.
+struct MsgField
+{
+	FieldKind kind;
+	double num;
+	std::string str;
+};
+
+struct OpenMsgHook
+{
+	bool active;
+	std::string name;
+	int dest;
+	edict_t *target;
+	std::vector<MsgField> fields;
+};
+static OpenMsgHook s_open_hook;
+
 // Resolved on first use rather than at load: the game DLL registers its
 // custom messages during its own startup, some time after Meta_Attach runs,
 // so asking too early would cache a 0. Every message id lookup elsewhere in
@@ -48,12 +81,25 @@ static int clcorpse_msg_id()
 static void Hook_MessageBegin(int msg_dest, int msg_type, const float *pOrigin, edict_t *ed)
 {
 	s_suppressing = s_hide_refs > 0 && msg_type == clcorpse_msg_id();
-	if (s_suppressing)
+	if (s_suppressing) {
+		s_open_hook.active = false;
 		RETURN_META(MRES_SUPERCEDE);
+	}
 	// A suppressed message never reaches the wire, so it never gets counted -
 	// netwatch is explaining a client's real reliable-buffer usage, and a
 	// dropped ClCorpse never added anything to it.
 	cslua_netwatch_message_begin(ed, msg_type);
+
+	char namebuf[32];
+	const char *name = cslua_netwatch_msg_name(msg_type, namebuf, sizeof namebuf);
+	s_open_hook.active = g_events.any_custom(std::string("msg:") + name);
+	if (s_open_hook.active) {
+		s_open_hook.name = name;
+		s_open_hook.dest = msg_dest;
+		s_open_hook.target = ed;
+		s_open_hook.fields.clear();
+	}
+
 	RETURN_META(MRES_IGNORED);
 }
 
@@ -63,6 +109,43 @@ static void Hook_MessageEnd(void)
 		s_suppressing = false;
 		RETURN_META(MRES_SUPERCEDE);
 	}
+
+	bool cancelled = false;
+
+	if (s_open_hook.active) {
+		OpenMsgHook &m = s_open_hook;
+
+		cancelled = g_events.run_custom(std::string("msg:") + m.name, [&](lua_State *L) {
+			lua_pushinteger(L, m.dest);
+			lua_setfield(L, -2, "dest");
+
+			int idx = (m.target && !m.target->free) ? ENTINDEX(m.target) : -1;
+			if (idx >= 1 && idx < CSLUA_MAXPLAYERS && g_players.is_connected(idx))
+				cslua_push_player(L, idx);
+			else
+				lua_pushnil(L);
+			lua_setfield(L, -2, "player");
+
+			lua_newtable(L);
+			for (size_t i = 0; i < m.fields.size(); i++) {
+				const MsgField &f = m.fields[i];
+				if (f.kind == MSGF_STRING)
+					lua_pushstring(L, f.str.c_str());
+				else
+					lua_pushnumber(L, f.num);
+				lua_rawseti(L, -2, (int)i + 1);
+			}
+			lua_setfield(L, -2, "fields");
+		});
+
+		s_open_hook.active = false;
+	}
+
+	// A handler cancelled: the message never reaches the wire, same
+	// RETURN_META(MRES_SUPERCEDE) the ClCorpse-hide path above already uses.
+	if (cancelled)
+		RETURN_META(MRES_SUPERCEDE);
+
 	cslua_netwatch_message_end();
 	RETURN_META(MRES_IGNORED);
 }
@@ -70,9 +153,22 @@ static void Hook_MessageEnd(void)
 // Rough per-field wire sizes (unsigned varint/fixed encodings used by the
 // GoldSrc network protocol). Good enough for "who is flooding whom" - this
 // is a diagnostic estimate, not a byte-exact accounting of SZ_Write*.
+// Records one field for the message currently being watched for a Lua
+// handler. Only called when s_open_hook.active - see Hook_MessageBegin.
+static void record_field(FieldKind kind, double num, const char *str = NULL)
+{
+	MsgField f;
+	f.kind = kind;
+	f.num = num;
+	if (str)
+		f.str = str;
+	s_open_hook.fields.push_back(f);
+}
+
 static void Hook_WriteByte(int iValue)
 {
 	if (s_suppressing) RETURN_META(MRES_SUPERCEDE);
+	if (s_open_hook.active) record_field(MSGF_BYTE, iValue);
 	cslua_netwatch_add_bytes(1);
 	RETURN_META(MRES_IGNORED);
 }
@@ -80,6 +176,7 @@ static void Hook_WriteByte(int iValue)
 static void Hook_WriteChar(int iValue)
 {
 	if (s_suppressing) RETURN_META(MRES_SUPERCEDE);
+	if (s_open_hook.active) record_field(MSGF_CHAR, iValue);
 	cslua_netwatch_add_bytes(1);
 	RETURN_META(MRES_IGNORED);
 }
@@ -87,6 +184,7 @@ static void Hook_WriteChar(int iValue)
 static void Hook_WriteShort(int iValue)
 {
 	if (s_suppressing) RETURN_META(MRES_SUPERCEDE);
+	if (s_open_hook.active) record_field(MSGF_SHORT, iValue);
 	cslua_netwatch_add_bytes(2);
 	RETURN_META(MRES_IGNORED);
 }
@@ -94,6 +192,7 @@ static void Hook_WriteShort(int iValue)
 static void Hook_WriteLong(int iValue)
 {
 	if (s_suppressing) RETURN_META(MRES_SUPERCEDE);
+	if (s_open_hook.active) record_field(MSGF_LONG, iValue);
 	cslua_netwatch_add_bytes(4);
 	RETURN_META(MRES_IGNORED);
 }
@@ -101,6 +200,7 @@ static void Hook_WriteLong(int iValue)
 static void Hook_WriteAngle(float flValue)
 {
 	if (s_suppressing) RETURN_META(MRES_SUPERCEDE);
+	if (s_open_hook.active) record_field(MSGF_ANGLE, flValue);
 	cslua_netwatch_add_bytes(1);
 	RETURN_META(MRES_IGNORED);
 }
@@ -108,6 +208,7 @@ static void Hook_WriteAngle(float flValue)
 static void Hook_WriteCoord(float flValue)
 {
 	if (s_suppressing) RETURN_META(MRES_SUPERCEDE);
+	if (s_open_hook.active) record_field(MSGF_COORD, flValue);
 	cslua_netwatch_add_bytes(2);
 	RETURN_META(MRES_IGNORED);
 }
@@ -115,6 +216,7 @@ static void Hook_WriteCoord(float flValue)
 static void Hook_WriteString(const char *sz)
 {
 	if (s_suppressing) RETURN_META(MRES_SUPERCEDE);
+	if (s_open_hook.active) record_field(MSGF_STRING, 0, sz ? sz : "");
 	cslua_netwatch_add_bytes(sz ? (int)strlen(sz) + 1 : 1);
 	RETURN_META(MRES_IGNORED);
 }
@@ -122,6 +224,7 @@ static void Hook_WriteString(const char *sz)
 static void Hook_WriteEntity(int iValue)
 {
 	if (s_suppressing) RETURN_META(MRES_SUPERCEDE);
+	if (s_open_hook.active) record_field(MSGF_ENTITY, iValue);
 	cslua_netwatch_add_bytes(2);
 	RETURN_META(MRES_IGNORED);
 }

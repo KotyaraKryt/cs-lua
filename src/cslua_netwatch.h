@@ -31,6 +31,15 @@ void cslua_netwatch_message_begin(edict_t *dest, int msg_type);
 void cslua_netwatch_add_bytes(int bytes);
 void cslua_netwatch_message_end();
 
+// Resolves a msg_type to its name - a builtin svc_* opcode, a custom
+// usermessage learned from pfnRegUserMsg, or "usermsg#<n>" as a fallback for
+// one this module has not seen registered yet. `buf` only gets written for
+// that fallback case; the builtin/custom cases return a pointer into this
+// module's own tables. Shared with cslua_corpse.cpp's hook.add("msg:Name",
+// ...) dispatch, which needs the same id->name resolution this module
+// already built for its own logging.
+const char *cslua_netwatch_msg_name(int msg_type, char *buf, size_t buflen);
+
 // Drops the accumulated history for a slot so it cannot be attributed to
 // whoever reconnects into it next.
 void cslua_netwatch_forget(int id);

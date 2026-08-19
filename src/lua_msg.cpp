@@ -15,18 +15,6 @@
 // for SayText - this is the same number for the same reason.
 #define MSG_MAX_STRING 192
 
-enum FieldKind
-{
-	MSGF_BYTE = 1,
-	MSGF_CHAR,
-	MSGF_SHORT,
-	MSGF_LONG,
-	MSGF_ANGLE,
-	MSGF_COORD,
-	MSGF_STRING,
-	MSGF_ENTITY,
-};
-
 // msg.byte(1) etc build one of these {kind, value} pairs rather than writing
 // anything themselves - msg.send is the only place that ever opens a
 // message, so this is just a validated, inert description of one field.
