@@ -109,11 +109,11 @@ function store.open(name)
 
 	-- Nothing is lost because somebody forgot to flush: a map change and an
 	-- unload both write the queue out first.
-	hook.add("map_change", "store.flush." .. name, function()
+	hook.add("server:map_change", "store.flush." .. name, function()
 		self:flush()
 	end)
 
-	hook.add("plugin_unload", "store.flush_unload." .. name, function()
+	hook.add("module:plugin_unload", "store.flush_unload." .. name, function()
 		self:flush()
 	end)
 
