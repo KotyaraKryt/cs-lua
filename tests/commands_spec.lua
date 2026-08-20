@@ -17,7 +17,7 @@ return function(t, support)
 
 	-- Имитирует «игрок написал в чат» так же, как это делает движок.
 	local function say(p, text, team)
-		return support.fire("player_chat", { player = p, text = text, team = team or false })
+		return support.fire("player:chat", { player = p, text = text, team = team or false })
 	end
 
 	--------------------------------------------------------------------

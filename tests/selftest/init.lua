@@ -268,7 +268,7 @@ local function run()
 	-- Объект события у движковых
 	----------------------------------------------------------------
 
-	hook.add("player_spawn", "selftest.nocancel", function(ev)
+	hook.add("player:spawn", "selftest.nocancel", function(ev)
 		local why = errmsg(function() ev:cancel() end)
 		ok("уведомление нельзя отменить", why and why:find("cannot be cancelled"), why)
 	end)
