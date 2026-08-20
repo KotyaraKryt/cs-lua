@@ -10,7 +10,7 @@ NS = {
     'brief': 'Сущности: дропы, точки интереса, зоны, маркеры.',
     'intro': """
 ```lua
-hook.add("round_start", "drops.spawn", function()
+hook.add("round:start", "drops.spawn", function()
 	local e = ents.create("info_target")
 	e:model("models/w_ak47.mdl")
 	e:origin(0, 0, 0)
@@ -40,7 +40,7 @@ ReGameDLL не нужен — слой работает и на ванильно
                     'returns': [('entity \\| nil', 'новая сущность'),
                                 ('string', 'причина, если игра не знает classname')],
                     'example': """
-hook.add("round_start", "drops.spawn", function()
+hook.add("round:start", "drops.spawn", function()
 	local e = ents.create("info_target")
 	e:model("models/w_ak47.mdl")
 	e:origin(x, y, z)
@@ -74,6 +74,56 @@ end)
                     'returns': [('table', 'массив сущностей, порядок произвольный')],
                     'extra': 'Из этого делается зона: объём без собственной сущности-триггера.',
                     'notes': [NO_MAP],
+                },
+                {
+                    'name': 'ents.trace_line',
+                    'brief': 'Пускает луч между двумя произвольными точками.',
+                    'sig': 'ents.trace_line(a, b[, opts])',
+                    'args': [('a', 'table', 'точка старта, `{x, y, z}`'),
+                             ('b', 'table', 'точка конца, `{x, y, z}`'),
+                             ('opts', 'table \\| nil', 'см. Опции ниже')],
+                    'returns': [('table', 'что попалось — тот же формат, что у [p:trace](../players/trace.md#trace-результат)')],
+                    'fields': ('Опции', [
+                        ('skip', 'entity \\| player \\| nil', 'луч эту сущность игнорирует'),
+                        ('ignore_monsters', 'boolean', '`true` — луч летит сквозь монстров/ботов'),
+                    ]),
+                    'example': """
+local a = { 0, 0, 0 }
+local b = { 100, 0, 0 }
+local t = ents.trace_line(a, b)
+if t.kind ~= "none" then
+	print(t.classname, t.distance)
+end
+""",
+                    'extra': """
+В отличие от [`p:trace`](../players/trace.md) — который стреляет из
+глаз игрока — здесь оба конца луча произвольные: ничьи глаза не нужны.
+Годится для эффектов, самодельных снарядов, проверки прямой видимости между
+двумя сущностями.
+""",
+                    'notes': [NO_MAP],
+                    'see': [('ents.trace_hull', 'trace_hull.md'),
+                            ('p:trace', '../players/trace.md'),
+                            ('p:trace_to', '../players/trace_to.md')],
+                },
+                {
+                    'name': 'ents.trace_hull',
+                    'brief': 'То же самое, что `ents.trace_line`, но толкает объём, а не бесконечно тонкий луч.',
+                    'sig': 'ents.trace_hull(a, b[, opts])',
+                    'args': [('a', 'table', 'точка старта, `{x, y, z}`'),
+                             ('b', 'table', 'точка конца, `{x, y, z}`'),
+                             ('opts', 'table \\| nil', 'опции `ents.trace_line`, плюс `hull`')],
+                    'returns': [('table', 'что попалось — тот же формат, что у [p:trace](../players/trace.md#trace-результат)')],
+                    'fields': ('Опция hull', [
+                        ('0', 'number', 'точка — то же самое, что `trace_line`'),
+                        ('1', 'number', 'стоящий игрок (по умолчанию)'),
+                        ('2', 'number', 'крупный объём'),
+                        ('3', 'number', 'голова, для приседа'),
+                    ]),
+                    'example': 'local t = ents.trace_hull({ 0, 0, 0 }, { 0, 0, -100 }, { hull = 1 })',
+                    'extra': 'Тем же движковым вызовом (`TRACE_HULL`) пользуется `sv.hull_free` — только\nтам объём нулевой длины и результат сведён к да/нет; здесь — полный трейс\nвдоль пути.',
+                    'notes': [NO_MAP],
+                    'see': [('ents.trace_line', 'trace_line.md')],
                 },
             ],
         },
@@ -168,15 +218,15 @@ end
 think эффект будет другим.
 """,
                     'example': """
-hook.add("grenade_thrown", "myplugin.instant", function(e)
+hook.add("grenade:thrown", "myplugin.instant", function(e)
 	if e.entity then
 		e.entity:detonate_on_touch()
 	end
 end)
 """,
                     'notes': [STALE],
-                    'see': [('grenade_thrown', '../hook/grenade_thrown.md'),
-                            ('grenade_explode', '../hook/grenade_explode.md')],
+                    'see': [('grenade:thrown', '../hook/grenade_thrown.md'),
+                            ('grenade:explode', '../hook/grenade_explode.md')],
                 },
                 {
                     'name': 'e:keyvalue',
@@ -242,6 +292,34 @@ end)
                     ]),
                     'example': 'e:render({ mode = 2, amount = 128, color = { 255, 0, 0 } })',
                     'extra': 'Таблица опций, а не пять чисел подряд: который из них renderfx, никто не помнит.',
+                },
+                {
+                    'name': 'e:pev',
+                    'brief': 'Читает или задаёт произвольное поле `entvars_t` по имени — то, для чего нет\nготового метода вроде `e:origin()` или `e:solid()`.',
+                    'sig': 'e:pev(name[, v...])',
+                    'args': [('name', 'string', 'имя поля, как в `entvars_t`: `health`, `v_angle`, `iuser1`, …'),
+                             ('v...', 'number \\| string \\| entity \\| nil', 'новое значение; без него метод читает')],
+                    'returns': [('число (int/float)', 'одно число'),
+                                ('вектор', 'три числа `x, y, z`'),
+                                ('строка', 'строка'),
+                                ('сущность (owner, aiment, enemy, …)', '`entity \\| nil`')],
+                    'example': """
+e:pev("health", 1)                -- то же, что и любой другой setter
+local x, y, z = e:pev("origin")   -- то же, что e:origin()
+e:pev("owner", other_entity)
+e:pev("owner", nil)               -- снимает владельца
+""",
+                    'extra': """
+Имена — буквально из `entvars_t` (`progdefs.h`), без переименований: плагин,
+портируемый с fakemeta, не требует таблицы соответствий. Полей нет для
+`controller`/`blending` (байтовые массивы) — если понадобятся, это будет
+отдельным методом.
+
+Неизвестное имя поля бросает ошибку, а не возвращает `nil` — опечатка в
+имени поля ловится сразу, а не где-то в логике плагина.
+""",
+                    'notes': [STALE],
+                    'see': [('p:pev', '../players/pev.md')],
                 },
             ],
         },

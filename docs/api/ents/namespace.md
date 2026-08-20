@@ -119,13 +119,13 @@ ents.trace_line(a, b[, opts])
 |---|---|---|---|
 | 1 | `a` | table | точка старта, `{x, y, z}` |
 | 2 | `b` | table | точка конца, `{x, y, z}` |
-| 3 | `opts` | table \| nil | см. [Опции](#trace_line-опции) |
+| 3 | `opts` | table \| nil | см. Опции ниже |
 
 ### Возвращает
 
 | тип |  |
 |---|---|
-| `table` | что попалось — тот же формат, что у [`p:trace`](../players/state.md#trace-результат) |
+| `table` | что попалось — тот же формат, что у [p:trace](../players/state.md#trace-результат) |
 
 ### Опции {#trace_line-опции}
 
@@ -151,13 +151,14 @@ end
 двумя сущностями.
 
 <Warning>
-Пока карта не загружена, трассировать нечего. Вызывай из события,
-как и остальные функции `ents`.
+Пока карта не загружена, сущностей не существует. Тело плагина
+выполняется задолго до неё, и здесь это ошибка. Создавай сущности
+из события: `round_start`, `player_spawn`, таймер, команда.
 </Warning>
 
 ### Смотри также
 
-- [ents.trace_hull](#trace_hull)
+- [ents.trace_hull](namespace.md#trace_hull)
 - [p:trace](../players/state.md#trace)
 - [p:trace_to](../players/state.md#trace_to)
 
@@ -175,17 +176,17 @@ ents.trace_hull(a, b[, opts])
 |---|---|---|---|
 | 1 | `a` | table | точка старта, `{x, y, z}` |
 | 2 | `b` | table | точка конца, `{x, y, z}` |
-| 3 | `opts` | table \| nil | [Опции `ents.trace_line`](#trace_line-опции), плюс `hull` |
+| 3 | `opts` | table \| nil | опции `ents.trace_line`, плюс `hull` |
 
 ### Возвращает
 
 | тип |  |
 |---|---|
-| `table` | что попалось — тот же формат, что у [`p:trace`](../players/state.md#trace-результат) |
+| `table` | что попалось — тот же формат, что у [p:trace](../players/state.md#trace-результат) |
 
-### Опция `hull` {#trace_hull-hull}
+### Опция hull {#trace_hull-опция hull}
 
-| значение | тип |  |
+| поле | тип |  |
 |---|---|---|
 | `0` | number | точка — то же самое, что `trace_line` |
 | `1` | number | стоящий игрок (по умолчанию) |
@@ -203,10 +204,11 @@ local t = ents.trace_hull({ 0, 0, 0 }, { 0, 0, -100 }, { hull = 1 })
 вдоль пути.
 
 <Warning>
-Пока карта не загружена, трассировать нечего. Вызывай из события,
-как и остальные функции `ents`.
+Пока карта не загружена, сущностей не существует. Тело плагина
+выполняется задолго до неё, и здесь это ошибка. Создавай сущности
+из события: `round_start`, `player_spawn`, таймер, команда.
 </Warning>
 
 ### Смотри также
 
-- [ents.trace_line](#trace_line)
+- [ents.trace_line](namespace.md#trace_line)

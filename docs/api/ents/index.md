@@ -32,6 +32,8 @@ ReGameDLL не нужен — слой работает и на ванильно
 | [`ents.create`](namespace.md#create) | Создаёт сущность по classname |
 | [`ents.find`](namespace.md#find) | Находит все сущности с заданным classname |
 | [`ents.in_sphere`](namespace.md#in_sphere) | Находит все сущности в радиусе от точки |
+| [`ents.trace_line`](namespace.md#trace_line) | Пускает луч между двумя произвольными точками |
+| [`ents.trace_hull`](namespace.md#trace_hull) | То же самое, что `ents.trace_line`, но толкает объём, а не бесконечно тонкий луч |
 
 ## Объект сущности
 
@@ -51,6 +53,8 @@ ReGameDLL не нужен — слой работает и на ванильно
 | [`e:movetype`](entity.md#movetype) | Читает или задаёт, как движок двигает сущность |
 | [`e:size`](entity.md#size) | Читает или задаёт ограничивающий объём |
 | [`e:render`](entity.md#render) | Читает или задаёт прозрачность и свечение |
+| [`e:pev`](entity.md#pev) | Читает или задаёт произвольное поле `entvars_t` по имени — то, для чего нет
+готового метода вроде `e:origin()` или `e:solid()` |
 
 ## Границы слоя
 

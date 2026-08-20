@@ -37,6 +37,14 @@
             ]
           },
           {
+            "group": "msg",
+            "pages": [
+              "api/msg/index",
+              "api/msg/send",
+              "api/msg/fields"
+            ]
+          },
+          {
             "group": "cmd",
             "pages": [
               "api/cmd/index"
@@ -69,6 +77,12 @@
               "api/ents/index",
               "api/ents/namespace",
               "api/ents/entity"
+            ]
+          },
+          {
+            "group": "vec",
+            "pages": [
+              "api/vec/index"
             ]
           },
           {
@@ -114,6 +128,24 @@
               "api/store/index",
               "api/store/kv",
               "api/store/datafile"
+            ]
+          },
+          {
+            "group": "file",
+            "pages": [
+              "api/file/index"
+            ]
+          },
+          {
+            "group": "log",
+            "pages": [
+              "api/log/index"
+            ]
+          },
+          {
+            "group": "regex",
+            "pages": [
+              "api/regex/index"
             ]
           },
           {

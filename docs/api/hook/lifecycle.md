@@ -5,7 +5,7 @@ description: "Одна система на движковые события и 
 
 # Жизнь сервера
 
-## map_change {#map_change}
+## server:map_change {#map_change}
 
 Карта заканчивается.
 
@@ -23,7 +23,7 @@ end)
 
 Lua-состояние живёт дальше. Место, где пишут данные на диск и снимают эффекты с мира.
 
-## plugin_unload {#plugin_unload}
+## module:plugin_unload {#plugin_unload}
 
 Плагин или всё состояние уходит.
 

@@ -62,6 +62,8 @@ p:health(p:health() + 25)
 | [`p:freeze`](state.md#freeze) | Заморозка движения (`FL_FROZEN`) |
 | [`p:godmode`](state.md#godmode) | Неуязвимость |
 | [`p:noclip`](state.md#noclip) | Полёт сквозь стены |
+| [`p:pev`](state.md#pev) | Читает или задаёт произвольное поле `entvars_t` по имени — то же, что
+`e:pev` у сущностей, только на игроке |
 | [`p:trace`](state.md#trace) | Пускает луч из глаз игрока туда, куда он смотрит |
 | [`p:trace_to`](state.md#trace_to) | Пускает луч из глаз игрока прямо к другому игроку |
 
@@ -75,6 +77,7 @@ p:health(p:health() + 25)
 | [`p:spawn`](cs-state.md#spawn) | Респаун игрока без потери денег и счёта |
 | [`p:money`](cs-state.md#money) | Читает или задаёт деньги игрока |
 | [`p:deaths`](cs-state.md#deaths) | Счётчик смертей |
+| [`p:defuser`](cs-state.md#defuser) | Есть ли у игрока дефузер |
 | [`p:give`](cs-state.md#give) | Выдаёт игроку предмет по classname |
 | [`p:strip`](cs-state.md#strip) | Забирает у игрока всё оружие |
 | [`p:weapon`](cs-state.md#weapon) | Classname оружия в руках |

@@ -220,8 +220,8 @@ think эффект будет другим.
 
 ### Смотри также
 
-- [grenade_thrown](../hook/gameplay.md#grenade_thrown)
-- [grenade_explode](../hook/gameplay.md#grenade_explode)
+- [grenade:thrown](../hook/gameplay.md#grenade_thrown)
+- [grenade:explode](../hook/gameplay.md#grenade_explode)
 
 ## e:keyvalue {#keyvalue}
 
@@ -401,18 +401,16 @@ e:pev(name[, v...])
 | # | имя | тип |  |
 |---|---|---|---|
 | 1 | `name` | string | имя поля, как в `entvars_t`: `health`, `v_angle`, `iuser1`, … |
-| 2+ | `v...` | number \| string \| entity \| nil | новое значение; без него метод читает |
+| 2 | `v...` | number \| string \| entity \| nil | новое значение; без него метод читает |
 
 ### Возвращает
 
-Зависит от типа поля:
-
-| тип поля |  |
+| тип |  |
 |---|---|
-| число (`int`/`float`) | одно число |
-| вектор | три числа `x, y, z` |
-| строка | строка |
-| сущность (`owner`, `aiment`, `enemy`, …) | `entity \| nil` |
+| `число (int/float)` | одно число |
+| `вектор` | три числа `x, y, z` |
+| `строка` | строка |
+| `сущность (owner, aiment, enemy, …)` | `entity \| nil` |
 
 ### Пример
 

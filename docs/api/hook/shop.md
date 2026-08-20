@@ -5,7 +5,7 @@ description: "Одна система на движковые события и 
 
 # Магазин
 
-## weapon_buy {#weapon_buy}
+## weapon:buy {#weapon_buy}
 
 Игрок покупает оружие в магазине.
 
@@ -44,10 +44,10 @@ end)
 
 ### Смотри также
 
-- [ammo_buy](shop.md#ammo_buy)
-- [item_buy](shop.md#item_buy)
+- [ammo:buy](shop.md#ammo_buy)
+- [item:buy](shop.md#item_buy)
 
-## ammo_buy {#ammo_buy}
+## ammo:buy {#ammo_buy}
 
 Игрок покупает патроны для оружия в руках.
 
@@ -73,9 +73,9 @@ end)
 
 ### Смотри также
 
-- [weapon_buy](shop.md#weapon_buy)
+- [weapon:buy](shop.md#weapon_buy)
 
-## item_buy {#item_buy}
+## item:buy {#item_buy}
 
 Игрок покупает не-оружие в магазине: броню, прибор ночного видения, набор для разминирования, щит или гранату.
 
@@ -104,7 +104,7 @@ end)
 
 **Отмена.** `e:cancel()` отменяет покупку: деньги не списываются, предмет не выдаётся.
 
-Гранаты (`hegrenade`, `flashbang`, `smokegrenade`) идут через тот же пункт меню, что и броня/щит — это не то же самое, что бросок: `weapon_buy` про оружие, `item_buy` про всё остальное в магазине.
+Гранаты (`hegrenade`, `flashbang`, `smokegrenade`) идут через тот же пункт меню, что и броня/щит — это не то же самое, что бросок: `weapon:buy` про оружие, `item:buy` про всё остальное в магазине.
 
 <Warning>
 Событие приходит из ReGameDLL. На ванильном `mp.dll` оно не
@@ -113,4 +113,58 @@ end)
 
 ### Смотри также
 
-- [weapon_buy](shop.md#weapon_buy)
+- [weapon:buy](shop.md#weapon_buy)
+
+## ammo:pickup {#ammo_pickup}
+
+Игроку вот-вот добавят патронов в запас — подбор с земли или дозарядка через магазин (отдельно от `ammo:buy`, которое про сам факт покупки).
+
+```lua
+hook.add("ammo:pickup", id, function(e)
+	...
+end)
+```
+
+### Поля события {#ammo_pickup-поля события}
+
+| поле | тип |  |
+|---|---|---|
+| `e.player` | player | кого касается событие |
+| `e.weapon` | string | classname оружия, для которого патроны |
+| `e.count` | number | сколько добавляется |
+| `e.max` | number | потолок запаса для этого оружия |
+
+**Отмена.** `e:cancel()` — патроны не добавляются.
+
+<Warning>
+Событие приходит из ReGameDLL. На ванильном `mp.dll` оно не
+срабатывает никогда.
+</Warning>
+
+### Смотри также
+
+- [ammo:buy](shop.md#ammo_buy)
+
+## weapon:drop {#weapon_drop}
+
+Игрок вот-вот выбросит оружие на пол — командой `drop`, из `p:drop()` или при потере слота.
+
+```lua
+hook.add("weapon:drop", id, function(e)
+	...
+end)
+```
+
+### Поля события {#weapon_drop-поля события}
+
+| поле | тип |  |
+|---|---|---|
+| `e.player` | player | кого касается событие |
+| `e.weapon` | string | classname выбрасываемого оружия |
+
+**Отмена.** `e:cancel()` — оружие остаётся в руках.
+
+<Warning>
+Событие приходит из ReGameDLL. На ванильном `mp.dll` оно не
+срабатывает никогда.
+</Warning>

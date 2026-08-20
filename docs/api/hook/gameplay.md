@@ -7,7 +7,7 @@ description: "Всё в этом разделе приходит из ReGameDLL"
 
 Всё в этом разделе приходит из ReGameDLL.
 
-## player_spawn {#player_spawn}
+## player:spawn {#player_spawn}
 
 Игрок появился в раунде живым.
 
@@ -30,7 +30,7 @@ end)
 срабатывает никогда.
 </Warning>
 
-## player_hurt {#player_hurt}
+## player:hurt {#player_hurt}
 
 Игроку наносят урон; урон можно изменить или погасить.
 
@@ -74,9 +74,9 @@ end)
 
 ### Смотри также
 
-- [player_hurt_post](gameplay.md#player_hurt_post)
+- [player:hurt_post](gameplay.md#player_hurt_post)
 
-## player_hurt_post {#player_hurt_post}
+## player:hurt_post {#player_hurt_post}
 
 Урон уже применён; только для наблюдателей.
 
@@ -103,7 +103,7 @@ end)
 срабатывает никогда.
 </Warning>
 
-## player_death {#player_death}
+## player:death {#player_death}
 
 Игрок погиб.
 
@@ -136,7 +136,7 @@ end)
 
 <Note>
 Граната и взрыв C4 приходят как оружие в руках убийцы, а не как
-`hegrenade`. Отличить снаряд можно по `e.bits` в `player_hurt`.
+`hegrenade`. Отличить снаряд можно по `e.bits` в `player:hurt`.
 </Note>
 
 <Warning>
@@ -144,7 +144,7 @@ end)
 срабатывает никогда.
 </Warning>
 
-## player_team_change {#player_team_change}
+## player:team_change {#player_team_change}
 
 Игрок сменил сторону.
 
@@ -169,7 +169,149 @@ end)
 срабатывает никогда.
 </Warning>
 
-## weapon_fire {#weapon_fire}
+## player:jump {#player_jump}
+
+Игрок прыгнул.
+
+```lua
+hook.add("player:jump", id, function(e)
+	...
+end)
+```
+
+### Поля события {#player_jump-поля события}
+
+| поле | тип |  |
+|---|---|---|
+| `e.player` | player | кого касается событие |
+
+Не отменяемое: к моменту события движок уже применил прыжок к движению игрока, отменять нечего.
+
+<Warning>
+Событие приходит из ReGameDLL. На ванильном `mp.dll` оно не
+срабатывает никогда.
+</Warning>
+
+## player:duck {#player_duck}
+
+Игрок присел.
+
+```lua
+hook.add("player:duck", id, function(e)
+	...
+end)
+```
+
+### Поля события {#player_duck-поля события}
+
+| поле | тип |  |
+|---|---|---|
+| `e.player` | player | кого касается событие |
+
+Не отменяемое, по той же причине, что и `player:jump`.
+
+<Warning>
+Событие приходит из ReGameDLL. На ванильном `mp.dll` оно не
+срабатывает никогда.
+</Warning>
+
+## player:spectate {#player_spectate}
+
+Игрок перешёл в режим наблюдателя.
+
+```lua
+hook.add("player:spectate", id, function(e)
+	...
+end)
+```
+
+### Поля события {#player_spectate-поля события}
+
+| поле | тип |  |
+|---|---|---|
+| `e.player` | player | кого касается событие |
+
+<Warning>
+Событие приходит из ReGameDLL. На ванильном `mp.dll` оно не
+срабатывает никогда.
+</Warning>
+
+## player:radio {#player_radio}
+
+Игрок использовал радиокоманду.
+
+```lua
+hook.add("player:radio", id, function(e)
+	...
+end)
+```
+
+### Поля события {#player_radio-поля события}
+
+| поле | тип |  |
+|---|---|---|
+| `e.player` | player | кого касается событие |
+| `e.sentence` | string | имя произносимой фразы движка |
+| `e.sample` | string | звуковой файл |
+
+**Отмена.** `e:cancel()` — ни звука, ни строки «Radio: ...» в консоли у остальных.
+
+<Warning>
+Событие приходит из ReGameDLL. На ванильном `mp.dll` оно не
+срабатывает никогда.
+</Warning>
+
+## player:respawn_check {#player_can_respawn}
+
+Игра вот-вот решит, можно ли игроку возродиться.
+
+```lua
+hook.add("player:respawn_check", id, function(e)
+	...
+end)
+```
+
+### Поля события {#player_can_respawn-поля события}
+
+| поле | тип |  |
+|---|---|---|
+| `e.player` | player | кого касается событие |
+
+**Отмена.** `e:cancel()` принудительно запрещает респаун — независимо от того, что решили бы правила игры сами. Разрешить респаун, который правила и так запретили бы, этим событием нельзя: только забрать разрешение, не выдать его.
+
+<Warning>
+Событие приходит из ReGameDLL. На ванильном `mp.dll` оно не
+срабатывает никогда.
+</Warning>
+
+## player:money_change {#money_change}
+
+У игрока вот-вот изменятся деньги — раундовый бонус, награда за фраг, покупка, действие с заложником и т.д.
+
+```lua
+hook.add("player:money_change", id, function(e)
+	...
+end)
+```
+
+### Поля события {#money_change-поля события}
+
+| поле | тип |  |
+|---|---|---|
+| `e.player` | player | кого касается событие |
+| `e.amount` | number | на сколько меняется баланс; отрицательное — трата |
+| `e.reason` | string | `round_bonus`, `enemy_killed`, `bought_something`, `hostage_rescued` и т.д. |
+
+**Отмена.** `e:cancel()` — баланс не меняется вообще.
+
+`weapon:buy`/`ammo:buy`/`item:buy` уже покрывают саму покупку; это событие — про деньги в отрыве от того, что их вызвало, включая раундовый бонус и награды за фраги, которые через магазинные события не видны.
+
+<Warning>
+Событие приходит из ReGameDLL. На ванильном `mp.dll` оно не
+срабатывает никогда.
+</Warning>
+
+## weapon:fire {#weapon_fire}
 
 Из ствола вышел выстрел.
 
@@ -194,7 +336,7 @@ end)
 срабатывает никогда.
 </Warning>
 
-## weapon_deploy {#weapon_deploy}
+## weapon:deploy {#weapon_deploy}
 
 Оружие вот-вот покажет вьюмодель и модель в руках.
 
@@ -224,7 +366,7 @@ hook.add("weapon:deploy", "healnade.reskin", function(e)
 end)
 ```
 
-Оба поля приходят уже заполненными тем, что показал бы движок — меняет их только тот, кто хочет реснуть оружие. Не заменяет модель на земле/в полёте: это `grenade_thrown` про `weapon_hegrenade`.
+Оба поля приходят уже заполненными тем, что показал бы движок — меняет их только тот, кто хочет реснуть оружие. Не заменяет модель на земле/в полёте: это `grenade:thrown` про `weapon_hegrenade`.
 
 <Warning>
 Событие приходит из ReGameDLL. На ванильном `mp.dll` оно не
@@ -233,9 +375,9 @@ end)
 
 ### Смотри также
 
-- [grenade_thrown](gameplay.md#grenade_thrown)
+- [grenade:thrown](gameplay.md#grenade_thrown)
 
-## weapon_reload {#weapon_reload}
+## weapon:reload {#weapon_reload}
 
 Началась настоящая перезарядка.
 
@@ -279,9 +421,68 @@ end)
 
 ### Смотри также
 
-- [weapon_deploy](gameplay.md#weapon_deploy)
+- [weapon:deploy](gameplay.md#weapon_deploy)
 
-## grenade_throw {#grenade_throw}
+## weapon:throw {#weapon_throw}
+
+Любой гранатный слот вот-вот покинёт руку, до того как движок решил, HE это, дымовая или флешка.
+
+```lua
+hook.add("weapon:throw", id, function(e)
+	...
+end)
+```
+
+### Поля события {#weapon_throw-поля события}
+
+| поле | тип |  |
+|---|---|---|
+| `e.player` | player | кого касается событие |
+| `e.weapon` | string | classname брошенного предмета |
+| `e.ammo_type` | number | `m_iPrimaryAmmoType` предмета — отличает переодетый предмет от настоящей гранаты того же classname |
+| `e.x, e.y, e.z` | number | точка броска |
+| `e.vx, e.vy, e.vz` | number | вектор броска |
+| `e.time` | number | таймер, который движок передаст дальше |
+
+**Отмена.** `e:cancel()` забирает бросок целиком себе: движковый `CGrenade` не создаётся вообще. Обработчик, который отменяет, обычно уже успел построить свой снаряд сам (`ents.create` + `e:movetype(8)`) — иначе ничего не полетит.
+
+Общий перехватчик перед тем, как движок решит, какая это граната — `grenade:throw` про конкретно HE/дымовую/флешку идёт дальше по цепочке отдельно.
+
+<Warning>
+Событие приходит из ReGameDLL. На ванильном `mp.dll` оно не
+срабатывает никогда.
+</Warning>
+
+### Смотри также
+
+- [grenade:throw](gameplay.md#grenade_throw)
+
+## weapon:secondary_attack {#weapon_secondary_attack}
+
+Игрок нажал правую кнопку мыши, держа это оружие.
+
+```lua
+hook.add("weapon:secondary_attack", id, function(e)
+	...
+end)
+```
+
+### Поля события {#weapon_secondary_attack-поля события}
+
+| поле | тип |  |
+|---|---|---|
+| `e.player` | player | кого касается событие |
+| `e.weapon` | string | classname оружия |
+| `e.ammo_type` | number | `m_iPrimaryAmmoType` оружия |
+
+Срабатывает на каждое нажатие, не на каждый кадр зажатой кнопки. Нет отдельного движкового хука на secondary attack (в отличие от primary, за которым стоит `weapon:fire`) — событие собрано из детектора фронта кнопки в `PlayerPreThink`.
+
+<Warning>
+Событие приходит из ReGameDLL. На ванильном `mp.dll` оно не
+срабатывает никогда.
+</Warning>
+
+## grenade:throw {#grenade_throw}
 
 HE, дымовая или флешка вот-вот покинёт руку.
 
@@ -309,7 +510,7 @@ hook.add("grenade:throw", "healnade.instant", function(e)
 end)
 ```
 
-Приходит до того, как движок создаст сам снаряд — на этом этапе ещё нет сущности для `e:detonate_on_touch()`, только число. Взрыв по касанию, а не по таймеру — это [`e:detonate_on_touch()`](../ents/entity.md#detonate_on_touch) в `grenade_thrown`, а не подмена `fuse` здесь.
+Приходит до того, как движок создаст сам снаряд — на этом этапе ещё нет сущности для `e:detonate_on_touch()`, только число. Взрыв по касанию, а не по таймеру — это [`e:detonate_on_touch()`](../ents/entity.md#detonate_on_touch) в `grenade:thrown`, а не подмена `fuse` здесь.
 
 <Warning>
 Событие приходит из ReGameDLL. На ванильном `mp.dll` оно не
@@ -318,9 +519,9 @@ end)
 
 ### Смотри также
 
-- [grenade_thrown](gameplay.md#grenade_thrown)
+- [grenade:thrown](gameplay.md#grenade_thrown)
 
-## grenade_thrown {#grenade_thrown}
+## grenade:thrown {#grenade_thrown}
 
 HE, дымовая или флешка только что покинула руку.
 
@@ -358,10 +559,10 @@ end)
 
 ### Смотри также
 
-- [weapon_deploy](gameplay.md#weapon_deploy)
+- [weapon:deploy](gameplay.md#weapon_deploy)
 - [ents](../ents/entity.md#index)
 
-## grenade_explode {#grenade_explode}
+## grenade:explode {#grenade_explode}
 
 HE, дымовая или флешка вот-вот взорвётся.
 
@@ -395,209 +596,7 @@ end)
 
 **Отмена.** `e:cancel()` забирает взрыв целиком себе: ни урона (у HE), ни дыма (у smoke), ни ослепления/звона в ушах (у флешки), ни звука от игры — дальше плагин сам решает, что происходит в этой точке. Сущность при этом не убирается сама: если она больше не нужна, убирай через `e.entity:remove()`.
 
-Бомбу не задевает: у неё отдельная цепочка, `bomb_exploded`.
-
-<Warning>
-Событие приходит из ReGameDLL. На ванильном `mp.dll` оно не
-срабатывает никогда.
-</Warning>
-
-## money_change {#money_change}
-
-У игрока вот-вот изменятся деньги — раундовый бонус, награда за фраг, покупка,
-действие с заложником и т.д.
-
-```lua
-hook.add("player:money_change", id, function(e)
-	...
-end)
-```
-
-### Поля события {#money_change-поля события}
-
-| поле | тип |  |
-|---|---|---|
-| `e.player` | player | кого касается событие |
-| `e.amount` | number | на сколько меняется баланс; отрицательное — трата |
-| `e.reason` | string | `round_bonus`, `enemy_killed`, `bought_something`, `hostage_rescued` и т.д. |
-
-**Отмена.** `e:cancel()` — баланс не меняется вообще.
-
-`weapon_buy`/`ammo_buy`/`item_buy` уже покрывают саму покупку; это событие —
-про деньги в отрыве от того, что их вызвало, включая раундовый бонус и
-награды за фраги, которые через магазинные события не видны.
-
-<Warning>
-Событие приходит из ReGameDLL. На ванильном `mp.dll` оно не
-срабатывает никогда.
-</Warning>
-
-## ammo_pickup {#ammo_pickup}
-
-Игроку вот-вот добавят патронов в запас — подбор с земли или дозарядка
-через магазин (отдельно от `ammo_buy`, которое про сам факт покупки).
-
-```lua
-hook.add("ammo:pickup", id, function(e)
-	...
-end)
-```
-
-### Поля события {#ammo_pickup-поля события}
-
-| поле | тип |  |
-|---|---|---|
-| `e.player` | player | кого касается событие |
-| `e.weapon` | string | classname оружия, для которого патроны |
-| `e.count` | number | сколько добавляется |
-| `e.max` | number | потолок запаса для этого оружия |
-
-**Отмена.** `e:cancel()` — патроны не добавляются.
-
-<Warning>
-Событие приходит из ReGameDLL. На ванильном `mp.dll` оно не
-срабатывает никогда.
-</Warning>
-
-## weapon_drop {#weapon_drop}
-
-Игрок вот-вот выбросит оружие на пол — командой `drop`, из `p:drop()` или
-при потере слота.
-
-```lua
-hook.add("weapon:drop", id, function(e)
-	...
-end)
-```
-
-### Поля события {#weapon_drop-поля события}
-
-| поле | тип |  |
-|---|---|---|
-| `e.player` | player | кого касается событие |
-| `e.weapon` | string | classname выбрасываемого оружия |
-
-**Отмена.** `e:cancel()` — оружие остаётся в руках.
-
-<Warning>
-Событие приходит из ReGameDLL. На ванильном `mp.dll` оно не
-срабатывает никогда.
-</Warning>
-
-## player_jump {#player_jump}
-
-Игрок прыгнул.
-
-```lua
-hook.add("player:jump", id, function(e)
-	...
-end)
-```
-
-### Поля события {#player_jump-поля события}
-
-| поле | тип |  |
-|---|---|---|
-| `e.player` | player | кого касается событие |
-
-Не отменяемое: к моменту события движок уже применил прыжок к движению
-игрока, отменять нечего.
-
-<Warning>
-Событие приходит из ReGameDLL. На ванильном `mp.dll` оно не
-срабатывает никогда.
-</Warning>
-
-## player_duck {#player_duck}
-
-Игрок присел.
-
-```lua
-hook.add("player:duck", id, function(e)
-	...
-end)
-```
-
-### Поля события {#player_duck-поля события}
-
-| поле | тип |  |
-|---|---|---|
-| `e.player` | player | кого касается событие |
-
-Не отменяемое, по той же причине, что и `player_jump`.
-
-<Warning>
-Событие приходит из ReGameDLL. На ванильном `mp.dll` оно не
-срабатывает никогда.
-</Warning>
-
-## player_spectate {#player_spectate}
-
-Игрок перешёл в режим наблюдателя.
-
-```lua
-hook.add("player:spectate", id, function(e)
-	...
-end)
-```
-
-### Поля события {#player_spectate-поля события}
-
-| поле | тип |  |
-|---|---|---|
-| `e.player` | player | кого касается событие |
-
-<Warning>
-Событие приходит из ReGameDLL. На ванильном `mp.dll` оно не
-срабатывает никогда.
-</Warning>
-
-## player_radio {#player_radio}
-
-Игрок использовал радиокоманду.
-
-```lua
-hook.add("player:radio", id, function(e)
-	...
-end)
-```
-
-### Поля события {#player_radio-поля события}
-
-| поле | тип |  |
-|---|---|---|
-| `e.player` | player | кого касается событие |
-| `e.sentence` | string | имя произносимой фразы движка |
-| `e.sample` | string | звуковой файл |
-
-**Отмена.** `e:cancel()` — ни звука, ни строки «Radio: ...» в консоли у
-остальных.
-
-<Warning>
-Событие приходит из ReGameDLL. На ванильном `mp.dll` оно не
-срабатывает никогда.
-</Warning>
-
-## player_can_respawn {#player_can_respawn}
-
-Игра вот-вот решит, можно ли игроку возродиться.
-
-```lua
-hook.add("player:respawn_check", id, function(e)
-	...
-end)
-```
-
-### Поля события {#player_can_respawn-поля события}
-
-| поле | тип |  |
-|---|---|---|
-| `e.player` | player | кого касается событие |
-
-**Отмена.** `e:cancel()` принудительно запрещает респаун — независимо от
-того, что решили бы правила игры сами. Разрешить респаун, который правила
-и так запретили бы, этим событием нельзя: только забрать разрешение, не
-выдать его.
+Бомбу не задевает: у неё отдельная цепочка, `bomb:exploded`.
 
 <Warning>
 Событие приходит из ReGameDLL. На ванильном `mp.dll` оно не

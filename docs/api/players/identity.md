@@ -68,7 +68,7 @@ p:steamid()
 <Warning>
 В событии `client_connect` возвращает `STEAM_ID_PENDING` —
 Steam отвечает позже. Всё, что завязано на steamid, вешай на
-[`player_authorized`](../hook/connection.md#player_authorized).
+[`player_authorized`](../hook/player_authorized.md).
 </Warning>
 
 ## p:userid {#userid}

@@ -21,8 +21,9 @@ import render  # noqa: E402
 
 # Порядок в меню: от того, с чего начинают, к тому, что ищут реже.
 NAMESPACES = [
-    'hook', 'cmd', 'players', 'timer', 'ents', 'fx', 'res',
-    'sv', 'db', 'mysql', 'store', 'http', 'menu', 'ui', 'access', 'plugin', 'exports',
+    'hook', 'msg', 'cmd', 'players', 'timer', 'ents', 'vec', 'fx', 'res',
+    'sv', 'db', 'mysql', 'store', 'file', 'log', 'regex',
+    'http', 'menu', 'ui', 'access', 'plugin', 'exports',
 ]
 
 SIDEBAR = """import type {SidebarsConfig} from '@docusaurus/plugin-content-docs';

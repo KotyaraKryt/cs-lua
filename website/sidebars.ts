@@ -21,6 +21,10 @@ const sidebars: SidebarsConfig = {
           {type: 'doc', id: 'api/hook/round', label: 'Раунд и бомба'},
           {type: 'doc', id: 'api/hook/shop', label: 'Магазин'},
         ]},
+        {type: 'category', label: 'msg', collapsed: true, link: {type: 'doc', id: 'api/msg/index'}, items: [
+          {type: 'doc', id: 'api/msg/send', label: 'Отправка'},
+          {type: 'doc', id: 'api/msg/fields', label: 'Поля сообщения'},
+        ]},
         {type: 'doc', id: 'api/cmd/index', label: 'cmd'},
         {type: 'category', label: 'players', collapsed: true, link: {type: 'doc', id: 'api/players/index'}, items: [
           {type: 'doc', id: 'api/players/namespace', label: 'Пространство имён'},
@@ -39,6 +43,7 @@ const sidebars: SidebarsConfig = {
           {type: 'doc', id: 'api/ents/namespace', label: 'Пространство имён'},
           {type: 'doc', id: 'api/ents/entity', label: 'Объект сущности'},
         ]},
+        {type: 'doc', id: 'api/vec/index', label: 'vec'},
         {type: 'doc', id: 'api/fx/index', label: 'fx'},
         {type: 'doc', id: 'api/res/index', label: 'res'},
         {type: 'category', label: 'sv', collapsed: true, link: {type: 'doc', id: 'api/sv/index'}, items: [
@@ -58,6 +63,9 @@ const sidebars: SidebarsConfig = {
           {type: 'doc', id: 'api/store/kv', label: 'Ключ-значение'},
           {type: 'doc', id: 'api/store/datafile', label: 'datafile'},
         ]},
+        {type: 'doc', id: 'api/file/index', label: 'file'},
+        {type: 'doc', id: 'api/log/index', label: 'log'},
+        {type: 'doc', id: 'api/regex/index', label: 'regex'},
         {type: 'doc', id: 'api/http/index', label: 'http'},
         {type: 'doc', id: 'api/menu/index', label: 'menu'},
         {type: 'doc', id: 'api/ui/index', label: 'ui'},

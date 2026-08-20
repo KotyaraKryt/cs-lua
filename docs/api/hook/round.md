@@ -5,7 +5,7 @@ description: "Одна система на движковые события и 
 
 # Раунд и бомба
 
-## round_start {#round_start}
+## round:start {#round_start}
 
 Раунд начался.
 
@@ -26,7 +26,7 @@ end)
 срабатывает никогда.
 </Warning>
 
-## round_end {#round_end}
+## round:end {#round_end}
 
 Раунд закончился.
 
@@ -47,7 +47,7 @@ end)
 срабатывает никогда.
 </Warning>
 
-## round_freeze_end {#round_freeze_end}
+## round:freeze_end {#round_freeze_end}
 
 Заморозка кончилась, игроки могут двигаться.
 
@@ -68,7 +68,7 @@ end)
 срабатывает никогда.
 </Warning>
 
-## bomb_planted {#bomb_planted}
+## bomb:planted {#bomb_planted}
 
 Бомба заложена.
 
@@ -89,10 +89,9 @@ end)
 срабатывает никогда.
 </Warning>
 
-## bomb_defuse_start {#bomb_defuse_start}
+## bomb:defusing {#bomb_defuse_start}
 
-Игрок начал разминирование. Не путать с `bomb_defused` — то приходит один
-раз в конце, успешно или нет; это — в момент начала попытки.
+Игрок начал разминирование.
 
 ```lua
 hook.add("bomb:defusing", id, function(e)
@@ -107,12 +106,18 @@ end)
 | `e.player` | player | кто начал разминировать |
 | `e.defuser` | boolean | с набором для разминирования (быстрее) или голыми руками |
 
+Не путать с `bomb:defused` — то приходит один раз в конце, успешно или нет; это — в момент начала попытки.
+
 <Warning>
 Событие приходит из ReGameDLL. На ванильном `mp.dll` оно не
 срабатывает никогда.
 </Warning>
 
-## bomb_defused {#bomb_defused}
+### Смотри также
+
+- [bomb:defused](round.md#bomb_defused)
+
+## bomb:defused {#bomb_defused}
 
 Попытка разминирования завершилась.
 
@@ -136,7 +141,7 @@ end)
 срабатывает никогда.
 </Warning>
 
-## bomb_exploded {#bomb_exploded}
+## bomb:exploded {#bomb_exploded}
 
 Бомба взорвалась.
 
@@ -152,7 +157,7 @@ end)
 |---|---|---|
 | `e.x, e.y, e.z` | number | координаты взрыва |
 
-Игрока в событии нет: запоминай заложившего в `bomb_planted`, если он нужен.
+Игрока в событии нет: запоминай заложившего в `bomb:planted`, если он нужен.
 
 <Warning>
 Событие приходит из ReGameDLL. На ванильном `mp.dll` оно не

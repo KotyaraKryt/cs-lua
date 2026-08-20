@@ -1,13 +1,13 @@
 ---
 title: hook — Подключение
-description: "Порядок: `client_connect` → `player_authorized` → `player_ready`"
+description: "Порядок: `client:connect` → `client:authorized` → `client:connected`"
 ---
 
 # Подключение
 
-Порядок: `client_connect` → `player_authorized` → `player_ready`.
+Порядок: `client:connect` → `client:authorized` → `client:connected`.
 
-## client_connect {#client_connect}
+## client:connect {#connect}
 
 Игрок стучится на сервер; его ещё можно не пустить.
 
@@ -17,7 +17,7 @@ hook.add("client:connect", id, function(e)
 end)
 ```
 
-### Поля события {#client_connect-поля события}
+### Поля события {#connect-поля события}
 
 | поле | тип |  |
 |---|---|---|
@@ -42,10 +42,10 @@ end)
 <Warning>
 Здесь `e.player:steamid()` возвращает `STEAM_ID_PENDING`, а
 сообщения не доходят. Права и статистику вешай на
-`player_authorized`, приветствия — на `player_ready`.
+`client:authorized`, приветствия — на `client:connected`.
 </Warning>
 
-## client_disconnect {#client_disconnect}
+## client:disconnect {#disconnect}
 
 Игрок отключился.
 
@@ -55,7 +55,7 @@ hook.add("client:disconnect", id, function(e)
 end)
 ```
 
-### Поля события {#client_disconnect-поля события}
+### Поля события {#disconnect-поля события}
 
 | поле | тип |  |
 |---|---|---|
@@ -64,7 +64,7 @@ end)
 
 Место, где чистят своё состояние по `e.player.id`.
 
-## player_authorized {#player_authorized}
+## client:authorized {#authorized}
 
 Steam ответил, steamid наконец известен.
 
@@ -74,7 +74,7 @@ hook.add("client:authorized", id, function(e)
 end)
 ```
 
-### Поля события {#player_authorized-поля события}
+### Поля события {#authorized-поля события}
 
 | поле | тип |  |
 |---|---|---|
@@ -83,7 +83,7 @@ end)
 
 Срабатывает один раз за подключение. Всё, что завязано на steamid — права, статистика — начинается здесь.
 
-## player_ready {#player_ready}
+## client:connected {#connected}
 
 Игрок в игре, сообщения до него доходят.
 
@@ -93,7 +93,7 @@ hook.add("client:connected", id, function(e)
 end)
 ```
 
-### Поля события {#player_ready-поля события}
+### Поля события {#connected-поля события}
 
 | поле | тип |  |
 |---|---|---|
@@ -101,7 +101,7 @@ end)
 
 Место для приветствий и первого HUD.
 
-## player_chat {#player_chat}
+## player:chat {#chat}
 
 Игрок написал в чат.
 
@@ -111,7 +111,7 @@ hook.add("player:chat", id, function(e)
 end)
 ```
 
-### Поля события {#player_chat-поля события}
+### Поля события {#chat-поля события}
 
 | поле | тип |  |
 |---|---|---|
@@ -132,7 +132,7 @@ end)
 
 **Отмена.** `e:cancel()` проглатывает сообщение — оно не доходит ни до кого. Так работает `!команда`, и так же чат-менеджер подменяет строку: отменить и разослать свою.
 
-## menu_select {#menu_select}
+## menu:select {#select}
 
 Игрок нажал клавишу в меню, открытом из Lua.
 
@@ -142,7 +142,7 @@ hook.add("menu:select", id, function(e)
 end)
 ```
 
-### Поля события {#menu_select-поля события}
+### Поля события {#select-поля события}
 
 | поле | тип |  |
 |---|---|---|

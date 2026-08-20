@@ -5,6 +5,8 @@ description: "Векторная математика: расстояние, д�
 
 # vec
 
+Векторная математика: расстояние, длина, нормализация, углы.
+
 Чистая математика без обращения к движку или сущностям — векторы теми же
 тройками чисел, что и везде в модуле (`p:origin()` возвращает `x, y, z`,
 а не таблицу, и `vec.*` принимает их так же).
@@ -106,8 +108,6 @@ vec.to_angle(x, y, z)
 |---|---|
 | `number, number, number` | `pitch, yaw, roll` |
 
-Обратная операция для [`vec.angle_vector`](#angle_vector).
-
 ### Пример
 
 ```lua
@@ -115,6 +115,8 @@ local px, py, pz = p:origin()
 local pitch, yaw, roll = vec.to_angle(target.x - px, target.y - py, target.z - pz)
 p:angles(pitch, yaw, roll)   -- модель игрока разворачивается на точку
 ```
+
+Обратная операция для [vec.angle_vector](index.md#angle_vector).
 
 ## vec.angle_vector {#angle_vector}
 
@@ -136,16 +138,16 @@ vec.angle_vector(pitch, yaw, roll)
 |---|---|
 | `number, number, number` | единичный вектор вперёд |
 
-Тот же движковый вызов, что `p:trace()` использует для направления взгляда
-игрока (`MAKE_VECTORS`), только без привязки к конкретному игроку — годится
-для сущностей и вычисленных углов.
-
 ### Пример
 
 ```lua
 local fx, fy, fz = vec.angle_vector(p:pev("v_angle"))
 ```
 
+Тот же движковый вызов, что `p:trace()` использует для направления взгляда
+игрока (`MAKE_VECTORS`), только без привязки к конкретному игроку — годится
+для сущностей и вычисленных углов.
+
 ### Смотри также
 
-- [vec.to_angle](#to_angle)
+- [vec.to_angle](index.md#to_angle)

@@ -197,6 +197,21 @@ end)
                 rw('godmode', 'Неуязвимость.', 'boolean'),
                 rw('noclip', 'Полёт сквозь стены.', 'boolean'),
                 {
+                    'name': 'p:pev',
+                    'brief': 'Читает или задаёт произвольное поле `entvars_t` по имени — то же, что\n`e:pev` у сущностей, только на игроке.',
+                    'sig': 'p:pev(name[, v...])',
+                    'args': [('name', 'string', 'имя поля, как в `entvars_t`: `health`, `v_angle`, `iuser1`, …'),
+                             ('v...', 'number \\| string \\| entity \\| nil', 'новое значение; без него метод читает')],
+                    'returns': [('...', 'зависит от типа поля — см. [e:pev](../ents/pev.md)')],
+                    'example': """
+p:pev("iuser1", 1)                 -- своё поле под нужды плагина
+local x, y, z = p:pev("v_angle")   -- то же, что p:aim()
+""",
+                    'extra': 'Тот же список полей и та же диспетчеризация по типу, что у `e:pev` — оба метода читают ровно один и тот же `entvars_t`.',
+                    'notes': [CONNECTED],
+                    'see': [('e:pev', '../ents/pev.md')],
+                },
+                {
                     'name': 'p:trace',
                     'brief': 'Пускает луч из глаз игрока туда, куда он смотрит.',
                     'sig': 'p:trace([distance])',
@@ -283,6 +298,8 @@ p:team("T", { force = true })     -- через смерть и повторны
                 },
                 rw('deaths', 'Счётчик смертей.', 'number',
                    extra='Запись обновляет строку в таблице счёта.', notes=[REGAMEDLL]),
+                rw('defuser', 'Есть ли у игрока дефузер.', 'boolean',
+                   example='p:defuser(true)     -- выдаёт дефузер бесплатно', notes=[REGAMEDLL]),
                 {
                     'name': 'p:give',
                     'brief': 'Выдаёт игроку предмет по classname.',
