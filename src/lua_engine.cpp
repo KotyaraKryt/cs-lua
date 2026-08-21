@@ -580,6 +580,112 @@ bool LuaEngine::check_plugin(const char *id, std::string &out)
 	return ok;
 }
 
+// Starts plugins/<id> that is not currently running. Two cases: an existing,
+// `lua_unload`ed slot (reuse it, same reset reload_plugin() does before its
+// own load_plugin() call - a fresh env/module cache, or edits to lib/ files
+// would keep resolving to what require() cached last time), or a folder
+// nobody has ever loaded this run (append a slot the same way
+// discover_plugins() would have at startup, had it existed then). Either
+// way every other plugin's index is untouched.
+bool LuaEngine::load_plugin_by_name(const char *id, std::string &out)
+{
+	if (!m_L) {
+		out = "Lua state is not running";
+		return false;
+	}
+
+	for (size_t i = 0; i < m_plugins.size(); i++) {
+		if (m_plugins[i].id != id)
+			continue;
+
+		if (m_plugins[i].loaded) {
+			out = "'" + std::string(id) + "' is already loaded - use lua_reload to restart it";
+			return false;
+		}
+
+		LuaPlugin &plugin = m_plugins[i];
+		luaL_unref(m_L, LUA_REGISTRYINDEX, plugin.env_ref);
+		luaL_unref(m_L, LUA_REGISTRYINDEX, plugin.modules_ref);
+		plugin.env_ref = LUA_NOREF;
+		plugin.modules_ref = LUA_NOREF;
+		plugin.declared = false;
+		plugin.failed = false;
+		plugin.required_modules.clear();
+
+		load_plugin((int)i);
+		plugin.loaded = true;
+		cslua_regamedll_install_hooks();
+
+		out = plugin.failed
+			? "'" + std::string(id) + "' loaded with errors - see console"
+			: "loaded '" + std::string(id) + "'";
+		return !plugin.failed;
+	}
+
+	std::string plugin_dir = cslua_base_dir() + "/plugins/" + id;
+	std::string manifest = plugin_dir + "/manifest.lua";
+	std::string init = plugin_dir + "/init.lua";
+
+	if (!cslua_file_exists(manifest)) {
+		out = "no manifest.lua in plugins/" + std::string(id);
+		return false;
+	}
+	if (!cslua_file_exists(init)) {
+		out = "no init.lua in plugins/" + std::string(id) +
+			" - both files are required";
+		return false;
+	}
+
+	int index = (int)m_plugins.size();
+	LuaPlugin plugin;
+	plugin.id = id;
+	plugin.dir = plugin_dir;
+	plugin.manifest = manifest;
+	plugin.entry = init;
+	plugin.name = plugin.id;
+	m_plugins.push_back(plugin);
+
+	load_plugin(index);
+	cslua_regamedll_install_hooks();
+
+	LuaPlugin &loaded = m_plugins[index];
+	out = loaded.failed
+		? "'" + std::string(id) + "' loaded with errors - see console"
+		: "loaded '" + std::string(id) + "'";
+	return !loaded.failed;
+}
+
+// The other half of load_plugin_by_name(): tears the plugin down exactly
+// like a reload would (its own on_unload handlers run, every
+// handler/timer/command/db it registered goes away), but does not run
+// init.lua again - the slot just sits there marked unloaded until
+// lua_load brings it back.
+bool LuaEngine::unload_plugin_by_name(const char *id, std::string &out)
+{
+	if (!m_L) {
+		out = "Lua state is not running";
+		return false;
+	}
+
+	for (size_t i = 0; i < m_plugins.size(); i++) {
+		if (m_plugins[i].id != id)
+			continue;
+
+		if (!m_plugins[i].loaded) {
+			out = "'" + std::string(id) + "' is already unloaded";
+			return false;
+		}
+
+		unload_plugin((int)i, true);
+		m_plugins[i].loaded = false;
+		out = "unloaded '" + std::string(id) + "'";
+		return true;
+	}
+
+	out = "no plugin named '" + std::string(id) + "' - run lua_list to see them";
+	return false;
+}
+
 void LuaEngine::load_core()
 {
 	std::string dir = cslua_base_dir() + "/core";

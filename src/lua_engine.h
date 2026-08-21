@@ -36,6 +36,11 @@ struct LuaPlugin
 	// Kept in the list even when it blows up during load, so lua_list can
 	// show it as broken instead of silently hiding it.
 	bool failed = false;
+
+	// False after `lua_unload <plugin>`: torn down on purpose, slot kept
+	// (not erased - every other index in m_plugins would shift) so
+	// `lua_load` can find it again and start it back up in place.
+	bool loaded = true;
 };
 
 // Owns the single lua_State shared by all plugins. Every plugin gets its own
@@ -61,6 +66,23 @@ public:
 	// Behind `lua_check <plugin>`. Returns false on any failure and leaves
 	// the reason in `out`.
 	bool check_plugin(const char *id, std::string &out);
+
+	// Starts a plugin that is not currently running - either brand new
+	// (its folder appeared under plugins/ after startup, never in
+	// m_plugins at all) or previously `lua_unload`ed (slot already
+	// exists, just inert). Appends a fresh slot for the first case, reuses
+	// the existing one for the second - either way nothing about any other
+	// already-running plugin's index moves. `out` explains what happened
+	// (already running, missing files, load error - see console) whether
+	// this returns true or false. Behind `lua_load <plugin>`.
+	bool load_plugin_by_name(const char *id, std::string &out);
+
+	// The other half: tears one plugin down like a reload would, but does
+	// not start it back up - the slot stays in m_plugins (see
+	// LuaPlugin::loaded) so indices elsewhere never shift, it just stops
+	// doing anything until `lua_load` picks it back up. Behind
+	// `lua_unload <plugin>`.
+	bool unload_plugin_by_name(const char *id, std::string &out);
 
 	// The web panel (or any other plugin) wants a reload, but its request
 	// arrives from inside a route handler - itself a lua_pcall running on the

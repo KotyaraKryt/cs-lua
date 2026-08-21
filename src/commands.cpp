@@ -64,6 +64,40 @@ static void cmd_lua_check()
 	cslua_print("%s", result.c_str());
 }
 
+// lua_load <plugin> - starts a plugin that is not currently running: a
+// folder that appeared under plugins/ after the server came up (never
+// discovered at startup, so `lua_reload <plugin>` has nothing to find), or
+// one a previous `lua_unload` stopped. Everything else already running
+// keeps running untouched - unlike a bare `lua_reload`, which tears down
+// and restarts the whole state.
+static void cmd_lua_load()
+{
+	if (CMD_ARGC() < 2) {
+		cslua_print("usage: lua_load <plugin>");
+		return;
+	}
+
+	std::string result;
+	g_lua.load_plugin_by_name(CMD_ARGV(1), result);
+	cslua_print("%s", result.c_str());
+}
+
+// lua_unload <plugin> - stops one plugin (its own on_unload handlers run,
+// then every handler/timer/command/db it registered goes away) without
+// touching any other plugin or restarting the Lua state. `lua_load` brings
+// it back later.
+static void cmd_lua_unload()
+{
+	if (CMD_ARGC() < 2) {
+		cslua_print("usage: lua_unload <plugin>");
+		return;
+	}
+
+	std::string result;
+	g_lua.unload_plugin_by_name(CMD_ARGV(1), result);
+	cslua_print("%s", result.c_str());
+}
+
 static void cmd_lua_list()
 {
 	if (!g_lua.ready()) {
@@ -94,7 +128,7 @@ static void cmd_lua_list()
 			cslua_timers_count_for_plugin((int)i),
 			cslua_db_count_for_plugin((int)i),
 			p.author.empty() ? "?" : p.author.c_str(),
-			p.failed ? "   [FAILED]" : "");
+			!p.loaded ? "   [UNLOADED]" : p.failed ? "   [FAILED]" : "");
 	}
 
 	cslua_print("  (h = handlers, t = timers, db = open databases)");
@@ -333,6 +367,8 @@ static void cmd_lua_precache()
 void cslua_register_commands()
 {
 	REG_SVR_COMMAND("lua_reload", cmd_lua_reload);
+	REG_SVR_COMMAND("lua_load", cmd_lua_load);
+	REG_SVR_COMMAND("lua_unload", cmd_lua_unload);
 	REG_SVR_COMMAND("lua_check", cmd_lua_check);
 	REG_SVR_COMMAND("lua_list", cmd_lua_list);
 	REG_SVR_COMMAND("lua_profile", cmd_lua_profile);
