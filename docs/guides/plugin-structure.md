@@ -6,17 +6,21 @@ description: "Как устроены Lua-плагины, их файлы, ок�
 
 Все плагины находятся в `addons/lua/plugins/`. Каждый плагин имеет собственную папку:
 
-```text
-addons/lua/
-├── core/
-├── include/
-└── plugins/
-    └── my_plugin/
-        ├── manifest.lua
-        └── init.lua
-```
+<Tree>
+  <Tree.Folder name="addons/lua" defaultOpen>
+    <Tree.Folder name="plugins" defaultOpen>
+      <Tree.Folder name="my_plugin" defaultOpen>
+        <Tree.File name="manifest.lua" />
+        <Tree.File name="init.lua" />
+      </Tree.Folder>
+    </Tree.Folder>
+    <Tree.Folder name="core" />
+    <Tree.Folder name="include" />
+  </Tree.Folder>
+</Tree>
 
 Каждый плагин должен содержать два обязательных файла:
+
 - `manifest.lua` — описывает плагин и его настройки
 - `init.lua` — содержит основной код плагина
 
@@ -50,28 +54,25 @@ end, { source = "chat" })
 
 ## Системные директории
 
-Помимо `plugins/`, в `addons/lua/` находятся директории, которые используются самим `cs-lua`:
+Помимо `plugins/`, в `addons/lua/` находятся директории, которые используются самим `cs-lua`.
 
-```text
-addons/lua/
-├── core/
-├── include/
-└── plugins/
-```
+<AccordionGroup>
+  <Accordion title="core/">
+    Содержит базовый Lua-код `cs-lua`, который загружается до плагинов.
 
-### `core/`
+    Файлы из `core/` определяют общие функции и API, доступные плагинам.
+  </Accordion>
 
-Содержит базовый Lua-код `cs-lua`, который загружается до плагинов.
-Файлы из `core/` определяют общие функции и API, доступные плагинам.
+  <Accordion title="include/">
+    Содержит общие Lua-модули, которые можно подключать через `require()`.
 
-### `include/`
+    В отличие от `core/`, файлы из `include/` не загружаются автоматически.
+  </Accordion>
 
-Содержит общие Lua-модули, которые можно подключать через `require()`.
-В отличие от `core/`, файлы из `include/` не загружаются автоматически.
-
-### `plugins/`
-
-Содержит установленные Lua-плагины. Каждый плагин располагается в отдельной папке.
+  <Accordion title="plugins/">
+    Содержит установленные Lua-плагины. Каждый плагин располагается в отдельной папке.
+  </Accordion>
+</AccordionGroup>
 
 ## Подключение модулей
 
@@ -91,11 +92,13 @@ plugins/
 ```
 
 В `init.lua` модуль можно подключить:
+
 ```lua
 local Session = require("lib.sessions")
 ```
 
 Общие модули из `include/` подключаются таким же образом:
+
 ```lua
 local class = require("class")
 ```
@@ -119,6 +122,7 @@ print(shared_value) -- nil
 ```
 
 При этом API `cs-lua` и стандартные возможности Lua доступны каждому плагину.
+
 Такое разделение позволяет плагинам использовать одинаковые имена переменных и собственные модули без конфликтов.
 
 ## Порядок загрузки
@@ -130,7 +134,9 @@ print(shared_value) -- nil
 ```text
 cstrike/addons/lua/load_order.txt
 ```
+
 Укажите имена плагинов, которые должны загрузиться первыми:
+
 ```text
 # Плагины, которые должны загрузиться первыми
 
@@ -142,9 +148,12 @@ stats
 ```
 
 Плагины из `load_order.txt` загружаются строго в указанном порядке. Все остальные загружаются после них в алфавитном порядке.
+
 Пустые строки и комментарии, начинающиеся с `#`, игнорируются.
 
-<Note> `load_order.txt` не обязан содержать все плагины. Указывайте только те, для которых порядок загрузки действительно важен. </Note>
+<Note>
+  `load_order.txt` не обязан содержать все плагины. Указывайте только те, для которых порядок загрузки действительно важен.
+</Note>
 
 ## Взаимодействие между плагинами
 
@@ -152,32 +161,41 @@ stats
 
 Для взаимодействия между плагинами используются `export()`, `import()` и `optional()`.
 
-Один плагин может предоставить функцию:
+<CodeGroup>
+```lua shop
+-- plugins/shop/init.lua
 
-```lua
--- cstrike/addons/lua/plugins/shop/init.lua
 export("give_vip", function(p)
   -- ...
 end)
 ```
-Другой плагин может получить доступ к экспорту:
-```lua
--- cstrike/addons/lua/plugins/stats/init.lua
+
+```lua stats
+-- plugins/stats/init.lua
+
 local shop = import("shop")
 
 shop.give_vip(p)
 ```
+</CodeGroup>
+
 `import()` создаёт жёсткую зависимость от указанного плагина. Если плагин не найден, загрузка зависимого плагина завершится ошибкой.
+
 Если зависимость необязательна, используйте `optional()`:
+
 ```lua
--- cstrike/addons/lua/plugins/admin_manager/init.lua
+-- plugins/admin_manager/init.lua
+
 local shop = optional("shop")
 
 if shop then
   shop.give_vip(p)
 end
 ```
-<Note> Если взаимодействие между плагинами не является прямым вызовом функции, используйте систему событий через `hook`. </Note>
+
+<Note>
+  Если взаимодействие между плагинами не является прямым вызовом функции, используйте систему событий через `hook`.
+</Note>
 
 ## Дальше
 

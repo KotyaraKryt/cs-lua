@@ -4,34 +4,30 @@ description: "Как создать свой первый плагин на Lua.
 
 # Первый плагин
 
+Создадим простой плагин, который регистрирует чат-команду `!hello` и `/hello`.
+
 ## Создание плагина
 
 Плагин представляет собой отдельную папку в `addons/lua/plugins/` с двумя обязательными файлами: `manifest.lua` и `init.lua`.
+
+<Tree>
+  <Tree.Folder name="first_plugin" defaultOpen>
+    <Tree.File name="manifest.lua" />
+    <Tree.File name="init.lua" />
+  </Tree.Folder>
+</Tree>
+
 <Steps>
   <Step title="Создайте папку плагина">
     Создайте новую папку внутри `cstrike/addons/lua/plugins/`.
-
-    Например:
-
-    ```text
-    cstrike/addons/lua/plugins/first_plugin/
-    ```
   </Step>
 
   <Step title="Создайте manifest.lua">
-    Внутри папки `first_plugin` создайте файл `manifest.lua`:
-
-    ```text
-    cstrike/addons/lua/plugins/first_plugin/manifest.lua
-    ```
+    Внутри папки `first_plugin` создайте файл `manifest.lua`.
   </Step>
 
   <Step title="Создайте init.lua">
-    Внутри папки `first_plugin` создайте файл `init.lua`:
-
-    ```text
-    cstrike/addons/lua/plugins/first_plugin/init.lua
-    ```
+    Внутри папки `first_plugin` создайте файл `init.lua`.
   </Step>
 
   <Step title="Настройте manifest.lua">
