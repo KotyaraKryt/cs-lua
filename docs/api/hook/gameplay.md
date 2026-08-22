@@ -514,6 +514,115 @@ end)
 
 - [weapon:deploy](gameplay.md#weapon_deploy)
 
+## item:give {#item_give}
+
+Движок вот-вот выдаст игроку предмет по имени classname.
+
+```lua
+hook.add("item:give", id, function(e)
+	...
+end)
+```
+
+### Поля события {#item_give-поля события}
+
+| поле | тип |  |
+|---|---|---|
+| `e.player` | player | кого касается событие |
+| `e.item` | string | classname выдаваемого предмета |
+
+**Отмена.** `e:cancel()` — ничего не создаётся и не выдаётся.
+
+Не тот же путь, что `p:give()` (тот идёт через `GiveNamedItemEx`, отдельный вызов ReGameDLL, который SDK не документирует как обёртку над этим). Это всё остальное, что раздаёт предметы по имени: стартовое снаряжение раунда, `give` из rcon, сторонний мод.
+
+<Warning>
+Событие приходит из ReGameDLL. На ванильном `mp.dll` оно не
+срабатывает никогда.
+</Warning>
+
+## player:strip {#player_strip}
+
+У игрока только что забрали весь инвентарь.
+
+```lua
+hook.add("player:strip", id, function(e)
+	...
+end)
+```
+
+### Поля события {#player_strip-поля события}
+
+| поле | тип |  |
+|---|---|---|
+| `e.player` | player | кого касается событие |
+| `e.remove_suit` | boolean | забрали и костюм тоже |
+
+Не отменяемое: к моменту события инвентарь уже пуст. Срабатывает и на `p:strip()` из любого плагина — хук общий для всех путей, которые ведут к `RemoveAllItems`.
+
+<Warning>
+Событие приходит из ReGameDLL. На ванильном `mp.dll` оно не
+срабатывает никогда.
+</Warning>
+
+## player:can_have_item {#player_can_have_item}
+
+Игра вот-вот решит, может ли игрок вообще получить этот предмет.
+
+```lua
+hook.add("player:can_have_item", id, function(e)
+	...
+end)
+```
+
+### Поля события {#player_can_have_item-поля события}
+
+| поле | тип |  |
+|---|---|---|
+| `e.player` | player | кого касается событие |
+| `e.item` | string | classname предмета |
+
+**Отмена.** `e:cancel()` принудительно запрещает — независимо от того, что решили бы правила игры сами. Разрешить то, что правила и так запретили бы, этим событием нельзя: только забрать разрешение, не выдать его.
+
+Комментарий SDK для этого хука дословно: «the player is touching an item, do I give it to him» — шире, чем просто подбор с земли: сюда же попадает и `item:give`, и всё остальное, что спрашивает разрешения выдать предмет.
+
+<Warning>
+Событие приходит из ReGameDLL. На ванильном `mp.dll` оно не
+срабатывает никогда.
+</Warning>
+
+### Смотри также
+
+- [weapon:pickup](gameplay.md#weapon_pickup)
+
+## weapon:pickup {#weapon_pickup}
+
+Игрок подобрал оружие с земли.
+
+```lua
+hook.add("weapon:pickup", id, function(e)
+	...
+end)
+```
+
+### Поля события {#weapon_pickup-поля события}
+
+| поле | тип |  |
+|---|---|---|
+| `e.player` | player | кого касается событие |
+| `e.weapon` | string | classname подобранного оружия |
+
+Комментарий SDK для этого хука дословно: «called each time a player picks up a weapon from the ground» — именно подбор с земли, не `item:give` и не покупка.
+
+<Warning>
+Событие приходит из ReGameDLL. На ванильном `mp.dll` оно не
+срабатывает никогда.
+</Warning>
+
+### Смотри также
+
+- [ammo:pickup](shop.md#ammo_pickup)
+- [weapon:drop](shop.md#weapon_drop)
+
 ## weapon:throw {#weapon_throw}
 
 Любой гранатный слот вот-вот покинёт руку, до того как движок решил, HE это, дымовая или флешка.

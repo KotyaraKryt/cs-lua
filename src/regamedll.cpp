@@ -619,6 +619,30 @@ static int hook_give_ammo(IReGameHook_CBasePlayer_GiveAmmo *chain, CBasePlayer *
 	return chain->callNext(player, iCount, pszName, iMax);
 }
 
+// Not the same path as p:give() (GiveNamedItemEx, a separate ReGameDLL API
+// call the SDK does not document as routing through this virtual) - whatever
+// else hands a player an item by classname: default round gear, an rcon
+// give, another mod's CBasePlayer::GiveNamedItem call.
+static CBaseEntity *hook_give_item(IReGameHook_CBasePlayer_GiveNamedItem *chain, CBasePlayer *player,
+	const char *pszName)
+{
+	if (!player || !player->IsPlayer())
+		return chain->callNext(player, pszName);
+
+	if (g_events.fire_item_give(player->entindex(), pszName ? pszName : ""))
+		return NULL;			// blocked: nothing created, nothing given
+
+	return chain->callNext(player, pszName);
+}
+
+static void hook_strip_items(IReGameHook_CBasePlayer_RemoveAllItems *chain, CBasePlayer *player, BOOL bRemoveSuit)
+{
+	chain->callNext(player, bRemoveSuit);
+
+	if (player && player->IsPlayer())
+		g_events.fire_player_strip(player->entindex(), bRemoveSuit != 0);
+}
+
 static CBaseEntity *hook_drop_item(IReGameHook_CBasePlayer_DropPlayerItem *chain, CBasePlayer *player,
 	const char *pszItemName)
 {
@@ -629,6 +653,38 @@ static CBaseEntity *hook_drop_item(IReGameHook_CBasePlayer_DropPlayerItem *chain
 		return NULL;			// weapon stays in the player's hands
 
 	return chain->callNext(player, pszItemName);
+}
+
+// CanHavePlayerItem's own comment in the SDK: "the player is touching an
+// CBasePlayerItem, do I give it to him?" - broader than a ground pickup,
+// whatever else asks this question before handing over an item goes through
+// here too. Pre-check only, same one-directional contract as
+// hook_can_take_damage: cancelling forces "no", there is no way to force a
+// "yes" the game's own rules would not have given.
+static BOOL hook_can_have_item(IReGameHook_CSGameRules_CanHavePlayerItem *chain,
+	CBasePlayer *player, CBasePlayerItem *item)
+{
+	int slot = (player && player->IsPlayer()) ? player->entindex() : 0;
+	const char *weapon = (item && item->pev) ? STRING(item->pev->classname) : "";
+
+	if (g_events.fire_player_can_have_item(slot, weapon))
+		return FALSE;
+
+	return chain->callNext(player, item);
+}
+
+// PlayerGotWeapon's own comment: "called each time a player picks up a
+// weapon from the ground" - unlike hook_give_item above, this is
+// specifically the ground-touch path.
+static void hook_got_weapon(IReGameHook_CSGameRules_PlayerGotWeapon *chain,
+	CBasePlayer *player, CBasePlayerItem *item)
+{
+	chain->callNext(player, item);
+
+	if (player && player->IsPlayer()) {
+		const char *weapon = (item && item->pev) ? STRING(item->pev->classname) : "";
+		g_events.fire_weapon_pickup(player->entindex(), weapon);
+	}
 }
 
 // Jump/Duck can't be blocked here - by the time this fires the engine has
@@ -887,6 +943,10 @@ enum HookSlot
 	HOOK_CAN_TAKE_DAMAGE,
 	HOOK_BALANCE_TEAMS,
 	HOOK_GO_TO_INTERMISSION,
+	HOOK_GIVE_ITEM,
+	HOOK_STRIP_ITEMS,
+	HOOK_CAN_HAVE_ITEM,
+	HOOK_GOT_WEAPON,
 	HOOK_COUNT
 };
 
@@ -1021,6 +1081,18 @@ void cslua_regamedll_install_hooks()
 
 	sync_hook(HOOK_GO_TO_INTERMISSION, s_hooks->CSGameRules_GoToIntermission(), &hook_go_to_intermission,
 		g_events.any(CSLUA_EVENT_ROUND_INTERMISSION));
+
+	sync_hook(HOOK_GIVE_ITEM, s_hooks->CBasePlayer_GiveNamedItem(), &hook_give_item,
+		g_events.any(CSLUA_EVENT_ITEM_GIVE));
+
+	sync_hook(HOOK_STRIP_ITEMS, s_hooks->CBasePlayer_RemoveAllItems(), &hook_strip_items,
+		g_events.any(CSLUA_EVENT_PLAYER_STRIP));
+
+	sync_hook(HOOK_CAN_HAVE_ITEM, s_hooks->CSGameRules_CanHavePlayerItem(), &hook_can_have_item,
+		g_events.any(CSLUA_EVENT_PLAYER_CAN_HAVE_ITEM));
+
+	sync_hook(HOOK_GOT_WEAPON, s_hooks->CSGameRules_PlayerGotWeapon(), &hook_got_weapon,
+		g_events.any(CSLUA_EVENT_WEAPON_PICKUP));
 }
 
 void cslua_regamedll_remove_hooks()
@@ -1069,6 +1141,10 @@ void cslua_regamedll_remove_hooks()
 	s_hooks->CSGameRules_FPlayerCanTakeDamage()->unregisterHook(&hook_can_take_damage);
 	s_hooks->CSGameRules_BalanceTeams()->unregisterHook(&hook_balance_teams);
 	s_hooks->CSGameRules_GoToIntermission()->unregisterHook(&hook_go_to_intermission);
+	s_hooks->CBasePlayer_GiveNamedItem()->unregisterHook(&hook_give_item);
+	s_hooks->CBasePlayer_RemoveAllItems()->unregisterHook(&hook_strip_items);
+	s_hooks->CSGameRules_CanHavePlayerItem()->unregisterHook(&hook_can_have_item);
+	s_hooks->CSGameRules_PlayerGotWeapon()->unregisterHook(&hook_got_weapon);
 
 	for (int i = 0; i < HOOK_COUNT; i++)
 		s_installed[i] = false;

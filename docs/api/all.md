@@ -38,6 +38,7 @@ description: "Плоский список всех функций и метод�
 | [`msg.byte`](msg/fields.md#byte) | msg | n — `0..255` (`WRITE_BYTE` в SDK) |
 | [`access.can`](access/read.md#can) | access | Есть ли у игрока право |
 | [`p:can`](players/access.md#can) | players | Есть ли у игрока право |
+| [`player:can_have_item`](hook/gameplay.md#player_can_have_item) | hook | Игра вот-вот решит, может ли игрок вообще получить этот предмет |
 | [`player:can_take_damage`](hook/gameplay.md#player_can_take_damage) | hook | Игра вот-вот решит, может ли жертва вообще получить урон от этого атакующего — самая ранняя точка, ещё до того, как известно, сколько урона |
 | [`http.cancel`](http/index.md#cancel) | http | Отменяет запрос по id |
 | [`timer.cancel`](timer/anonymous.md#cancel) | timer | Снимает таймер по id |
@@ -111,6 +112,7 @@ description: "Плоский список всех функций и метод�
 | [`http.get`](http/index.md#get) | http | Выполняет GET-запрос |
 | [`players.get`](players/namespace.md#get) | players | Возвращает игрока по номеру слота |
 | [`s:get`](store/kv.md#get) | store | Читает значение по ключу |
+| [`item:give`](hook/gameplay.md#item_give) | hook | Движок вот-вот выдаст игроку предмет по имени classname |
 | [`p:give`](players/cs-state.md#give) | players | Выдаёт игроку предмет по classname |
 | [`p:godmode`](players/state.md#godmode) | players | Неуязвимость |
 | [`access.grant`](access/grant.md#grant) | access | Выдаёт права по ключу |
@@ -181,6 +183,7 @@ description: "Плоский список всех функций и метод�
 | [`p:pev`](players/state.md#pev) | players | Читает или задаёт произвольное поле `entvars_t` по имени — то же, что
 `e:pev` у сущностей, только на игроке |
 | [`ammo:pickup`](hook/shop.md#ammo_pickup) | hook | Игроку вот-вот добавят патронов в запас — подбор с земли или дозарядка через магазин (отдельно от `ammo:buy`, которое про сам факт покупки) |
+| [`weapon:pickup`](hook/gameplay.md#weapon_pickup) | hook | Игрок подобрал оружие с земли |
 | [`bomb:planted`](hook/round.md#bomb_planted) | hook | Бомба заложена |
 | [`p:play_sound`](players/messages.md#play_sound) | players | Проигрывает игроку звук |
 | [`module:plugin_unload`](hook/lifecycle.md#plugin_unload) | hook | Плагин или всё состояние уходит |
@@ -233,6 +236,7 @@ description: "Плоский список всех функций и метод�
 | [`c:str`](sv/cvar.md#str) | sv | Значение переменной как строка |
 | [`msg.string`](msg/fields.md#string) | msg | s — до 191 байта (`WRITE_STRING` в SDK) |
 | [`p:strip`](players/cs-state.md#strip) | players | Забирает у игрока всё оружие |
+| [`player:strip`](hook/gameplay.md#player_strip) | hook | У игрока только что забрали весь инвентарь |
 | [`p:team`](players/cs-state.md#team) | players | Читает или меняет сторону игрока |
 | [`player:team_change`](hook/gameplay.md#player_team_change) | hook | Игрок сменил сторону |
 | [`grenade:throw`](hook/gameplay.md#grenade_throw) | hook | HE, дымовая или флешка вот-вот покинёт руку |
@@ -256,4 +260,4 @@ description: "Плоский список всех функций и метод�
 | [`file.write`](file/index.md#write) | file | Перезаписывает файл целиком (или создаёт его) |
 | [`log.write`](log/index.md#write) | log | Пишет строку в лог плагина |
 
-Всего: 242.
+Всего: 246.

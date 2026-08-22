@@ -76,6 +76,10 @@ end)
 | [`weapon:fire`](gameplay.md#weapon_fire) | Из ствола вышел выстрел |
 | [`weapon:deploy`](gameplay.md#weapon_deploy) | Оружие вот-вот покажет вьюмодель и модель в руках |
 | [`weapon:reload`](gameplay.md#weapon_reload) | Началась настоящая перезарядка |
+| [`item:give`](gameplay.md#item_give) | Движок вот-вот выдаст игроку предмет по имени classname |
+| [`player:strip`](gameplay.md#player_strip) | У игрока только что забрали весь инвентарь |
+| [`player:can_have_item`](gameplay.md#player_can_have_item) | Игра вот-вот решит, может ли игрок вообще получить этот предмет |
+| [`weapon:pickup`](gameplay.md#weapon_pickup) | Игрок подобрал оружие с земли |
 | [`weapon:throw`](gameplay.md#weapon_throw) | Любой гранатный слот вот-вот покинёт руку, до того как движок решил, HE это, дымовая или флешка |
 | [`weapon:secondary_attack`](gameplay.md#weapon_secondary_attack) | Игрок нажал правую кнопку мыши, держа это оружие |
 | [`grenade:throw`](gameplay.md#grenade_throw) | HE, дымовая или флешка вот-вот покинёт руку |

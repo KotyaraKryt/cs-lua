@@ -61,6 +61,10 @@ enum CsLuaEvent
 	CSLUA_EVENT_PLAYER_CAN_TAKE_DAMAGE,	// pre: cancel to force "no" regardless of the game's own FF rules
 	CSLUA_EVENT_ROUND_BALANCE_TEAMS,	// auto-balance just moved players around
 	CSLUA_EVENT_ROUND_INTERMISSION,	// map is over, about to show the scoreboard
+	CSLUA_EVENT_ITEM_GIVE,			// pre: GiveNamedItem; cancel to block it
+	CSLUA_EVENT_PLAYER_STRIP,		// RemoveAllItems just ran
+	CSLUA_EVENT_PLAYER_CAN_HAVE_ITEM,	// pre: cancel to force "no" regardless of the game's own rules
+	CSLUA_EVENT_WEAPON_PICKUP,		// PlayerGotWeapon: picked a weapon up off the ground
 
 	CSLUA_EVENT_COUNT
 };
@@ -364,6 +368,33 @@ public:
 	// about to show the scoreboard before the next map loads. Notify only,
 	// and earlier than server:map_change - the world is still there.
 	void fire_round_intermission();
+
+	// GiveNamedItem is about to create and hand over an item by classname.
+	// Not the same code path as p:give() (that goes through GiveNamedItemEx,
+	// which the SDK does not document as calling this) - this is whatever
+	// else in the engine hands a player an item by name: default round gear,
+	// an rcon give, another mod. Cancel to block it: the caller then returns
+	// NULL without ever asking the chain, so nothing is created at all.
+	bool fire_item_give(int player, const char *item);
+
+	// RemoveAllItems just ran - the player's whole inventory (and the suit,
+	// if remove_suit) is gone. Notify only: by the time this fires it already
+	// happened, same as fire_round_balance_teams.
+	void fire_player_strip(int player, bool remove_suit);
+
+	// CanHavePlayerItem's pre-check: "the player is touching an item, do I
+	// give it to him" - the SDK's own words for it. Broader than a ground
+	// pickup: whatever else in the engine asks this question before handing
+	// over an item goes through here too. Cancel to force "no" regardless of
+	// what the game's own rules would have said - same one-directional
+	// contract as fire_player_can_take_damage: this can only take away
+	// permission, never grant it.
+	bool fire_player_can_have_item(int player, const char *item);
+
+	// PlayerGotWeapon just ran - specifically a weapon picked up off the
+	// ground (the SDK's own comment: "each time a player picks up a weapon
+	// from the ground"), not a GiveNamedItem-style hand-over. Notify only.
+	void fire_weapon_pickup(int player, const char *weapon);
 
 private:
 	struct Handler

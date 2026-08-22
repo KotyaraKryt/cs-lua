@@ -58,6 +58,10 @@ static const char *const s_event_names[CSLUA_EVENT_COUNT] =
 	"player:can_take_damage",
 	"round:balance_teams",
 	"round:intermission",
+	"item:give",
+	"player:strip",
+	"player:can_have_item",
+	"weapon:pickup",
 };
 
 static int find_event(const char *name)
@@ -91,7 +95,9 @@ static bool is_cancellable(int ev)
 		|| ev == CSLUA_EVENT_PLAYER_CAN_RESPAWN
 		|| ev == CSLUA_EVENT_PLAYER_HIT
 		|| ev == CSLUA_EVENT_PLAYER_HEAL
-		|| ev == CSLUA_EVENT_PLAYER_CAN_TAKE_DAMAGE;
+		|| ev == CSLUA_EVENT_PLAYER_CAN_TAKE_DAMAGE
+		|| ev == CSLUA_EVENT_ITEM_GIVE
+		|| ev == CSLUA_EVENT_PLAYER_CAN_HAVE_ITEM;
 }
 
 static std::string known_events()
@@ -1246,4 +1252,43 @@ void LuaEvents::fire_round_balance_teams()
 void LuaEvents::fire_round_intermission()
 {
 	notify(CSLUA_EVENT_ROUND_INTERMISSION);
+}
+
+bool LuaEvents::fire_item_give(int player, const char *item)
+{
+	std::string name = item ? item : "";
+
+	return run(CSLUA_EVENT_ITEM_GIVE, [=](lua_State *L) {
+		set_player_or_nil(L, player, "player");
+		set_string(L, name, "item");
+	});
+}
+
+void LuaEvents::fire_player_strip(int player, bool remove_suit)
+{
+	notify(CSLUA_EVENT_PLAYER_STRIP, [=](lua_State *L) {
+		set_player_or_nil(L, player, "player");
+		lua_pushboolean(L, remove_suit);
+		lua_setfield(L, -2, "remove_suit");
+	});
+}
+
+bool LuaEvents::fire_player_can_have_item(int player, const char *item)
+{
+	std::string name = item ? item : "";
+
+	return run(CSLUA_EVENT_PLAYER_CAN_HAVE_ITEM, [=](lua_State *L) {
+		set_player_or_nil(L, player, "player");
+		set_string(L, name, "item");
+	});
+}
+
+void LuaEvents::fire_weapon_pickup(int player, const char *weapon)
+{
+	std::string name = weapon ? weapon : "";
+
+	notify(CSLUA_EVENT_WEAPON_PICKUP, [=](lua_State *L) {
+		set_player_or_nil(L, player, "player");
+		set_string(L, name, "weapon");
+	});
 }
