@@ -678,6 +678,13 @@ bool LuaEngine::unload_plugin_by_name(const char *id, std::string &out)
 
 		unload_plugin((int)i, true);
 		m_plugins[i].loaded = false;
+
+		// This plugin may have been the last one listening for some
+		// gameplay event - ask again so sync_hook() can unregister that
+		// hookchain instead of leaving it installed (and firing into an
+		// empty handler list) until the next load/reload of anything else.
+		cslua_regamedll_install_hooks();
+
 		out = "unloaded '" + std::string(id) + "'";
 		return true;
 	}

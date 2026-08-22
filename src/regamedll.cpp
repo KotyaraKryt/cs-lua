@@ -187,7 +187,7 @@ static void hook_trace_attack(IReGameHook_CBasePlayer_TraceAttack *chain, CBaseP
 	float y = ptr ? ptr->vecEndPos.y : 0.0f;
 	float z = ptr ? ptr->vecEndPos.z : 0.0f;
 
-	flDamage = g_events.fire_player_hit(vslot, aslot, flDamage, bitsDamageType, hitgroup, x, y, z);
+	flDamage = g_events.fire_player_trace_attack(vslot, aslot, flDamage, bitsDamageType, hitgroup, x, y, z);
 	if (flDamage <= 0.0f)
 		return;				// fully blocked: this hit contributes nothing - no blood, no multidamage
 
@@ -658,9 +658,8 @@ static CBaseEntity *hook_drop_item(IReGameHook_CBasePlayer_DropPlayerItem *chain
 // CanHavePlayerItem's own comment in the SDK: "the player is touching an
 // CBasePlayerItem, do I give it to him?" - broader than a ground pickup,
 // whatever else asks this question before handing over an item goes through
-// here too. Pre-check only, same one-directional contract as
-// hook_can_take_damage: cancelling forces "no", there is no way to force a
-// "yes" the game's own rules would not have given.
+// here too. Pre-check only: cancelling forces "no", there is no way to force
+// a "yes" the game's own rules would not have given.
 static BOOL hook_can_have_item(IReGameHook_CSGameRules_CanHavePlayerItem *chain,
 	CBasePlayer *player, CBasePlayerItem *item)
 {
@@ -739,39 +738,6 @@ static BOOL hook_can_respawn(IReGameHook_CSGameRules_FPlayerCanRespawn *chain, C
 		return FALSE;
 
 	return chain->callNext(player);
-}
-
-// The friendly-fire/immunity gate. attacker can be anything the engine
-// considers a damage source, not only a player (world, a trigger, falling
-// debris - resolved to slot 0 in that case).
-//
-// This single hook function sees every real call the engine makes to
-// FPlayerCanTakeDamage, and there are up to two of them per hit (verified
-// against ReGameDLL's own source, not just the SDK headers - nothing here is
-// guessed):
-//
-//   - CBasePlayer::TraceAttack calls it, but only when the attacker is a
-//     player, and "no" there does NOT stop the hit - it only turns off
-//     blood/punch and the headshot multiplier. Damage still proceeds.
-//   - CBasePlayer::TakeDamage calls it unconditionally, and "no" there is
-//     the real refusal (`return FALSE`, TakeDamage never applies anything) -
-//     UNLESS the damage is from a grenade, in which case ReGameDLL ignores
-//     this check's result outright and the damage happens regardless.
-//
-// So a script's handler can see this event twice for one player-on-player
-// hit, and cancelling it does nothing at all against a grenade. There is no
-// way to force a "yes" the game's own rules would not have given - only to
-// take permission away, and even that not always.
-static BOOL hook_can_take_damage(IReGameHook_CSGameRules_FPlayerCanTakeDamage *chain,
-	CBasePlayer *player, CBaseEntity *attacker)
-{
-	int vslot = (player && player->IsPlayer()) ? player->entindex() : 0;
-	int aslot = (attacker && attacker->IsPlayer()) ? attacker->entindex() : 0;
-
-	if (g_events.fire_player_can_take_damage(vslot, aslot))
-		return FALSE;
-
-	return chain->callNext(player, attacker);
 }
 
 static void hook_defuse_start(IReGameHook_CGrenade_DefuseBombStart *chain, CGrenade *grenade,
@@ -954,7 +920,6 @@ enum HookSlot
 	HOOK_DEFUSE_START,
 	HOOK_TRACE_ATTACK,
 	HOOK_TAKE_HEALTH,
-	HOOK_CAN_TAKE_DAMAGE,
 	HOOK_BALANCE_TEAMS,
 	HOOK_GO_TO_INTERMISSION,
 	HOOK_GIVE_ITEM,
@@ -1082,13 +1047,10 @@ void cslua_regamedll_install_hooks()
 		g_events.any(CSLUA_EVENT_BOMB_DEFUSE_START));
 
 	sync_hook(HOOK_TRACE_ATTACK, s_hooks->CBasePlayer_TraceAttack(), &hook_trace_attack,
-		g_events.any(CSLUA_EVENT_PLAYER_HIT));
+		g_events.any(CSLUA_EVENT_PLAYER_TRACE_ATTACK));
 
 	sync_hook(HOOK_TAKE_HEALTH, s_hooks->CBasePlayer_TakeHealth(), &hook_take_health,
 		g_events.any(CSLUA_EVENT_PLAYER_HEAL));
-
-	sync_hook(HOOK_CAN_TAKE_DAMAGE, s_hooks->CSGameRules_FPlayerCanTakeDamage(), &hook_can_take_damage,
-		g_events.any(CSLUA_EVENT_PLAYER_CAN_TAKE_DAMAGE));
 
 	sync_hook(HOOK_BALANCE_TEAMS, s_hooks->CSGameRules_BalanceTeams(), &hook_balance_teams,
 		g_events.any(CSLUA_EVENT_ROUND_BALANCE_TEAMS));
@@ -1152,7 +1114,6 @@ void cslua_regamedll_remove_hooks()
 	s_hooks->CGrenade_DefuseBombStart()->unregisterHook(&hook_defuse_start);
 	s_hooks->CBasePlayer_TraceAttack()->unregisterHook(&hook_trace_attack);
 	s_hooks->CBasePlayer_TakeHealth()->unregisterHook(&hook_take_health);
-	s_hooks->CSGameRules_FPlayerCanTakeDamage()->unregisterHook(&hook_can_take_damage);
 	s_hooks->CSGameRules_BalanceTeams()->unregisterHook(&hook_balance_teams);
 	s_hooks->CSGameRules_GoToIntermission()->unregisterHook(&hook_go_to_intermission);
 	s_hooks->CBasePlayer_GiveNamedItem()->unregisterHook(&hook_give_item);

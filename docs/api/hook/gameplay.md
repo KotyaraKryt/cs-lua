@@ -75,8 +75,7 @@ end)
 ### Смотри также
 
 - [player:hurt_post](gameplay.md#player_hurt_post)
-- [player:hit](gameplay.md#player_hit)
-- [player:can_take_damage](gameplay.md#player_can_take_damage)
+- [player:trace_attack](gameplay.md#player_trace_attack)
 
 ## player:hurt_post {#player_hurt_post}
 
@@ -105,17 +104,17 @@ end)
 срабатывает никогда.
 </Warning>
 
-## player:hit {#player_hit}
+## player:trace_attack {#player_trace_attack}
 
 Один хитбокс получил попадание — раньше и точнее, чем `player:hurt`: до брони, до множителей, до суммирования дроби дробовика в одно число.
 
 ```lua
-hook.add("player:hit", id, function(e)
+hook.add("player:trace_attack", id, function(e)
 	...
 end)
 ```
 
-### Поля события {#player_hit-поля события}
+### Поля события {#player_trace_attack-поля события}
 
 | поле | тип |  |
 |---|---|---|
@@ -128,7 +127,7 @@ end)
 
 **Отмена.** `e:cancel()` (или `e.damage = 0`) убирает это попадание целиком: ни крови, ни вклада в итоговый урон, который дальше увидит `player:hurt`.
 
-Дробовик даёт одно `player:hit` на каждую долетевшую дробину и одно `player:hurt`/`weapon:fire` в сумме — здесь урон ещё не сложен.
+Название — по движковому хуку `CBasePlayer::TraceAttack` (тот же, что `RG_CBasePlayer_TraceAttack` в ReAPI). Дробовик даёт одно `player:trace_attack` на каждую долетевшую дробину и одно `player:hurt`/`weapon:fire` в сумме — здесь урон ещё не сложен.
 
 <Warning>
 Событие приходит из ReGameDLL. На ванильном `mp.dll` оно не
@@ -163,42 +162,6 @@ end)
 Событие приходит из ReGameDLL. На ванильном `mp.dll` оно не
 срабатывает никогда.
 </Warning>
-
-## player:can_take_damage {#player_can_take_damage}
-
-Низкоуровневый гейт «может ли жертва вообще получить урон от этого атакующего» — то, на чём стоит тимфрайр.
-
-```lua
-hook.add("player:can_take_damage", id, function(e)
-	...
-end)
-```
-
-### Поля события {#player_can_take_damage-поля события}
-
-| поле | тип |  |
-|---|---|---|
-| `e.victim` | player | кого могут ранить |
-| `e.attacker` | player \| nil | `nil`, если источник урона — не игрок (мир, ловушка, обломки) |
-
-**Отмена.** `e:cancel()` принудительно запрещает — но не всегда действует, см. ниже. Разрешить урон, который правила и так запретили бы, этим событием нельзя: только забрать разрешение, не выдать его.
-
-По движку (проверено по исходникам ReGameDLL, не по одним только заголовкам) эта проверка реально вызывается **до двух раз на одно попадание**:
-
-- изнутри `TraceAttack`, и только если атакующий — игрок: `e:cancel()` здесь **не блокирует урон**, а только гасит кровь и множитель урона по хитгруппе (например, x4 в голову);
-- изнутри `TakeDamage` — вот тут `e:cancel()` уже реальный отказ, урон не применяется вообще, **кроме гранат** — движок прямо игнорирует результат этой проверки для урона от гранаты.
-
-Значит на удар пулей/ножом от игрока событие прилетит дважды подряд с разным эффектом отмены, на урон не от игрока — один раз (только `TakeDamage`), а на урон от гранаты отмена не сработает совсем.
-
-<Warning>
-Событие приходит из ReGameDLL. На ванильном `mp.dll` оно не
-срабатывает никогда.
-</Warning>
-
-### Смотри также
-
-- [player:hurt](gameplay.md#player_hurt)
-- [player:hit](gameplay.md#player_hit)
 
 ## player:death {#player_death}
 

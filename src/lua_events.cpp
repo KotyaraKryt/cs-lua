@@ -53,9 +53,8 @@ static const char *const s_event_names[CSLUA_EVENT_COUNT] =
 	"player:radio",
 	"player:respawn_check",
 	"bomb:defusing",
-	"player:hit",
+	"player:trace_attack",
 	"player:heal",
-	"player:can_take_damage",
 	"round:balance_teams",
 	"round:intermission",
 	"item:give",
@@ -93,9 +92,8 @@ static bool is_cancellable(int ev)
 		|| ev == CSLUA_EVENT_WEAPON_DROP
 		|| ev == CSLUA_EVENT_PLAYER_RADIO
 		|| ev == CSLUA_EVENT_PLAYER_CAN_RESPAWN
-		|| ev == CSLUA_EVENT_PLAYER_HIT
+		|| ev == CSLUA_EVENT_PLAYER_TRACE_ATTACK
 		|| ev == CSLUA_EVENT_PLAYER_HEAL
-		|| ev == CSLUA_EVENT_PLAYER_CAN_TAKE_DAMAGE
 		|| ev == CSLUA_EVENT_ITEM_GIVE
 		|| ev == CSLUA_EVENT_PLAYER_CAN_HAVE_ITEM;
 }
@@ -1182,12 +1180,12 @@ void LuaEvents::fire_bomb_defuse_start(int player, bool defuser)
 	});
 }
 
-float LuaEvents::fire_player_hit(int victim, int attacker, float damage, int bits,
+float LuaEvents::fire_player_trace_attack(int victim, int attacker, float damage, int bits,
 	int hitgroup, float x, float y, float z)
 {
 	float result = damage;
 
-	bool cancelled = run(CSLUA_EVENT_PLAYER_HIT,
+	bool cancelled = run(CSLUA_EVENT_PLAYER_TRACE_ATTACK,
 		[=](lua_State *L) {
 			set_player(L, victim, "victim");
 			set_player_or_nil(L, attacker, "attacker");
@@ -1234,14 +1232,6 @@ float LuaEvents::fire_player_heal(int player, float amount, int bits)
 		result = 0.0f;
 
 	return result;
-}
-
-bool LuaEvents::fire_player_can_take_damage(int victim, int attacker)
-{
-	return run(CSLUA_EVENT_PLAYER_CAN_TAKE_DAMAGE, [=](lua_State *L) {
-		set_player(L, victim, "victim");
-		set_player_or_nil(L, attacker, "attacker");
-	});
 }
 
 void LuaEvents::fire_round_balance_teams()

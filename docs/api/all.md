@@ -39,7 +39,6 @@ description: "Плоский список всех функций и метод�
 | [`access.can`](access/read.md#can) | access | Есть ли у игрока право |
 | [`p:can`](players/access.md#can) | players | Есть ли у игрока право |
 | [`player:can_have_item`](hook/gameplay.md#player_can_have_item) | hook | Игра вот-вот решит, может ли игрок вообще получить этот предмет |
-| [`player:can_take_damage`](hook/gameplay.md#player_can_take_damage) | hook | Низкоуровневый гейт «может ли жертва вообще получить урон от этого атакующего» — то, на чём стоит тимфрайр |
 | [`http.cancel`](http/index.md#cancel) | http | Отменяет запрос по id |
 | [`timer.cancel`](timer/anonymous.md#cancel) | timer | Снимает таймер по id |
 | [`p:center`](players/messages.md#center) | players | Показывает текст по центру экрана |
@@ -122,7 +121,6 @@ description: "Плоский список всех функций и метод�
 | [`p:groups`](players/access.md#groups) | players | Массив групп игрока |
 | [`player:heal`](hook/gameplay.md#player_heal) | hook | Игроку вот-вот дадут здоровье — аптечка, админ-команда; своей регенерации в CS нет |
 | [`p:health`](players/state.md#health) | players | Здоровье игрока |
-| [`player:hit`](hook/gameplay.md#player_hit) | hook | Один хитбокс получил попадание — раньше и точнее, чем `player:hurt`: до брони, до множителей, до суммирования дроби дробовика в одно число |
 | [`p:hud`](players/messages.md#hud) | players | Рисует текст на HUD с позицией, цветом и таймингами |
 | [`player:hurt`](hook/gameplay.md#player_hurt) | hook | Игроку наносят урон; урон можно изменить или погасить |
 | [`player:hurt_post`](hook/gameplay.md#player_hurt_post) | hook | Урон уже применён; только для наблюдателей |
@@ -245,6 +243,7 @@ description: "Плоский список всех функций и метод�
 | [`sv.time`](sv/server.md#time) | sv | Серверные часы в секундах |
 | [`vec.to_angle`](vec/index.md#to_angle) | vec | Углы, которые смотрят вдоль вектора |
 | [`p:trace`](players/state.md#trace) | players | Пускает луч из глаз игрока туда, куда он смотрит |
+| [`player:trace_attack`](hook/gameplay.md#player_trace_attack) | hook | Один хитбокс получил попадание — раньше и точнее, чем `player:hurt`: до брони, до множителей, до суммирования дроби дробовика в одно число |
 | [`ents.trace_hull`](ents/namespace.md#trace_hull) | ents | То же самое, что `ents.trace_line`, но толкает объём, а не бесконечно тонкий луч |
 | [`ents.trace_line`](ents/namespace.md#trace_line) | ents | Пускает луч между двумя произвольными точками |
 | [`p:trace_to`](players/state.md#trace_to) | players | Пускает луч из глаз игрока прямо к другому игроку |
@@ -260,4 +259,4 @@ description: "Плоский список всех функций и метод�
 | [`file.write`](file/index.md#write) | file | Перезаписывает файл целиком (или создаёт его) |
 | [`log.write`](log/index.md#write) | log | Пишет строку в лог плагина |
 
-Всего: 246.
+Всего: 245.

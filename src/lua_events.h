@@ -56,9 +56,8 @@ enum CsLuaEvent
 	CSLUA_EVENT_PLAYER_RADIO,		// a radio command was used; cancel to block the sound/message
 	CSLUA_EVENT_PLAYER_CAN_RESPAWN,	// pre: cancel to block a respawn the game would otherwise allow
 	CSLUA_EVENT_BOMB_DEFUSE_START,	// defusing just started (not yet finished - see bomb_defused)
-	CSLUA_EVENT_PLAYER_HIT,			// pre: TraceAttack, one raw hit before TakeDamage sums it up
+	CSLUA_EVENT_PLAYER_TRACE_ATTACK,	// pre: TraceAttack, one raw hit before TakeDamage sums it up
 	CSLUA_EVENT_PLAYER_HEAL,			// pre: change or block healing
-	CSLUA_EVENT_PLAYER_CAN_TAKE_DAMAGE,	// pre: cancel to force "no" regardless of the game's own FF rules
 	CSLUA_EVENT_ROUND_BALANCE_TEAMS,	// auto-balance just moved players around
 	CSLUA_EVENT_ROUND_INTERMISSION,	// map is over, about to show the scoreboard
 	CSLUA_EVENT_ITEM_GIVE,			// pre: GiveNamedItem; cancel to block it
@@ -341,7 +340,7 @@ public:
 	// (possibly changed) damage, 0 if a handler cancelled - the caller then
 	// skips the real call entirely, so this hit contributes nothing at all
 	// (no blood, no multidamage).
-	float fire_player_hit(int victim, int attacker, float damage, int bits,
+	float fire_player_trace_attack(int victim, int attacker, float damage, int bits,
 		int hitgroup, float x, float y, float z);
 
 	// TakeHealth is about to restore amount health points - a first aid kit,
@@ -349,28 +348,6 @@ public:
 	// changed) amount, 0 if a handler cancelled - the caller then skips the
 	// real call and reports no health given.
 	float fire_player_heal(int player, float amount, int bits);
-
-	// FPlayerCanTakeDamage's pre-check: the low-level friendly-fire/immunity
-	// gate, the only one of the damage events where attacker can be
-	// something other than a player (world, a trigger, falling debris - 0 in
-	// that case). Cancel to force "no" - but note what "no" means depends on
-	// which of the (up to two) real calls this is:
-	//
-	//   - From CBasePlayer::TraceAttack, only when the attacker is a player:
-	//     "no" here does NOT block the hit - it only turns off blood/punch
-	//     and the headshot multiplier for it. The damage still goes on to
-	//     TakeDamage.
-	//   - From CBasePlayer::TakeDamage, always: "no" here is the real
-	//     refusal (`return FALSE`) - UNLESS the damage is from a grenade, in
-	//     which case the engine ignores this check's result entirely and the
-	//     damage happens regardless of what a handler returns.
-	//
-	// So this can fire twice for one player-on-player hit (once from each
-	// call site above) and once for anything else (TakeDamage only, since
-	// TraceAttack's own call is guarded by "is the attacker a player").
-	// There is no way to force a "yes" the game's own rules would not have
-	// given - only to take permission away, and even that not always.
-	bool fire_player_can_take_damage(int victim, int attacker);
 
 	// BalanceTeams just moved one or more players to a different team to even
 	// the sides out. Notify only - by the time this fires the move already
@@ -399,8 +376,7 @@ public:
 	// give it to him" - the SDK's own words for it. Broader than a ground
 	// pickup: whatever else in the engine asks this question before handing
 	// over an item goes through here too. Cancel to force "no" regardless of
-	// what the game's own rules would have said - same one-directional
-	// contract as fire_player_can_take_damage: this can only take away
+	// what the game's own rules would have said: this can only take away
 	// permission, never grant it.
 	bool fire_player_can_have_item(int player, const char *item);
 
