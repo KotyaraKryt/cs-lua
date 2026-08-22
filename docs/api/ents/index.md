@@ -53,6 +53,9 @@ ReGameDLL не нужен — слой работает и на ванильно
 | [`e:movetype`](entity.md#movetype) | Читает или задаёт, как движок двигает сущность |
 | [`e:size`](entity.md#size) | Читает или задаёт ограничивающий объём |
 | [`e:render`](entity.md#render) | Читает или задаёт прозрачность и свечение |
+| [`e:render_for`](entity.md#render_for) | То же самое, что `e:render()`, но только для одного игрока — остальные видят сущность как обычно |
+| [`e:clear_render_for`](entity.md#clear_render_for) | Убирает override, поставленный `e:render_for()`/`e:visible_to()` |
+| [`e:visible_to`](entity.md#visible_to) | Делает сущность видимой или невидимой для одного игрока |
 | [`e:pev`](entity.md#pev) | Читает или задаёт произвольное поле `entvars_t` по имени — то, для чего нет
 готового метода вроде `e:origin()` или `e:solid()` |
 

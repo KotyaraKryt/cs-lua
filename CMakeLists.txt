@@ -202,6 +202,7 @@ add_library(lua_mm SHARED
 	src/rehlds.cpp
 	src/cslua_corpse.cpp
 	src/cslua_netwatch.cpp
+	src/cslua_visibility.cpp
 )
 
 target_include_directories(lua_mm PRIVATE

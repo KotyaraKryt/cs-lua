@@ -387,6 +387,113 @@ e:render({ mode = 2, amount = 128, color = { 255, 0, 0 } })
 
 Таблица опций, а не пять чисел подряд: который из них renderfx, никто не помнит.
 
+## e:render_for {#render_for}
+
+То же самое, что `e:render()`, но только для одного игрока — остальные видят сущность как обычно.
+
+```lua
+e:render_for(player[, opts])
+```
+
+### Аргументы
+
+| # | имя | тип |  |
+|---|---|---|---|
+| 1 | `player` | player \| number | кому |
+| 2 | `opts` | table \| nil | без него метод читает |
+
+### Возвращает
+
+| тип |  |
+|---|---|
+| `table \| nil` | `{ mode =, amount =, color =, fx = }`, `nil` — нет override для этого игрока |
+
+### Опции {#render_for-опции}
+
+| поле | тип |  |
+|---|---|---|
+| `mode` | number | как у `e:render()` |
+| `amount` | number | `0..255` |
+| `color` | table | `{ r, g, b }` |
+| `fx` | number | эффект |
+
+### Пример
+
+```lua
+-- невидим для конкретного зрителя, для остальных — как обычно
+e:render_for(hunter, { mode = 4, amount = 0 })
+```
+
+Поле, которого нет в `opts`, остаётся тем, что уже было в этом override — а при первой установке берётся из обычного `e:render()` сущности. Работает только через `pfnAddToFullPack` — движок собирает копию сущности отдельно на каждого клиента, и только тут возможна разница между зрителями. Обычные `entvars` (то, что меняет `e:render()`) — одно значение на сущность, разлетается всем одинаково.
+
+### Смотри также
+
+- [e:render](entity.md#render)
+- [e:clear_render_for](entity.md#clear_render_for)
+- [e:visible_to](entity.md#visible_to)
+
+## e:clear_render_for {#clear_render_for}
+
+Убирает override, поставленный `e:render_for()`/`e:visible_to()`.
+
+```lua
+e:clear_render_for(player)
+```
+
+### Аргументы
+
+| # | имя | тип |  |
+|---|---|---|---|
+| 1 | `player` | player \| number | кому |
+
+### Возвращает
+
+Ничего.
+
+Игрок снова видит сущность как обычно.
+
+### Смотри также
+
+- [e:render_for](entity.md#render_for)
+
+## e:visible_to {#visible_to}
+
+Делает сущность видимой или невидимой для одного игрока.
+
+```lua
+e:visible_to(player, visible)
+```
+
+### Аргументы
+
+| # | имя | тип |  |
+|---|---|---|---|
+| 1 | `player` | player \| number | кому |
+| 2 | `visible` | boolean | `false` — спрятать |
+
+### Возвращает
+
+Ничего.
+
+### Пример
+
+```lua
+hook.add("round:start", "furrien.hide", function()
+	for _, hunter in ipairs(players.list{ team = "ct" }) do
+		for _, prey in ipairs(players.list{ team = "t" }) do
+			-- hunter не видит prey, все остальные видят как обычно
+			prey:visible_to(hunter, false)
+		end
+	end
+end)
+```
+
+Частый случай `e:render_for()`: `visible_to(p, false)` то же самое, что `render_for(p, { mode = 4, amount = 0 })`; `visible_to(p, true)` то же самое, что `clear_render_for(p)`.
+
+### Смотри также
+
+- [e:render_for](entity.md#render_for)
+
 ## e:pev {#pev}
 
 Читает или задаёт произвольное поле `entvars_t` по имени — то, для чего нет

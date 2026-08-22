@@ -11,6 +11,9 @@
 #include "players.h"
 #include "regamedll.h"
 #include "cslua_netwatch.h"
+#include "cslua_visibility.h"
+
+#include <entity_state.h>
 
 #include <in_buttons.h>
 #include <string.h>
@@ -74,6 +77,7 @@ static void ServerDeactivate()
 	// still remove its own entities.
 	s_world_ready = false;
 	cslua_touch_detonate_clear();
+	cslua_visibility_reset();
 	RETURN_META(MRES_IGNORED);
 }
 
@@ -348,6 +352,20 @@ static void StartFrame()
 	RETURN_META(MRES_IGNORED);
 }
 
+// Runs once per (recipient, potentially-visible entity) pair on every
+// network update - the only point where one client's copy of an entity can
+// be made to look different from everyone else's (see cslua_visibility.h).
+// *Post*, not pre: the engine and the game DLL have already built `state`
+// the normal way by the time this runs, so a script's override just
+// overwrites specific fields in it rather than having to reconstruct
+// everything itself.
+static int AddToFullPack_Post(entity_state_s *state, int e, edict_t *ent, edict_t *host,
+	int hostflags, int player, unsigned char *pSet)
+{
+	cslua_visibility_apply(state, e, ent, host);
+	RETURN_META_VALUE(MRES_IGNORED, 1);
+}
+
 // Only a couple of hooks here, so build it instead of spelling out 50 NULLs.
 static DLL_FUNCTIONS make_post_table()
 {
@@ -355,6 +373,7 @@ static DLL_FUNCTIONS make_post_table()
 	table.pfnSpawn = Spawn_Post;
 	table.pfnClientPutInServer = ClientPutInServer;
 	table.pfnStartFrame = StartFrame;
+	table.pfnAddToFullPack = AddToFullPack_Post;
 	return table;
 }
 

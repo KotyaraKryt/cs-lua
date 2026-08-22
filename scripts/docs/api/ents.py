@@ -294,6 +294,53 @@ end)
                     'extra': 'Таблица опций, а не пять чисел подряд: который из них renderfx, никто не помнит.',
                 },
                 {
+                    'name': 'e:render_for',
+                    'brief': 'То же самое, что `e:render()`, но только для одного игрока — остальные видят сущность как обычно.',
+                    'sig': 'e:render_for(player[, opts])',
+                    'args': [('player', 'player \\| number', 'кому'),
+                             ('opts', 'table \\| nil', 'без него метод читает')],
+                    'returns': [('table \\| nil', '`{ mode =, amount =, color =, fx = }`, `nil` — нет override для этого игрока')],
+                    'fields': ('Опции', [
+                        ('mode', 'number', 'как у `e:render()`'),
+                        ('amount', 'number', '`0..255`'),
+                        ('color', 'table', '`{ r, g, b }`'),
+                        ('fx', 'number', 'эффект'),
+                    ]),
+                    'example': """
+-- невидим для конкретного зрителя, для остальных — как обычно
+e:render_for(hunter, { mode = 4, amount = 0 })
+""",
+                    'extra': 'Поле, которого нет в `opts`, остаётся тем, что уже было в этом override — а при первой установке берётся из обычного `e:render()` сущности. Работает только через `pfnAddToFullPack` — движок собирает копию сущности отдельно на каждого клиента, и только тут возможна разница между зрителями. Обычные `entvars` (то, что меняет `e:render()`) — одно значение на сущность, разлетается всем одинаково.',
+                    'see': [('e:render', 'render.md'), ('e:clear_render_for', 'clear_render_for.md'), ('e:visible_to', 'visible_to.md')],
+                },
+                {
+                    'name': 'e:clear_render_for',
+                    'brief': 'Убирает override, поставленный `e:render_for()`/`e:visible_to()`.',
+                    'sig': 'e:clear_render_for(player)',
+                    'args': [('player', 'player \\| number', 'кому')],
+                    'extra': 'Игрок снова видит сущность как обычно.',
+                    'see': [('e:render_for', 'render_for.md')],
+                },
+                {
+                    'name': 'e:visible_to',
+                    'brief': 'Делает сущность видимой или невидимой для одного игрока.',
+                    'sig': 'e:visible_to(player, visible)',
+                    'args': [('player', 'player \\| number', 'кому'),
+                             ('visible', 'boolean', '`false` — спрятать')],
+                    'example': """
+hook.add("round:start", "furrien.hide", function()
+	for _, hunter in ipairs(players.list{ team = "ct" }) do
+		for _, prey in ipairs(players.list{ team = "t" }) do
+			-- hunter не видит prey, все остальные видят как обычно
+			prey:visible_to(hunter, false)
+		end
+	end
+end)
+""",
+                    'extra': 'Частый случай `e:render_for()`: `visible_to(p, false)` то же самое, что `render_for(p, { mode = 4, amount = 0 })`; `visible_to(p, true)` то же самое, что `clear_render_for(p)`.',
+                    'see': [('e:render_for', 'render_for.md')],
+                },
+                {
                     'name': 'e:pev',
                     'brief': 'Читает или задаёт произвольное поле `entvars_t` по имени — то, для чего нет\nготового метода вроде `e:origin()` или `e:solid()`.',
                     'sig': 'e:pev(name[, v...])',

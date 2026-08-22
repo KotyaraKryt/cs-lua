@@ -53,6 +53,7 @@ description: "Плоский список всех функций и метод�
 | [`player:choose_team`](hook/gameplay.md#player_choose_team) | hook | Игрок выбрал пункт в меню команды |
 | [`e:classname`](ents/entity.md#classname) | ents | Classname сущности |
 | [`round:cleanup`](hook/round.md#round_cleanup) | hook | Карта вот-вот сбросит мир между раундами |
+| [`e:clear_render_for`](ents/entity.md#clear_render_for) | ents | Убирает override, поставленный `e:render_for()`/`e:visible_to()` |
 | [`p:clip`](players/cs-state.md#clip) | players | Читает или задаёт патроны в магазине |
 | [`conn:close`](mysql/connection.md#close) | mysql | Закрывает соединение |
 | [`db:close`](db/database.md#close) | db | Закрывает базу |
@@ -211,6 +212,7 @@ description: "Плоский список всех функций и метод�
 | [`hook.remove`](hook/namespace.md#remove) | hook | Снимает подписку по имени события и id |
 | [`round:remove_guns`](hook/round.md#round_remove_guns) | hook | У всех игроков вот-вот заберут оружие |
 | [`e:render`](ents/entity.md#render) | ents | Читает или задаёт прозрачность и свечение |
+| [`e:render_for`](ents/entity.md#render_for) | ents | То же самое, что `e:render()`, но только для одного игрока — остальные видят сущность как обычно |
 | [`regex.replace`](regex/index.md#replace) | regex | Заменяет совпадения |
 | [`http.request`](http/index.md#request) | http | Выполняет запрос произвольным методом |
 | [`player:respawn_check`](hook/gameplay.md#player_can_respawn) | hook | Игра вот-вот решит, можно ли игроку возродиться |
@@ -269,10 +271,11 @@ description: "Плоский список всех функций и метод�
 | [`access.users`](access/read.md#users) | access | Все записи из `users.lua` |
 | [`e:valid`](ents/entity.md#valid) | ents | Жива ли сущность |
 | [`p:velocity`](players/state.md#velocity) | players | Скорость игрока |
+| [`e:visible_to`](ents/entity.md#visible_to) | ents | Делает сущность видимой или невидимой для одного игрока |
 | [`p:weapon`](players/cs-state.md#weapon) | players | Classname оружия в руках |
 | [`p:weapons`](players/cs-state.md#weapons) | players | Массив classname всего, что несёт игрок |
 | [`p:weight`](players/access.md#weight) | players | Вес игрока для иммунитета |
 | [`file.write`](file/index.md#write) | file | Перезаписывает файл целиком (или создаёт его) |
 | [`log.write`](log/index.md#write) | log | Пишет строку в лог плагина |
 
-Всего: 261.
+Всего: 264.

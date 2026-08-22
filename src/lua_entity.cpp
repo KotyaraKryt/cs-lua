@@ -4,8 +4,10 @@
 #include "lua_natives.h"
 #include "lua_sound.h"
 #include "cslua_corpse.h"
+#include "cslua_visibility.h"
 #include "lua_pev.h"
 #include "lua_player.h"
+#include "players.h"
 
 #include <string.h>
 #include <vector>
@@ -691,6 +693,144 @@ static int l_render(lua_State *L)
 	return 0;
 }
 
+// Accepts a player object ({id=...}) or a bare id, same two shapes
+// cslua_arg_to_edict unwraps for a pev field - but here the target has to be
+// an actual connected client (a recipient of network data), not any entity,
+// so this checks that directly rather than resolving through an edict.
+static int arg_to_player_slot(lua_State *L, int idx)
+{
+	int id = 0;
+	bool valid = false;
+
+	if (lua_isnumber(L, idx)) {
+		id = (int)lua_tointeger(L, idx);
+		valid = true;
+	} else if (lua_istable(L, idx)) {
+		lua_getfield(L, idx, "id");
+		if (lua_isnumber(L, -1)) {
+			id = (int)lua_tointeger(L, -1);
+			valid = true;
+		}
+		lua_pop(L, 1);
+	}
+
+	if (!valid)
+		luaL_error(L, "expected a player object or a player id");
+
+	if (id < 1 || id >= CSLUA_MAXPLAYERS || !g_players.is_connected(id))
+		luaL_error(L, "no such connected player #%d", id);
+
+	return id;
+}
+
+// e:render_for(player[, opts]) - like e:render(), but only for one client:
+// everyone else keeps seeing the entity's ordinary, entvars-driven look.
+// Only possible at all because this goes through pfnAddToFullPack, the
+// engine's per-recipient snapshot build (see cslua_visibility.h) - there is
+// no such thing as a per-client entvars write.
+static int l_render_for(lua_State *L)
+{
+	edict_t *e = self_edict(L);
+	int recipient = arg_to_player_slot(L, 2);
+
+	CsluaRenderOverride cur;
+	bool has_cur = cslua_visibility_get(e, recipient, cur);
+
+	if (lua_isnoneornil(L, 3)) {
+		if (!has_cur) {
+			lua_pushnil(L);
+			return 1;
+		}
+
+		lua_newtable(L);
+		lua_pushinteger(L, cur.mode);   lua_setfield(L, -2, "mode");
+		lua_pushnumber(L, cur.amount);  lua_setfield(L, -2, "amount");
+		lua_pushinteger(L, cur.fx);     lua_setfield(L, -2, "fx");
+
+		lua_newtable(L);
+		lua_pushnumber(L, cur.r); lua_rawseti(L, -2, 1);
+		lua_pushnumber(L, cur.g); lua_rawseti(L, -2, 2);
+		lua_pushnumber(L, cur.b); lua_rawseti(L, -2, 3);
+		lua_setfield(L, -2, "color");
+		return 1;
+	}
+
+	luaL_checktype(L, 3, LUA_TTABLE);
+
+	// A field opts leaves out keeps this override's own current value - or,
+	// the first time a rule is set for this recipient, the entity's own
+	// ordinary render. Same "starts from what it already looked like" idea
+	// e:render() itself uses for a partial update.
+	CsluaRenderOverride values = has_cur ? cur : CsluaRenderOverride{
+		e->v.rendermode, e->v.renderamt,
+		e->v.rendercolor.x, e->v.rendercolor.y, e->v.rendercolor.z,
+		e->v.renderfx
+	};
+
+	lua_getfield(L, 3, "mode");
+	if (lua_isnumber(L, -1))
+		values.mode = (int)lua_tointeger(L, -1);
+	lua_pop(L, 1);
+
+	lua_getfield(L, 3, "amount");
+	if (lua_isnumber(L, -1))
+		values.amount = (float)lua_tonumber(L, -1);
+	lua_pop(L, 1);
+
+	lua_getfield(L, 3, "fx");
+	if (lua_isnumber(L, -1))
+		values.fx = (int)lua_tointeger(L, -1);
+	lua_pop(L, 1);
+
+	lua_getfield(L, 3, "color");
+	if (lua_istable(L, -1)) {
+		float rgb[3] = { values.r, values.g, values.b };
+		for (int i = 0; i < 3; i++) {
+			lua_rawgeti(L, -1, i + 1);
+			if (lua_isnumber(L, -1))
+				rgb[i] = (float)lua_tonumber(L, -1);
+			lua_pop(L, 1);
+		}
+		values.r = rgb[0];
+		values.g = rgb[1];
+		values.b = rgb[2];
+	}
+	lua_pop(L, 1);
+
+	cslua_visibility_set(e, recipient, values);
+	return 0;
+}
+
+// e:clear_render_for(player) - removes an override set by e:render_for() or
+// e:visible_to(); player goes back to seeing e's ordinary render.
+static int l_clear_render_for(lua_State *L)
+{
+	edict_t *e = self_edict(L);
+	int recipient = arg_to_player_slot(L, 2);
+	cslua_visibility_clear(e, recipient);
+	return 0;
+}
+
+// e:visible_to(player, visible) - the common case of e:render_for(): make an
+// entity invisible to one specific client (kRenderTransAlpha, amount 0)
+// without touching what anyone else sees. visible = true clears the
+// override outright, same as e:clear_render_for().
+static int l_visible_to(lua_State *L)
+{
+	edict_t *e = self_edict(L);
+	int recipient = arg_to_player_slot(L, 2);
+	bool visible = lua_toboolean(L, 3) != 0;
+
+	if (visible) {
+		cslua_visibility_clear(e, recipient);
+		return 0;
+	}
+
+	CsluaRenderOverride values = { kRenderTransAlpha, 0.0f, 0.0f, 0.0f, 0.0f, kRenderFxNone };
+	cslua_visibility_set(e, recipient, values);
+	return 0;
+}
+
 // e:pev(name[, v...]) - generic read/write for any entvars_t field by its
 // real name (see lua_pev.cpp for the field table and p:pev for the player
 // object's copy of this same method). Covers everything the typed methods
@@ -720,6 +860,9 @@ static const luaL_Reg s_methods[] =
 	{ "detach",    l_detach },
 	{ "size",      l_size },
 	{ "render",    l_render },
+	{ "render_for",       l_render_for },
+	{ "clear_render_for", l_clear_render_for },
+	{ "visible_to",       l_visible_to },
 	{ "sequence",  l_sequence },
 	{ "frame",     l_frame },
 	{ "framerate", l_framerate },
