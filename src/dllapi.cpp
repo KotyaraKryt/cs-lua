@@ -17,6 +17,7 @@
 
 #include <in_buttons.h>
 #include <string.h>
+#include <string>
 
 // Defined further down, next to the polls they reset.
 void cslua_reset_auth_poll();
@@ -34,6 +35,23 @@ static bool s_world_ready = false;
 bool cslua_world_ready()
 {
 	return s_world_ready;
+}
+
+// Set by cslua_set_game_desc(), read by GetGameDescription() below. Empty
+// means "no override" - the engine's own description goes out untouched.
+static std::string s_game_desc;
+
+void cslua_set_game_desc(const char *text)
+{
+	s_game_desc = text ? text : "";
+}
+
+static const char *GetGameDescription()
+{
+	if (s_game_desc.empty())
+		RETURN_META_VALUE(MRES_IGNORED, NULL);
+
+	RETURN_META_VALUE(MRES_SUPERCEDE, s_game_desc.c_str());
 }
 
 static int Spawn_Post(edict_t *pent)
@@ -248,7 +266,7 @@ DLL_FUNCTIONS g_DllFunctionTable =
 	NULL,					// pfnStartFrame
 	NULL,					// pfnParmsNewLevel
 	NULL,					// pfnParmsChangeLevel
-	NULL,					// pfnGetGameDescription
+	GetGameDescription,		// pfnGetGameDescription
 	NULL,					// pfnPlayerCustomization
 	NULL,					// pfnSpectatorConnect
 	NULL,					// pfnSpectatorDisconnect

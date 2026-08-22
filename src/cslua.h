@@ -49,3 +49,8 @@ void cslua_profile_init();
 // Meta_Attach, long before there is a world, and the engine does not check -
 // it walks a table that is not there yet and takes the server down.
 bool cslua_world_ready();
+
+// Overrides the string GetGameDescription() reports to the engine - the
+// "game" column a server browser shows next to the hostname. Empty (the
+// default) leaves the engine's own description alone.
+void cslua_set_game_desc(const char *text);

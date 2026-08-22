@@ -381,6 +381,16 @@ static int l_sv_map(lua_State *L)
 	return 1;
 }
 
+// sv.set_game_desc(name) -> overrides the "game" column a server browser
+// shows next to the hostname. Call with "" (or nil) to drop back to the
+// engine's own description.
+static int l_sv_set_game_desc(lua_State *L)
+{
+	const char *text = lua_isnoneornil(L, 1) ? "" : luaL_checkstring(L, 1);
+	cslua_set_game_desc(text);
+	return 0;
+}
+
 // ---------------------------------------------------------------------------
 // players
 
@@ -454,10 +464,11 @@ static const luaL_Reg s_plugin[] =
 
 static const luaL_Reg s_sv[] =
 {
-	{ "cmd",       l_sv_cmd },
-	{ "time",      l_sv_time },
-	{ "map",       l_sv_map },
-	{ "hull_free", cslua_sv_hull_free },
+	{ "cmd",           l_sv_cmd },
+	{ "time",          l_sv_time },
+	{ "map",           l_sv_map },
+	{ "hull_free",     cslua_sv_hull_free },
+	{ "set_game_desc", l_sv_set_game_desc },
 	{ NULL, NULL }
 };
 
