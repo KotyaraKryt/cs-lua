@@ -51,6 +51,40 @@ static int msg_textmsg()
 int cslua_msg_saytext_id() { return msg_saytext(); }
 int cslua_msg_textmsg_id() { return msg_textmsg(); }
 
+// Also game-DLL user messages, same lazy-resolve-and-cache as SayText/TextMsg.
+static int msg_screenshake()
+{
+	static int id = -1;
+	if (id < 0) {
+		id = GET_USER_MSG_ID(PLID, "ScreenShake", NULL);
+		if (!id) {
+			cslua_error("user message 'ScreenShake' is not registered yet, p:screen_shake() does nothing");
+			id = -1;
+		}
+	}
+	return id;
+}
+
+static int msg_screenfade()
+{
+	static int id = -1;
+	if (id < 0) {
+		id = GET_USER_MSG_ID(PLID, "ScreenFade", NULL);
+		if (!id) {
+			cslua_error("user message 'ScreenFade' is not registered yet, p:screen_fade() does nothing");
+			id = -1;
+		}
+	}
+	return id;
+}
+
+// dlls/const.h flags for ScreenFade, spelled out rather than pulled from the
+// SDK - same call this file already made for SVC_TEMPENTITY/SVC_DIRECTOR.
+#define FFADE_IN		0x0001	// present in the SDK only so 0 isn't passed in; 0 already fades in
+#define FFADE_OUT		0x0002
+#define FFADE_MODULATE		0x0004
+#define FFADE_STAYOUT		0x0008
+
 // Text encoding, and why this is a switch rather than a rule.
 //
 // Modern CS 1.6 clients (current Steam builds) render chat as UTF-8, which is
@@ -678,6 +712,74 @@ void cslua_send_dhud(int id, const char *text, const HudParams &p)
 		WRITE_LONG(float_bits(p.hold));
 		WRITE_LONG(float_bits(p.fxtime));
 		WRITE_STRING(buf);
+		MESSAGE_END();
+	});
+}
+
+// UTIL_ScreenShake's own fixed-point scales (dlls/util.cpp): amplitude and
+// duration at 1<<12, frequency at 1<<8. Not ours to pick - the client decodes
+// with the same constants.
+void cslua_send_screen_shake(int id, float amplitude, float frequency, float duration)
+{
+	int msg = msg_screenshake();
+	if (!msg)
+		return;
+
+	short famplitude = fixed_unsigned16(amplitude, 1 << 12);
+	short ffrequency = fixed_unsigned16(frequency, 1 << 8);
+	short fduration = fixed_unsigned16(duration, 1 << 12);
+
+	for_targets(id, [&](int, edict_t *e) {
+		MESSAGE_BEGIN(MSG_ONE_UNRELIABLE, msg, NULL, e);
+		WRITE_SHORT(famplitude);
+		WRITE_SHORT(fduration);
+		WRITE_SHORT(ffrequency);
+		MESSAGE_END();
+	});
+}
+
+void cslua_read_screen_fade_params(lua_State *L, int index, ScreenFadeParams &out)
+{
+	if (lua_isnoneornil(L, index))
+		return;
+
+	luaL_checktype(L, index, LUA_TTABLE);
+	index = abs_index(L, index);
+
+	out.duration = opt_number(L, index, "duration", out.duration);
+	out.hold = opt_number(L, index, "hold", out.hold);
+
+	unsigned char a = out.a;
+	opt_color(L, index, "color", out.r, out.g, out.b, a);
+	out.a = (unsigned char)opt_number(L, index, "alpha", (float)a);
+
+	lua_getfield(L, index, "out");      out.fade_out = lua_toboolean(L, -1) != 0; lua_pop(L, 1);
+	lua_getfield(L, index, "modulate"); out.modulate = lua_toboolean(L, -1) != 0; lua_pop(L, 1);
+	lua_getfield(L, index, "stay");     out.stay     = lua_toboolean(L, -1) != 0; lua_pop(L, 1);
+}
+
+void cslua_send_screen_fade(int id, const ScreenFadeParams &p)
+{
+	int msg = msg_screenfade();
+	if (!msg)
+		return;
+
+	short fduration = fixed_unsigned16(p.duration, 1 << 8);
+	short fhold = fixed_unsigned16(p.hold, 1 << 8);
+
+	int flags = p.fade_out ? FFADE_OUT : FFADE_IN;
+	if (p.modulate) flags |= FFADE_MODULATE;
+	if (p.stay) flags |= FFADE_STAYOUT;
+
+	for_targets(id, [&](int, edict_t *e) {
+		MESSAGE_BEGIN(MSG_ONE, msg, NULL, e);
+		WRITE_SHORT(fduration);
+		WRITE_SHORT(fhold);
+		WRITE_SHORT(flags);
+		WRITE_BYTE(p.r);
+		WRITE_BYTE(p.g);
+		WRITE_BYTE(p.b);
+		WRITE_BYTE(p.a);
 		MESSAGE_END();
 	});
 }

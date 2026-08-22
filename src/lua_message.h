@@ -64,3 +64,23 @@ void cslua_send_hud(int id, const char *text, const HudParams &p);
 // for a caller who wants real markup.
 void cslua_send_motd(int id, const char *text, bool raw);
 void cslua_send_dhud(int id, const char *text, const HudParams &p);
+
+// p:screen_shake(opts) - the same three fields UTIL_ScreenShake takes. There
+// is no radius/PVS filtering here: id already picks the target directly, the
+// same as chat/hud/motd, so a world radius would have nothing to filter.
+void cslua_send_screen_shake(int id, float amplitude, float frequency, float duration);
+
+// Options for p:screen_fade(). Defaults land on the classic "flash and
+// clear" damage effect: opaque at t=0, fading away over `duration`.
+struct ScreenFadeParams
+{
+	float duration = 1.0f;
+	float hold = 0.0f;
+	unsigned char r = 0, g = 0, b = 0, a = 200;
+	bool fade_out = false;		// FFADE_OUT: fade FROM normal TO the colour, not the reverse
+	bool modulate = false;		// FFADE_MODULATE: blend instead of a solid colour
+	bool stay = false;		// FFADE_STAYOUT: hold at the end instead of clearing
+};
+
+void cslua_read_screen_fade_params(lua_State *L, int index, ScreenFadeParams &out);
+void cslua_send_screen_fade(int id, const ScreenFadeParams &p);

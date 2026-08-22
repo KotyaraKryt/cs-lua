@@ -1302,6 +1302,47 @@ static int l_dhud(lua_State *L)
 	return 0;
 }
 
+// p:screen_shake([opts]) - opts = { amplitude, frequency, duration }, all in
+// UTIL_ScreenShake's own units. Sent straight to the target(s), no radius/PVS
+// filtering - id already says who gets it.
+static int l_screen_shake(lua_State *L)
+{
+	int id = self_id(L);
+
+	float amplitude = 16.0f, frequency = 150.0f, duration = 1.0f;
+
+	if (!lua_isnoneornil(L, 2)) {
+		luaL_checktype(L, 2, LUA_TTABLE);
+
+		lua_getfield(L, 2, "amplitude");
+		if (lua_isnumber(L, -1)) amplitude = (float)lua_tonumber(L, -1);
+		lua_pop(L, 1);
+
+		lua_getfield(L, 2, "frequency");
+		if (lua_isnumber(L, -1)) frequency = (float)lua_tonumber(L, -1);
+		lua_pop(L, 1);
+
+		lua_getfield(L, 2, "duration");
+		if (lua_isnumber(L, -1)) duration = (float)lua_tonumber(L, -1);
+		lua_pop(L, 1);
+	}
+
+	cslua_send_screen_shake(id, amplitude, frequency, duration);
+	return 0;
+}
+
+// p:screen_fade([opts]) - a full-screen colour fade. opts = { color, alpha,
+// duration, hold, out, modulate, stay }; see ScreenFadeParams for defaults.
+static int l_screen_fade(lua_State *L)
+{
+	int id = self_id(L);
+
+	ScreenFadeParams params;
+	cslua_read_screen_fade_params(L, 2, params);
+	cslua_send_screen_fade(id, params);
+	return 0;
+}
+
 // p:play_sound("misc/foo.wav") or with options:
 //   { volume = 1.0, channel = 0, pitch = 100, attenuation = 0.8 }
 // attenuation 0 means "no falloff" - the same loudness anywhere on the map,
@@ -1379,6 +1420,8 @@ static const luaL_Reg s_messaging[] =
 	{ "center",     l_center },
 	{ "hud",        l_hud },
 	{ "dhud",       l_dhud },
+	{ "screen_shake", l_screen_shake },
+	{ "screen_fade",  l_screen_fade },
 	{ "play_sound", l_play_sound },
 	{ NULL, NULL }
 };
