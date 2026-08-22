@@ -26,8 +26,8 @@
 
 local color = require("color")
 
--- Raw panel drawing, taken into locals and cleared: a plugin sees menu.new()
--- and nothing else on this table.
+-- Raw panel drawing, taken into locals and cleared: menu.new() is what a
+-- plugin sees by default...
 local show_panel  = menu._show
 local close_panel = menu._close
 menu._show, menu._close = nil, nil
@@ -106,6 +106,28 @@ Menu.__index = Menu
 
 -- Who is looking at what, so a reply lands on the right menu and page.
 local open = {}
+
+-- ...but a plugin that wants to build the panel text and key mask itself -
+-- the same shape AMXModX's show_menu()/register_menucmd() offered - gets
+-- that here instead. Handle the answer with hook.add("menu:select", ...);
+-- e.player and e.key are the same key AMXModX's menu callback got.
+--
+--   menu.raw_show(p.id, 2^0 + 2^1, -1, "Choose:\n1. Yes\n2. No")
+--   hook.add("menu:select", "my_plugin", function(e)
+--       if e.key == 1 then ... end
+--   end)
+--
+-- Only one panel can be on screen at a time, so showing a raw menu drops
+-- whatever menu.new() menu that player had open, and the other way round.
+function menu.raw_show(id, keys, time, text)
+	open[id] = nil
+	return show_panel(id, keys, time, text)
+end
+
+function menu.raw_close(id)
+	open[id] = nil
+	return close_panel(id)
+end
 
 function menu.new(title, opts)
 	opts = opts or {}
