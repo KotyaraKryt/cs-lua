@@ -206,12 +206,24 @@ static void ClientDisconnect(edict_t *pEntity)
 	RETURN_META(MRES_IGNORED);
 }
 
+// The "kill" console command - a rate-limited self-kill (ClientKill itself
+// enforces the 1-second cooldown once the chain runs). Cancelling here skips
+// that chain entirely, so a blocked suicide leaves no trace at all - not
+// even the cooldown timer moves.
+static void ClientKill(edict_t *pEntity)
+{
+	int id = g_engfuncs.pfnIndexOfEdict(pEntity);
+	if (g_events.fire_player_suicide(id))
+		RETURN_META(MRES_SUPERCEDE);
+	RETURN_META(MRES_IGNORED);
+}
+
 DLL_FUNCTIONS g_DllFunctionTable =
 {
 	NULL,					// pfnGameInit
 	NULL,					// pfnSpawn
 	NULL,					// pfnThink
-	NULL,					// pfnUse
+	NULL,					// pfnUse (hooked post, see below)
 	Touch,					// pfnTouch
 	NULL,					// pfnBlocked
 	NULL,					// pfnKeyValue
@@ -225,7 +237,7 @@ DLL_FUNCTIONS g_DllFunctionTable =
 	NULL,					// pfnResetGlobalState
 	ClientConnect,			// pfnClientConnect
 	ClientDisconnect,		// pfnClientDisconnect
-	NULL,					// pfnClientKill
+	ClientKill,				// pfnClientKill
 	NULL,					// pfnClientPutInServer	(hooked post, see below)
 	ClientCommand,			// pfnClientCommand
 	NULL,					// pfnClientUserInfoChanged
@@ -366,6 +378,25 @@ static int AddToFullPack_Post(entity_state_s *state, int e, edict_t *ent, edict_
 	RETURN_META_VALUE(MRES_IGNORED, 1);
 }
 
+// pfnUse just ran - +use on something with a Use handler (a button, a
+// lever, a multi_manager): DispatchUse already dispatched it to the
+// target's own Use(). Post, not pre - nothing here needs to intercept the
+// interaction, only observe that it happened. entity resolves to whatever
+// was used, player to whoever pressed +use (0 if the activator was not a
+// connected player - most things that can activate a Use handler are, but
+// the engine does not guarantee it).
+static void Use_Post(edict_t *pentUsed, edict_t *pentOther)
+{
+	int entity = pentUsed ? g_engfuncs.pfnIndexOfEdict(pentUsed) : 0;
+
+	int player = pentOther ? g_engfuncs.pfnIndexOfEdict(pentOther) : 0;
+	if (player < 1 || player >= CSLUA_MAXPLAYERS || !g_players.is_connected(player))
+		player = 0;
+
+	g_events.fire_player_use(player, entity);
+	RETURN_META(MRES_IGNORED);
+}
+
 // Only a couple of hooks here, so build it instead of spelling out 50 NULLs.
 static DLL_FUNCTIONS make_post_table()
 {
@@ -374,11 +405,70 @@ static DLL_FUNCTIONS make_post_table()
 	table.pfnClientPutInServer = ClientPutInServer;
 	table.pfnStartFrame = StartFrame;
 	table.pfnAddToFullPack = AddToFullPack_Post;
+	table.pfnUse = Use_Post;
 	return table;
 }
 
 DLL_FUNCTIONS g_DllFunctionTable_Post = make_post_table();
-NEW_DLL_FUNCTIONS g_NewDllFunctionTable = {};
+
+// The four hooks below are NEW_DLL_FUNCTIONS fields ReGameDLL itself leaves
+// null (verified against its own source, not guessed from the header) - so
+// this is not a pre-hook layered in front of some existing behavior, it is
+// the only implementation of them there is. Registered pre rather than
+// post for that reason: post would imply something real runs first.
+
+// The only implementation of pfnShouldCollide at all - see above. Defaults
+// to letting two entities collide normally; only an explicit
+// e.collide = false in a handler turns that off for one pair.
+static int ShouldCollide(edict_t *pentTouched, edict_t *pentOther)
+{
+	int a = pentTouched ? g_engfuncs.pfnIndexOfEdict(pentTouched) : 0;
+	int b = pentOther ? g_engfuncs.pfnIndexOfEdict(pentOther) : 0;
+
+	bool collide = g_events.fire_ents_should_collide(a, b, true);
+	RETURN_META_VALUE(MRES_SUPERCEDE, collide ? 1 : 0);
+}
+
+// Fires before ReGameDLL's own cleanup runs, on purpose - this is the last
+// point the entity (classname, fields) can still be read at all. A post
+// hook here would only ever see whatever is left once it is already gone.
+static void OnFreeEntPrivateData(edict_t *pEnt)
+{
+	int index = pEnt ? g_engfuncs.pfnIndexOfEdict(pEnt) : 0;
+	g_events.fire_ents_free(index);
+	RETURN_META(MRES_IGNORED);
+}
+
+// A client's answer to a QueryClientCvarValue request - the old,
+// context-free version: no request id, no cvar name, the code that asked
+// is expected to already remember which cvar it queried.
+static void CvarValue(const edict_t *pEnt, const char *value)
+{
+	int id = pEnt ? g_engfuncs.pfnIndexOfEdict((edict_t *)pEnt) : 0;
+	g_events.fire_player_cvar_value(id, value);
+	RETURN_META(MRES_IGNORED);
+}
+
+// Same idea, the QueryClientCvarValue2 version: request_id ties this answer
+// back to whichever query asked for it, cvar names which one.
+static void CvarValue2(const edict_t *pEnt, int requestID, const char *cvarName, const char *value)
+{
+	int id = pEnt ? g_engfuncs.pfnIndexOfEdict((edict_t *)pEnt) : 0;
+	g_events.fire_player_cvar_value2(id, requestID, cvarName, value);
+	RETURN_META(MRES_IGNORED);
+}
+
+static NEW_DLL_FUNCTIONS make_new_table()
+{
+	NEW_DLL_FUNCTIONS table = {};
+	table.pfnShouldCollide = ShouldCollide;
+	table.pfnOnFreeEntPrivateData = OnFreeEntPrivateData;
+	table.pfnCvarValue = CvarValue;
+	table.pfnCvarValue2 = CvarValue2;
+	return table;
+}
+
+NEW_DLL_FUNCTIONS g_NewDllFunctionTable = make_new_table();
 NEW_DLL_FUNCTIONS g_NewDllFunctionTable_Post = {};
 
 C_DLLEXPORT int GetEntityAPI2(DLL_FUNCTIONS *pFunctionTable, int *interfaceVersion)

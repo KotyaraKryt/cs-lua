@@ -73,6 +73,16 @@ static int hook_precache_model(IRehldsHook_PF_precache_model_I *chain, const cha
 	return slot;
 }
 
+// No overflow accounting for this one - unlike model/sound, nothing in this
+// module calls it (there is no res.generic() yet), so there is no budget of
+// our own to protect. Just the notify.
+static int hook_precache_generic(IRehldsHook_PF_precache_generic_I *chain, const char *name)
+{
+	int index = chain->callNext(name);
+	g_events.fire_server_precache_generic(name, index);
+	return index;
+}
+
 void cslua_sound_install_hooks()
 {
 	IRehldsHookchains *hooks = cslua_rehlds_hooks();
@@ -81,6 +91,7 @@ void cslua_sound_install_hooks()
 
 	hooks->PF_precache_sound_I()->registerHook(&hook_precache_sound);
 	hooks->PF_precache_model_I()->registerHook(&hook_precache_model);
+	hooks->PF_precache_generic_I()->registerHook(&hook_precache_generic);
 }
 
 void cslua_sound_set_window(bool open)

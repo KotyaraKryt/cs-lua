@@ -124,3 +124,19 @@ end)
 | [`item:buy`](shop.md#item_buy) | Игрок покупает не-оружие в магазине: броню, прибор ночного видения, набор для разминирования, щит или гранату |
 | [`ammo:pickup`](shop.md#ammo_pickup) | Игроку вот-вот добавят патронов в запас — подбор с земли или дозарядка через магазин (отдельно от `ammo:buy`, которое про сам факт покупки) |
 | [`weapon:drop`](shop.md#weapon_drop) | Игрок вот-вот выбросит оружие на пол — командой `drop`, из `p:drop()` или при потере слота |
+
+## Движок и ReHLDS
+
+В отличие от «Геймплея» эти события не требуют ReGameDLL — работают и на ванильном `mp.dll`. Три из них (отмечены отдельно) требуют ReHLDS.
+
+|  |  |
+|---|---|
+| [`player:use`](engine.md#player_use) | Игрок нажал +use на чём-то с обработчиком Use — кнопке, рычаге, multi_manager |
+| [`player:suicide`](engine.md#player_suicide) | Игрок вот-вот покончит с собой командой `kill` из консоли |
+| [`ents:should_collide`](engine.md#should_collide) | Движок решает, должны ли две сущности физически сталкиваться |
+| [`ents:free`](engine.md#ents_free) | Сущность вот-вот уничтожат — последняя точка, где её ещё можно прочитать |
+| [`player:cvar_value`](engine.md#player_cvar_value) | Клиент ответил на запрос значения cvar — старый вариант API, без имени cvar и без id запроса |
+| [`player:cvar_value2`](engine.md#player_cvar_value2) | То же самое, но новый вариант API: с именем cvar и id запроса, чтобы сверить ответ с тем, что спрашивали |
+| [`server:cvar_change`](engine.md#server_cvar_change) | Любой cvar вот-вот изменится — движковый, чужого плагина, свой |
+| [`server:precache_generic`](engine.md#server_precache_generic) | Прекеширован generic-ресурс (не модель и не звук) — движком, игрой, другим плагином |
+| [`client:bot_created`](engine.md#bot_created) | Подключился бот (fake client) |

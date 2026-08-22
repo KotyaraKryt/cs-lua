@@ -80,6 +80,15 @@ enum CsLuaEvent
 	CSLUA_EVENT_PLAYER_CAN_HEAR,		// pre: CanPlayerHearPlayer; cancel to force "no"
 	CSLUA_EVENT_PLAYER_CHOOSE_MODEL,	// HandleMenu_ChooseAppearance just ran
 	CSLUA_EVENT_PLAYER_CHOOSE_TEAM,	// pre: HandleMenu_ChooseTeam; cancel to block the switch
+	CSLUA_EVENT_PLAYER_USE,		// post: DispatchUse just ran (+use on a usable entity)
+	CSLUA_EVENT_PLAYER_SUICIDE,		// pre: the "kill" console command; cancel to block it
+	CSLUA_EVENT_ENTS_SHOULD_COLLIDE,	// pfnShouldCollide; e.collide, default true, read back
+	CSLUA_EVENT_ENTS_FREE,			// pfnOnFreeEntPrivateData: entity about to be destroyed
+	CSLUA_EVENT_PLAYER_CVAR_VALUE,		// pfnCvarValue: a client answered a cvar query
+	CSLUA_EVENT_PLAYER_CVAR_VALUE2,	// pfnCvarValue2: same, with a request id and cvar name
+	CSLUA_EVENT_SERVER_CVAR_CHANGE,	// pre: ReHLDS Cvar_DirectSet; cancel to block it
+	CSLUA_EVENT_SERVER_PRECACHE_GENERIC,	// ReHLDS PF_precache_generic_I just ran
+	CSLUA_EVENT_CLIENT_BOT_CREATED,	// ReHLDS CreateFakeClient just ran
 
 	CSLUA_EVENT_COUNT
 };
@@ -478,6 +487,61 @@ public:
 	// team change happens inside this call, so a pre-cancel prevents it
 	// entirely, same contract as fire_player_can_respawn.
 	bool fire_player_choose_team(int player, int slot);
+
+	// pfnUse just ran (DispatchUse: +use on something with a Use handler -
+	// a button, a lever, a multi_manager). entity is 0 if it is already gone
+	// by the time this fires. Notify only: the interaction already happened.
+	void fire_player_use(int player, int entity);
+
+	// The "kill" console command is about to run - a rate-limited self-kill,
+	// same path as a real suicide. Cancel to block it entirely: the caller
+	// then skips ClientKill's own chain, so nothing happens at all (not even
+	// the rate-limit timer updates).
+	bool fire_player_suicide(int player);
+
+	// pfnShouldCollide's pre-check, and the only implementation of it at all
+	// - ReGameDLL leaves this field null, so whatever this returns is final,
+	// not a chain around some other answer. collide comes in true (normal
+	// physics) and goes back out however the last handler left e.collide;
+	// nothing here can make two entities that would collide anyway skip
+	// touching each other by omission - only an explicit false does that.
+	bool fire_ents_should_collide(int entity, int other, bool collide);
+
+	// pfnOnFreeEntPrivateData's pre-check - the entity is about to be
+	// destroyed, but is still readable right now. Fires before ReGameDLL's
+	// own cleanup runs, on purpose: this is the last point anything about
+	// the entity can be read at all. Notify only - blocking destruction
+	// here would leak the slot, not save the entity.
+	void fire_ents_free(int entity);
+
+	// pfnCvarValue: a client answered a QueryClientCvarValue request with
+	// this cvar's value - the old, context-free version of the query (no
+	// name, no request id; the caller is expected to already know which
+	// cvar it asked about). Notify only.
+	void fire_player_cvar_value(int player, const char *value);
+
+	// pfnCvarValue2: same idea, but the modern version - request_id ties the
+	// answer back to whichever QueryClientCvarValue2 call asked, and cvar
+	// names which one this is an answer for.
+	void fire_player_cvar_value2(int player, int request_id, const char *cvar, const char *value);
+
+	// ReHLDS Cvar_DirectSet: a cvar (any of them - the engine's own, another
+	// plugin's, not just this module's) is about to change. Cancel to block
+	// it: the caller then skips the chain entirely, so the cvar keeps its
+	// old value. A handler that itself sets a cvar from inside this event
+	// will re-enter it - do not have it set the same cvar unconditionally,
+	// or that recursion never bottoms out.
+	bool fire_server_cvar_change(const char *name, const char *value);
+
+	// ReHLDS PF_precache_generic_I just ran - a generic (non-model,
+	// non-sound) resource was precached, by anything: the engine, the game
+	// DLL, another plugin, or this module (though nothing here calls it -
+	// there is no res.generic() yet). Notify only.
+	void fire_server_precache_generic(const char *name, int index);
+
+	// ReHLDS CreateFakeClient just ran - a bot connected. Notify only;
+	// id is the slot it was given.
+	void fire_client_bot_created(int id);
 
 private:
 	struct Handler

@@ -186,6 +186,7 @@ C_DLLEXPORT int Meta_Attach(PLUG_LOADTIME now, META_FUNCTIONS *pFunctionTable, m
 	if (cslua_rehlds_init()) {
 		cslua_sound_install_hooks();
 		cslua_netwatch_install_hooks();
+		cslua_rehlds_install_hooks();
 	}
 
 	// Before anything reads addons/lua/core: a module dropped in on its own,

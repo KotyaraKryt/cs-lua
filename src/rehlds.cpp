@@ -1,5 +1,6 @@
 #include "cslua.h"
 #include "rehlds.h"
+#include "lua_events.h"
 
 #include <rehlds_api.h>
 
@@ -78,4 +79,36 @@ bool cslua_rehlds_init()
 
 	cslua_print("ReHLDS API %s connected", s_version);
 	return true;
+}
+
+// Any cvar changing - the engine's own, another plugin's, this module's,
+// through any path (console, rcon, a server.cfg exec) - goes through here.
+// Pre: cancelling skips the chain entirely, so the cvar keeps its old value.
+static void hook_cvar_direct_set(IRehldsHook_Cvar_DirectSet *chain, cvar_s *var, const char *value)
+{
+	if (g_events.fire_server_cvar_change(var && var->name ? var->name : "", value ? value : ""))
+		return;
+
+	chain->callNext(var, value);
+}
+
+// A bot connected. Notify only - id is the slot it was given, resolved
+// after the real CreateFakeClient has already run so the edict exists.
+static edict_t *hook_create_fake_client(IRehldsHook_CreateFakeClient *chain, const char *netname)
+{
+	edict_t *result = chain->callNext(netname);
+
+	int id = result ? g_engfuncs.pfnIndexOfEdict(result) : 0;
+	g_events.fire_client_bot_created(id);
+
+	return result;
+}
+
+void cslua_rehlds_install_hooks()
+{
+	if (!s_hooks)
+		return;
+
+	s_hooks->Cvar_DirectSet()->registerHook(&hook_cvar_direct_set);
+	s_hooks->CreateFakeClient()->registerHook(&hook_create_fake_client);
 }

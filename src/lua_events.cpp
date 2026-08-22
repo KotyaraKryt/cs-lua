@@ -77,6 +77,15 @@ static const char *const s_event_names[CSLUA_EVENT_COUNT] =
 	"player:can_hear",
 	"player:choose_model",
 	"player:choose_team",
+	"player:use",
+	"player:suicide",
+	"ents:should_collide",
+	"ents:free",
+	"player:cvar_value",
+	"player:cvar_value2",
+	"server:cvar_change",
+	"server:precache_generic",
+	"client:bot_created",
 };
 
 static int find_event(const char *name)
@@ -116,7 +125,9 @@ static bool is_cancellable(int ev)
 		|| ev == CSLUA_EVENT_PLAYER_SCORE_ADD
 		|| ev == CSLUA_EVENT_TEAM_SCORE_ADD
 		|| ev == CSLUA_EVENT_PLAYER_CAN_HEAR
-		|| ev == CSLUA_EVENT_PLAYER_CHOOSE_TEAM;
+		|| ev == CSLUA_EVENT_PLAYER_CHOOSE_TEAM
+		|| ev == CSLUA_EVENT_PLAYER_SUICIDE
+		|| ev == CSLUA_EVENT_SERVER_CVAR_CHANGE;
 }
 
 static std::string known_events()
@@ -1483,5 +1494,99 @@ bool LuaEvents::fire_player_choose_team(int player, int slot)
 		set_player_or_nil(L, player, "player");
 		lua_pushinteger(L, slot);
 		lua_setfield(L, -2, "slot");
+	});
+}
+
+void LuaEvents::fire_player_use(int player, int entity)
+{
+	notify(CSLUA_EVENT_PLAYER_USE, [=](lua_State *L) {
+		set_player_or_nil(L, player, "player");
+		set_entity_or_nil(L, entity, "entity");
+	});
+}
+
+bool LuaEvents::fire_player_suicide(int player)
+{
+	return run(CSLUA_EVENT_PLAYER_SUICIDE, [=](lua_State *L) {
+		set_player(L, player, "player");
+	});
+}
+
+bool LuaEvents::fire_ents_should_collide(int entity, int other, bool collide)
+{
+	run(CSLUA_EVENT_ENTS_SHOULD_COLLIDE,
+		[=](lua_State *L) {
+			set_entity_or_nil(L, entity, "entity");
+			set_entity_or_nil(L, other, "other");
+			lua_pushboolean(L, collide);
+			lua_setfield(L, -2, "collide");
+		},
+		[&](lua_State *L) {
+			lua_getfield(L, -1, "collide");
+			if (lua_isboolean(L, -1))
+				collide = lua_toboolean(L, -1) != 0;
+			lua_pop(L, 1);
+		});
+
+	return collide;
+}
+
+void LuaEvents::fire_ents_free(int entity)
+{
+	notify(CSLUA_EVENT_ENTS_FREE, [=](lua_State *L) {
+		set_entity_or_nil(L, entity, "entity");
+	});
+}
+
+void LuaEvents::fire_player_cvar_value(int player, const char *value)
+{
+	std::string val = value ? value : "";
+
+	notify(CSLUA_EVENT_PLAYER_CVAR_VALUE, [=](lua_State *L) {
+		set_player_or_nil(L, player, "player");
+		set_string(L, val, "value");
+	});
+}
+
+void LuaEvents::fire_player_cvar_value2(int player, int request_id, const char *cvar, const char *value)
+{
+	std::string name = cvar ? cvar : "";
+	std::string val = value ? value : "";
+
+	notify(CSLUA_EVENT_PLAYER_CVAR_VALUE2, [=](lua_State *L) {
+		set_player_or_nil(L, player, "player");
+		lua_pushinteger(L, request_id);
+		lua_setfield(L, -2, "request_id");
+		set_string(L, name, "cvar");
+		set_string(L, val, "value");
+	});
+}
+
+bool LuaEvents::fire_server_cvar_change(const char *name, const char *value)
+{
+	std::string n = name ? name : "";
+	std::string v = value ? value : "";
+
+	return run(CSLUA_EVENT_SERVER_CVAR_CHANGE, [=](lua_State *L) {
+		set_string(L, n, "name");
+		set_string(L, v, "value");
+	});
+}
+
+void LuaEvents::fire_server_precache_generic(const char *name, int index)
+{
+	std::string n = name ? name : "";
+
+	notify(CSLUA_EVENT_SERVER_PRECACHE_GENERIC, [=](lua_State *L) {
+		set_string(L, n, "name");
+		lua_pushinteger(L, index);
+		lua_setfield(L, -2, "index");
+	});
+}
+
+void LuaEvents::fire_client_bot_created(int id)
+{
+	notify(CSLUA_EVENT_CLIENT_BOT_CREATED, [=](lua_State *L) {
+		set_player_or_nil(L, id, "player");
 	});
 }

@@ -31,6 +31,7 @@ description: "Плоский список всех функций и метод�
 | [`round:balance_teams`](hook/round.md#round_balance_teams) | hook | Автобаланс только что раскидал игроков по командам |
 | [`p:ban`](players/admin.md#ban) | players | Банит игрока |
 | [`fx.beam_cylinder`](fx/index.md#beam_cylinder) | fx | Кольцо луча, расширяющееся от точки |
+| [`client:bot_created`](hook/engine.md#bot_created) | hook | Подключился бот (fake client) |
 | [`players.broadcast`](players/namespace.md#broadcast) | players | Приёмник «всем сразу»: только отправка сообщений |
 | [`ammo:buy`](hook/shop.md#ammo_buy) | hook | Игрок покупает патроны для оружия в руках |
 | [`item:buy`](hook/shop.md#item_buy) | hook | Игрок покупает не-оружие в магазине: броню, прибор ночного видения, набор для разминирования, щит или гранату |
@@ -72,7 +73,10 @@ description: "Плоский список всех функций и метод�
 | [`ents.create`](ents/namespace.md#create) | ents | Создаёт сущность по classname |
 | [`timer.create`](timer/named.md#create) | timer | Заводит именованный таймер; повторный вызов заменяет старый |
 | [`sv.cvar`](sv/cvar.md#cvar) | sv | Возвращает объект существующей переменной движка |
+| [`server:cvar_change`](hook/engine.md#server_cvar_change) | hook | Любой cvar вот-вот изменится — движковый, чужого плагина, свой |
 | [`sv.cvar_register`](sv/cvar.md#cvar_register) | sv | Заводит свою переменную движка |
+| [`player:cvar_value`](hook/engine.md#player_cvar_value) | hook | Клиент ответил на запрос значения cvar — старый вариант API, без имени cvar и без id запроса |
+| [`player:cvar_value2`](hook/engine.md#player_cvar_value2) | hook | То же самое, но новый вариант API: с именем cvar и id запроса, чтобы сверить ответ с тем, что спрашивали |
 | [`plugin.data_dir`](plugin/index.md#data_dir) | plugin | Каталог плагина под данные, переживающий обновление |
 | [`round:dead_weapons`](hook/round.md#round_dead_weapons) | hook | Игра только что решила, что делать с оружием погибшего |
 | [`player:death`](hook/gameplay.md#player_death) | hook | Игрок погиб |
@@ -115,6 +119,7 @@ description: "Плоский список всех функций и метод�
 | [`c:float`](sv/cvar.md#float) | sv | Значение переменной как число |
 | [`s:flush`](store/kv.md#flush) | store | Записывает очередь на диск одной транзакцией |
 | [`p:frags`](players/state.md#frags) | players | Счётчик фрагов |
+| [`ents:free`](hook/engine.md#ents_free) | hook | Сущность вот-вот уничтожат — последняя точка, где её ещё можно прочитать |
 | [`p:freeze`](players/state.md#freeze) | players | Заморозка движения (`FL_FROZEN`) |
 | [`round:freeze_end`](hook/round.md#round_freeze_end) | hook | Заморозка кончилась, игроки могут двигаться |
 | [`http.get`](http/index.md#get) | http | Выполняет GET-запрос |
@@ -198,6 +203,7 @@ description: "Плоский список всех функций и метод�
 | [`module:plugin_unload`](hook/lifecycle.md#plugin_unload) | hook | Плагин или всё состояние уходит |
 | [`plugin{}`](plugin/index.md#manifest) | plugin | Объявляет метаданные и требования плагина |
 | [`http.post`](http/index.md#post) | http | Выполняет POST-запрос с телом |
+| [`server:precache_generic`](hook/engine.md#server_precache_generic) | hook | Прекеширован generic-ресурс (не модель и не звук) — движком, игрой, другим плагином |
 | [`db:prepare`](db/database.md#prepare) | db | Разбирает SQL один раз для многократного выполнения |
 | [`conn:query`](mysql/connection.md#query) | mysql | Выполняет запрос и отдаёт строки в коллбэк |
 | [`db:query`](db/database.md#query) | db | Выполняет запрос и возвращает все строки |
@@ -233,6 +239,7 @@ description: "Плоский список всех функций и метод�
 | [`player:shield_drop`](hook/gameplay.md#player_shield_drop) | hook | У игрока только что забрали щит |
 | [`player:shield_give`](hook/gameplay.md#player_shield_give) | hook | Игроку вот-вот выдадут щит |
 | [`msg.short`](msg/fields.md#short) | msg | n — `-32768..32767` (`WRITE_SHORT` в SDK) |
+| [`ents:should_collide`](hook/engine.md#should_collide) | hook | Движок решает, должны ли две сущности физически сталкиваться |
 | [`m:show`](menu/index.md#show) | menu | Показывает меню игроку |
 | [`e:size`](ents/entity.md#size) | ents | Читает или задаёт ограничивающий объём |
 | [`file.size`](file/index.md#size) | file | Возвращает размер файла в байтах |
@@ -252,6 +259,7 @@ description: "Плоский список всех функций и метод�
 | [`msg.string`](msg/fields.md#string) | msg | s — до 191 байта (`WRITE_STRING` в SDK) |
 | [`p:strip`](players/cs-state.md#strip) | players | Забирает у игрока всё оружие |
 | [`player:strip`](hook/gameplay.md#player_strip) | hook | У игрока только что забрали весь инвентарь |
+| [`player:suicide`](hook/engine.md#player_suicide) | hook | Игрок вот-вот покончит с собой командой `kill` из консоли |
 | [`p:team`](players/cs-state.md#team) | players | Читает или меняет сторону игрока |
 | [`player:team_change`](hook/gameplay.md#player_team_change) | hook | Игрок сменил сторону |
 | [`grenade:throw`](hook/gameplay.md#grenade_throw) | hook | HE, дымовая или флешка вот-вот покинёт руку |
@@ -265,6 +273,7 @@ description: "Плоский список всех функций и метод�
 | [`ents.trace_line`](ents/namespace.md#trace_line) | ents | Пускает луч между двумя произвольными точками |
 | [`p:trace_to`](players/state.md#trace_to) | players | Пускает луч из глаз игрока прямо к другому игроку |
 | [`db:transaction`](db/database.md#transaction) | db | Выполняет блок одной транзакцией |
+| [`player:use`](hook/engine.md#player_use) | hook | Игрок нажал +use на чём-то с обработчиком Use — кнопке, рычаге, multi_manager |
 | [`access.user`](access/read.md#user) | access | Одна запись из `users.lua` |
 | [`p:userid`](players/identity.md#userid) | players | Userid движка |
 | [`player:userinfo_change`](hook/gameplay.md#player_userinfo_change) | hook | У игрока изменился один из userinfo-ключей (модель, имя и т.д.) |
@@ -278,4 +287,4 @@ description: "Плоский список всех функций и метод�
 | [`file.write`](file/index.md#write) | file | Перезаписывает файл целиком (или создаёт его) |
 | [`log.write`](log/index.md#write) | log | Пишет строку в лог плагина |
 
-Всего: 264.
+Всего: 273.
