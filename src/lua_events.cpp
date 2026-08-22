@@ -53,6 +53,11 @@ static const char *const s_event_names[CSLUA_EVENT_COUNT] =
 	"player:radio",
 	"player:respawn_check",
 	"bomb:defusing",
+	"player:hit",
+	"player:heal",
+	"player:can_take_damage",
+	"round:balance_teams",
+	"round:intermission",
 };
 
 static int find_event(const char *name)
@@ -83,7 +88,10 @@ static bool is_cancellable(int ev)
 		|| ev == CSLUA_EVENT_AMMO_PICKUP
 		|| ev == CSLUA_EVENT_WEAPON_DROP
 		|| ev == CSLUA_EVENT_PLAYER_RADIO
-		|| ev == CSLUA_EVENT_PLAYER_CAN_RESPAWN;
+		|| ev == CSLUA_EVENT_PLAYER_CAN_RESPAWN
+		|| ev == CSLUA_EVENT_PLAYER_HIT
+		|| ev == CSLUA_EVENT_PLAYER_HEAL
+		|| ev == CSLUA_EVENT_PLAYER_CAN_TAKE_DAMAGE;
 }
 
 static std::string known_events()
@@ -1166,4 +1174,76 @@ void LuaEvents::fire_bomb_defuse_start(int player, bool defuser)
 		lua_pushboolean(L, defuser);
 		lua_setfield(L, -2, "defuser");
 	});
+}
+
+float LuaEvents::fire_player_hit(int victim, int attacker, float damage, int bits,
+	int hitgroup, float x, float y, float z)
+{
+	float result = damage;
+
+	bool cancelled = run(CSLUA_EVENT_PLAYER_HIT,
+		[=](lua_State *L) {
+			set_player(L, victim, "victim");
+			set_player_or_nil(L, attacker, "attacker");
+			set_number(L, damage, "damage");
+			lua_pushinteger(L, bits);
+			lua_setfield(L, -2, "bits");
+			set_hitgroup(L, hitgroup);
+			set_number(L, x, "x");
+			set_number(L, y, "y");
+			set_number(L, z, "z");
+		},
+		[&result](lua_State *L) {
+			lua_getfield(L, -1, "damage");
+			if (lua_isnumber(L, -1))
+				result = (float)lua_tonumber(L, -1);
+			lua_pop(L, 1);
+		});
+
+	if (cancelled || result < 0.0f)
+		result = 0.0f;
+
+	return result;
+}
+
+float LuaEvents::fire_player_heal(int player, float amount, int bits)
+{
+	float result = amount;
+
+	bool cancelled = run(CSLUA_EVENT_PLAYER_HEAL,
+		[=](lua_State *L) {
+			set_player(L, player, "player");
+			set_number(L, amount, "amount");
+			lua_pushinteger(L, bits);
+			lua_setfield(L, -2, "bits");
+		},
+		[&result](lua_State *L) {
+			lua_getfield(L, -1, "amount");
+			if (lua_isnumber(L, -1))
+				result = (float)lua_tonumber(L, -1);
+			lua_pop(L, 1);
+		});
+
+	if (cancelled || result < 0.0f)
+		result = 0.0f;
+
+	return result;
+}
+
+bool LuaEvents::fire_player_can_take_damage(int victim, int attacker)
+{
+	return run(CSLUA_EVENT_PLAYER_CAN_TAKE_DAMAGE, [=](lua_State *L) {
+		set_player(L, victim, "victim");
+		set_player_or_nil(L, attacker, "attacker");
+	});
+}
+
+void LuaEvents::fire_round_balance_teams()
+{
+	notify(CSLUA_EVENT_ROUND_BALANCE_TEAMS);
+}
+
+void LuaEvents::fire_round_intermission()
+{
+	notify(CSLUA_EVENT_ROUND_INTERMISSION);
 }

@@ -62,6 +62,9 @@ end)
 | [`player:spawn`](gameplay.md#player_spawn) | Игрок появился в раунде живым |
 | [`player:hurt`](gameplay.md#player_hurt) | Игроку наносят урон; урон можно изменить или погасить |
 | [`player:hurt_post`](gameplay.md#player_hurt_post) | Урон уже применён; только для наблюдателей |
+| [`player:hit`](gameplay.md#player_hit) | Один хитбокс получил попадание — раньше и точнее, чем `player:hurt`: до брони, до множителей, до суммирования дроби дробовика в одно число |
+| [`player:heal`](gameplay.md#player_heal) | Игроку вот-вот дадут здоровье — аптечка, админ-команда; своей регенерации в CS нет |
+| [`player:can_take_damage`](gameplay.md#player_can_take_damage) | Игра вот-вот решит, может ли жертва вообще получить урон от этого атакующего — самая ранняя точка, ещё до того, как известно, сколько урона |
 | [`player:death`](gameplay.md#player_death) | Игрок погиб |
 | [`player:team_change`](gameplay.md#player_team_change) | Игрок сменил сторону |
 | [`player:jump`](gameplay.md#player_jump) | Игрок прыгнул |
@@ -86,6 +89,8 @@ end)
 | [`round:start`](round.md#round_start) | Раунд начался |
 | [`round:end`](round.md#round_end) | Раунд закончился |
 | [`round:freeze_end`](round.md#round_freeze_end) | Заморозка кончилась, игроки могут двигаться |
+| [`round:balance_teams`](round.md#round_balance_teams) | Автобаланс только что раскидал игроков по командам |
+| [`round:intermission`](round.md#round_intermission) | Карта закончилась, сервер вот-вот покажет табло перед сменой карты |
 | [`bomb:planted`](round.md#bomb_planted) | Бомба заложена |
 | [`bomb:defusing`](round.md#bomb_defuse_start) | Игрок начал разминирование |
 | [`bomb:defused`](round.md#bomb_defused) | Попытка разминирования завершилась |

@@ -68,6 +68,60 @@ end)
 срабатывает никогда.
 </Warning>
 
+## round:balance_teams {#round_balance_teams}
+
+Автобаланс только что раскидал игроков по командам.
+
+```lua
+hook.add("round:balance_teams", id, function(e)
+	...
+end)
+```
+
+### Поля события {#round_balance_teams-поля события}
+
+| поле | тип |  |
+|---|---|---|
+| `—` | — | событие без полей |
+
+Приходит уже после перемещения — кого именно перекинули, событие не говорит; команду каждого игрока смотри через `p:team()` или лови `player:team_change`.
+
+<Warning>
+Событие приходит из ReGameDLL. На ванильном `mp.dll` оно не
+срабатывает никогда.
+</Warning>
+
+### Смотри также
+
+- [player:team_change](gameplay.md#player_team_change)
+
+## round:intermission {#round_intermission}
+
+Карта закончилась, сервер вот-вот покажет табло перед сменой карты.
+
+```lua
+hook.add("round:intermission", id, function(e)
+	...
+end)
+```
+
+### Поля события {#round_intermission-поля события}
+
+| поле | тип |  |
+|---|---|---|
+| `—` | — | событие без полей |
+
+Раньше, чем `server:map_change`: мир ещё цел, сущности ещё на месте. Последняя точка для финального сохранения статистики перед сменой карты.
+
+<Warning>
+Событие приходит из ReGameDLL. На ванильном `mp.dll` оно не
+срабатывает никогда.
+</Warning>
+
+### Смотри также
+
+- [server:map_change](lifecycle.md#map_change)
+
 ## bomb:planted {#bomb_planted}
 
 Бомба заложена.

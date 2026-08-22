@@ -28,6 +28,7 @@ description: "Плоский список всех функций и метод�
 | [`p:armor`](players/state.md#armor) | players | Броня игрока |
 | [`datafile.at`](store/datafile.md#at) | store | Привязывает модуль к своему каталогу |
 | [`client:authorized`](hook/connection.md#authorized) | hook | Steam ответил, steamid наконец известен |
+| [`round:balance_teams`](hook/round.md#round_balance_teams) | hook | Автобаланс только что раскидал игроков по командам |
 | [`p:ban`](players/admin.md#ban) | players | Банит игрока |
 | [`fx.beam_cylinder`](fx/index.md#beam_cylinder) | fx | Кольцо луча, расширяющееся от точки |
 | [`players.broadcast`](players/namespace.md#broadcast) | players | Приёмник «всем сразу»: только отправка сообщений |
@@ -37,6 +38,7 @@ description: "Плоский список всех функций и метод�
 | [`msg.byte`](msg/fields.md#byte) | msg | n — `0..255` (`WRITE_BYTE` в SDK) |
 | [`access.can`](access/read.md#can) | access | Есть ли у игрока право |
 | [`p:can`](players/access.md#can) | players | Есть ли у игрока право |
+| [`player:can_take_damage`](hook/gameplay.md#player_can_take_damage) | hook | Игра вот-вот решит, может ли жертва вообще получить урон от этого атакующего — самая ранняя точка, ещё до того, как известно, сколько урона |
 | [`http.cancel`](http/index.md#cancel) | http | Отменяет запрос по id |
 | [`timer.cancel`](timer/anonymous.md#cancel) | timer | Снимает таймер по id |
 | [`p:center`](players/messages.md#center) | players | Показывает текст по центру экрана |
@@ -116,7 +118,9 @@ description: "Плоский список всех функций и метод�
 | [`access.group`](access/read.md#group) | access | Одна группа по имени |
 | [`p:group`](players/access.md#group) | players | Состоит ли игрок в группе, с учётом наследования |
 | [`p:groups`](players/access.md#groups) | players | Массив групп игрока |
+| [`player:heal`](hook/gameplay.md#player_heal) | hook | Игроку вот-вот дадут здоровье — аптечка, админ-команда; своей регенерации в CS нет |
 | [`p:health`](players/state.md#health) | players | Здоровье игрока |
+| [`player:hit`](hook/gameplay.md#player_hit) | hook | Один хитбокс получил попадание — раньше и точнее, чем `player:hurt`: до брони, до множителей, до суммирования дроби дробовика в одно число |
 | [`p:hud`](players/messages.md#hud) | players | Рисует текст на HUD с позицией, цветом и таймингами |
 | [`player:hurt`](hook/gameplay.md#player_hurt) | hook | Игроку наносят урон; урон можно изменить или погасить |
 | [`player:hurt_post`](hook/gameplay.md#player_hurt_post) | hook | Урон уже применён; только для наблюдателей |
@@ -127,6 +131,7 @@ description: "Плоский список всех функций и метод�
 | [`e.index`](ents/entity.md#index) | ents | Индекс edict'а |
 | [`p:info`](players/identity.md#info) | players | Читает ключ инфобуфера клиента |
 | [`c:int`](sv/cvar.md#int) | sv | Значение переменной как целое |
+| [`round:intermission`](hook/round.md#round_intermission) | hook | Карта закончилась, сервер вот-вот покажет табло перед сменой карты |
 | [`access.invalidate`](access/grant.md#invalidate) | access | Сбрасывает кеш прав |
 | [`p:ip`](players/identity.md#ip) | players | Адрес игрока вида `1.2.3.4:27005` |
 | [`p:is_bot`](players/identity.md#is_bot) | players | Серверный бот (`FL_FAKECLIENT`) |
@@ -251,4 +256,4 @@ description: "Плоский список всех функций и метод�
 | [`file.write`](file/index.md#write) | file | Перезаписывает файл целиком (или создаёт его) |
 | [`log.write`](log/index.md#write) | log | Пишет строку в лог плагина |
 
-Всего: 237.
+Всего: 242.

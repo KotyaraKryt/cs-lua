@@ -165,6 +165,35 @@ static int attacker_slot(entvars_t *pevAttacker)
 	return (idx >= 1 && idx < CSLUA_MAXPLAYERS) ? idx : 0;
 }
 
+// TraceAttack fires once per hit - once per shotgun pellet, say - and only
+// accumulates into the multi-damage buffer TakeDamage later reads; it never
+// applies anything itself. flDamage is the raw per-hit amount here, before
+// armor and any multiplier TakeDamage would apply. Neither this parameter nor
+// the SDK's own TraceAttack(entvars_t *, float, Vector, TraceResult *, int)
+// take it by reference, so a changed value has to be forwarded into callNext
+// explicitly rather than mutated in place, same idea as hook_takedamage below.
+static void hook_trace_attack(IReGameHook_CBasePlayer_TraceAttack *chain, CBasePlayer *victim,
+	entvars_t *pevAttacker, float flDamage, Vector &vecDir, TraceResult *ptr, int bitsDamageType)
+{
+	if (!victim || !victim->IsPlayer()) {
+		chain->callNext(victim, pevAttacker, flDamage, vecDir, ptr, bitsDamageType);
+		return;
+	}
+
+	int vslot = victim->entindex();
+	int aslot = attacker_slot(pevAttacker);
+	int hitgroup = ptr ? ptr->iHitgroup : -1;
+	float x = ptr ? ptr->vecEndPos.x : 0.0f;
+	float y = ptr ? ptr->vecEndPos.y : 0.0f;
+	float z = ptr ? ptr->vecEndPos.z : 0.0f;
+
+	flDamage = g_events.fire_player_hit(vslot, aslot, flDamage, bitsDamageType, hitgroup, x, y, z);
+	if (flDamage <= 0.0f)
+		return;				// fully blocked: this hit contributes nothing - no blood, no multidamage
+
+	chain->callNext(victim, pevAttacker, flDamage, vecDir, ptr, bitsDamageType);
+}
+
 static BOOL hook_takedamage(IReGameHook_CBasePlayer_TakeDamage *chain, CBasePlayer *victim,
 	entvars_t *pevInflictor, entvars_t *pevAttacker, float &flDamage, int bitsDamageType)
 {
@@ -235,6 +264,23 @@ static void hook_killed(IReGameHook_CBasePlayer_Killed *chain, CBasePlayer *vict
 
 	bool headshot = victim->m_bHeadshotKilled;
 	g_events.fire_player_death(victim->entindex(), killer, headshot ? 1 : 0, weapon, distance);
+}
+
+// TakeHealth is what a first aid kit or an admin heal command goes through -
+// CS has no natural regen, so this is the only source. flHealth is by value
+// in both the SDK's own TakeHealth(float, int) and this chain, same reason as
+// flDamage in hook_trace_attack above: forward the changed value explicitly.
+static BOOL hook_take_health(IReGameHook_CBasePlayer_TakeHealth *chain, CBasePlayer *player,
+	float flHealth, int bitsDamageType)
+{
+	if (!player || !player->IsPlayer())
+		return chain->callNext(player, flHealth, bitsDamageType);
+
+	flHealth = g_events.fire_player_heal(player->entindex(), flHealth, bitsDamageType);
+	if (flHealth <= 0.0f)
+		return FALSE;			// fully blocked: no health given
+
+	return chain->callNext(player, flHealth, bitsDamageType);
 }
 
 // A shot left the barrel. There is no one hookchain for "fired": the game
@@ -401,6 +447,18 @@ static void hook_freeze_end(IReGameHook_CSGameRules_OnRoundFreezeEnd *chain)
 {
 	chain->callNext();
 	g_events.fire_round_freeze_end();
+}
+
+static void hook_balance_teams(IReGameHook_CSGameRules_BalanceTeams *chain)
+{
+	chain->callNext();
+	g_events.fire_round_balance_teams();
+}
+
+static void hook_go_to_intermission(IReGameHook_CSGameRules_GoToIntermission *chain)
+{
+	chain->callNext();
+	g_events.fire_round_intermission();
 }
 
 // fuse is read from grenade_throw before the engine creates the projectile -
@@ -627,6 +685,25 @@ static BOOL hook_can_respawn(IReGameHook_CSGameRules_FPlayerCanRespawn *chain, C
 	return chain->callNext(player);
 }
 
+// The friendly-fire/immunity gate, one level below fire_player_hurt: this
+// runs before TakeDamage is even asked, and attacker can be anything the
+// engine considers a damage source, not only a player (world, a trigger,
+// falling debris - resolved to slot 0 in that case).
+static BOOL hook_can_take_damage(IReGameHook_CSGameRules_FPlayerCanTakeDamage *chain,
+	CBasePlayer *player, CBaseEntity *attacker)
+{
+	int vslot = (player && player->IsPlayer()) ? player->entindex() : 0;
+	int aslot = (attacker && attacker->IsPlayer()) ? attacker->entindex() : 0;
+
+	// Pre-check only: cancelling forces "no" without ever asking the game's
+	// own rules. There is no way to force a "yes" the game would not have
+	// given on its own - this can only take away permission, not grant it.
+	if (g_events.fire_player_can_take_damage(vslot, aslot))
+		return FALSE;
+
+	return chain->callNext(player, attacker);
+}
+
 static void hook_defuse_start(IReGameHook_CGrenade_DefuseBombStart *chain, CGrenade *grenade,
 	CBasePlayer *player)
 {
@@ -805,6 +882,11 @@ enum HookSlot
 	HOOK_RADIO,
 	HOOK_CAN_RESPAWN,
 	HOOK_DEFUSE_START,
+	HOOK_TRACE_ATTACK,
+	HOOK_TAKE_HEALTH,
+	HOOK_CAN_TAKE_DAMAGE,
+	HOOK_BALANCE_TEAMS,
+	HOOK_GO_TO_INTERMISSION,
 	HOOK_COUNT
 };
 
@@ -924,6 +1006,21 @@ void cslua_regamedll_install_hooks()
 
 	sync_hook(HOOK_DEFUSE_START, s_hooks->CGrenade_DefuseBombStart(), &hook_defuse_start,
 		g_events.any(CSLUA_EVENT_BOMB_DEFUSE_START));
+
+	sync_hook(HOOK_TRACE_ATTACK, s_hooks->CBasePlayer_TraceAttack(), &hook_trace_attack,
+		g_events.any(CSLUA_EVENT_PLAYER_HIT));
+
+	sync_hook(HOOK_TAKE_HEALTH, s_hooks->CBasePlayer_TakeHealth(), &hook_take_health,
+		g_events.any(CSLUA_EVENT_PLAYER_HEAL));
+
+	sync_hook(HOOK_CAN_TAKE_DAMAGE, s_hooks->CSGameRules_FPlayerCanTakeDamage(), &hook_can_take_damage,
+		g_events.any(CSLUA_EVENT_PLAYER_CAN_TAKE_DAMAGE));
+
+	sync_hook(HOOK_BALANCE_TEAMS, s_hooks->CSGameRules_BalanceTeams(), &hook_balance_teams,
+		g_events.any(CSLUA_EVENT_ROUND_BALANCE_TEAMS));
+
+	sync_hook(HOOK_GO_TO_INTERMISSION, s_hooks->CSGameRules_GoToIntermission(), &hook_go_to_intermission,
+		g_events.any(CSLUA_EVENT_ROUND_INTERMISSION));
 }
 
 void cslua_regamedll_remove_hooks()
@@ -967,6 +1064,11 @@ void cslua_regamedll_remove_hooks()
 	s_hooks->CBasePlayer_Radio()->unregisterHook(&hook_radio);
 	s_hooks->CSGameRules_FPlayerCanRespawn()->unregisterHook(&hook_can_respawn);
 	s_hooks->CGrenade_DefuseBombStart()->unregisterHook(&hook_defuse_start);
+	s_hooks->CBasePlayer_TraceAttack()->unregisterHook(&hook_trace_attack);
+	s_hooks->CBasePlayer_TakeHealth()->unregisterHook(&hook_take_health);
+	s_hooks->CSGameRules_FPlayerCanTakeDamage()->unregisterHook(&hook_can_take_damage);
+	s_hooks->CSGameRules_BalanceTeams()->unregisterHook(&hook_balance_teams);
+	s_hooks->CSGameRules_GoToIntermission()->unregisterHook(&hook_go_to_intermission);
 
 	for (int i = 0; i < HOOK_COUNT; i++)
 		s_installed[i] = false;

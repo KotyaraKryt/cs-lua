@@ -56,6 +56,11 @@ enum CsLuaEvent
 	CSLUA_EVENT_PLAYER_RADIO,		// a radio command was used; cancel to block the sound/message
 	CSLUA_EVENT_PLAYER_CAN_RESPAWN,	// pre: cancel to block a respawn the game would otherwise allow
 	CSLUA_EVENT_BOMB_DEFUSE_START,	// defusing just started (not yet finished - see bomb_defused)
+	CSLUA_EVENT_PLAYER_HIT,			// pre: TraceAttack, one raw hit before TakeDamage sums it up
+	CSLUA_EVENT_PLAYER_HEAL,			// pre: change or block healing
+	CSLUA_EVENT_PLAYER_CAN_TAKE_DAMAGE,	// pre: cancel to force "no" regardless of the game's own FF rules
+	CSLUA_EVENT_ROUND_BALANCE_TEAMS,	// auto-balance just moved players around
+	CSLUA_EVENT_ROUND_INTERMISSION,	// map is over, about to show the scoreboard
 
 	CSLUA_EVENT_COUNT
 };
@@ -322,6 +327,43 @@ public:
 
 	// Post variant: the damage the game actually applied, for observers.
 	void fire_player_hurt_post(int victim, int attacker, float damage, int bits, int hitgroup);
+
+	// TraceAttack: the exact hit, before TakeDamage sums same-frame hits (a
+	// shotgun's pellets, say) into one damage value. damage is the raw
+	// per-hit amount, before armor and multipliers are applied - a handler
+	// that changes it changes what TakeDamage eventually sees. x,y,z is the
+	// world position the engine's own trace recorded for this hit. hitgroup
+	// is the body region, same meaning as in fire_player_hurt. Returns the
+	// (possibly changed) damage, 0 if a handler cancelled - the caller then
+	// skips the real call entirely, so this hit contributes nothing at all
+	// (no blood, no multidamage).
+	float fire_player_hit(int victim, int attacker, float damage, int bits,
+		int hitgroup, float x, float y, float z);
+
+	// TakeHealth is about to restore amount health points - a first aid kit,
+	// an admin command; CS has no natural regen. Returns the (possibly
+	// changed) amount, 0 if a handler cancelled - the caller then skips the
+	// real call and reports no health given.
+	float fire_player_heal(int player, float amount, int bits);
+
+	// FPlayerCanTakeDamage's pre-check: the game is about to decide whether
+	// victim may take damage from attacker at all - the low-level friendly-
+	// fire/immunity gate, ahead of fire_player_hurt and the only one of the
+	// two where attacker can be something other than a player (world, a
+	// trigger, falling debris - 0 in that case). Cancel to force "no": the
+	// caller then returns FALSE without ever asking the chain, and
+	// TakeDamage never runs for this hit at all.
+	bool fire_player_can_take_damage(int victim, int attacker);
+
+	// BalanceTeams just moved one or more players to a different team to even
+	// the sides out. Notify only - by the time this fires the move already
+	// happened.
+	void fire_round_balance_teams();
+
+	// GoToIntermission just ran: the round/map is over and the server is
+	// about to show the scoreboard before the next map loads. Notify only,
+	// and earlier than server:map_change - the world is still there.
+	void fire_round_intermission();
 
 private:
 	struct Handler
