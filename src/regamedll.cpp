@@ -1063,6 +1063,41 @@ static BOOL hook_choose_team(IReGameHook_HandleMenu_ChooseTeam *chain, CBasePlay
 	return chain->callNext(player, slot);
 }
 
+// RoundRespawn is the actual per-player reset for a new round (position,
+// health, weapons kept or not, team-kill punishment) - not to be confused
+// with hook_spawn (CBasePlayer_Spawn), which fires for a player's very
+// first spawn too. Pre-cancel: skipping the chain entirely leaves this
+// player exactly as they were, no reset at all for this round.
+static void hook_round_respawn(IReGameHook_CBasePlayer_RoundRespawn *chain, CBasePlayer *player)
+{
+	if (!player || !player->IsPlayer()) {
+		chain->callNext(player);
+		return;
+	}
+
+	if (g_events.fire_player_round_respawn(player->entindex()))
+		return;
+
+	chain->callNext(player);
+}
+
+// GiveDefaultItems starts by stripping whatever the player is currently
+// holding (RemoveAllItems), then hands out the round's standard loadout.
+// Cancelling here skips both halves - nothing is taken away, nothing new is
+// given - not just the gift.
+static void hook_give_default_items(IReGameHook_CBasePlayer_GiveDefaultItems *chain, CBasePlayer *player)
+{
+	if (!player || !player->IsPlayer()) {
+		chain->callNext(player);
+		return;
+	}
+
+	if (g_events.fire_player_give_default_items(player->entindex()))
+		return;
+
+	chain->callNext(player);
+}
+
 // Which chains we currently hold a hook on.
 //
 // registerHook is fatal when the same handler is added twice - ReGameDLL kills
@@ -1129,6 +1164,8 @@ enum HookSlot
 	HOOK_CAN_HEAR,
 	HOOK_CHOOSE_MODEL,
 	HOOK_CHOOSE_TEAM,
+	HOOK_ROUND_RESPAWN,
+	HOOK_GIVE_DEFAULT_ITEMS,
 	HOOK_COUNT
 };
 
@@ -1320,6 +1357,12 @@ void cslua_regamedll_install_hooks()
 
 	sync_hook(HOOK_CHOOSE_TEAM, s_hooks->HandleMenu_ChooseTeam(), &hook_choose_team,
 		g_events.any(CSLUA_EVENT_PLAYER_CHOOSE_TEAM));
+
+	sync_hook(HOOK_ROUND_RESPAWN, s_hooks->CBasePlayer_RoundRespawn(), &hook_round_respawn,
+		g_events.any(CSLUA_EVENT_PLAYER_ROUND_RESPAWN));
+
+	sync_hook(HOOK_GIVE_DEFAULT_ITEMS, s_hooks->CBasePlayer_GiveDefaultItems(), &hook_give_default_items,
+		g_events.any(CSLUA_EVENT_PLAYER_GIVE_DEFAULT_ITEMS));
 }
 
 void cslua_regamedll_remove_hooks()
@@ -1387,6 +1430,8 @@ void cslua_regamedll_remove_hooks()
 	s_hooks->CSGameRules_CanPlayerHearPlayer()->unregisterHook(&hook_can_hear_player);
 	s_hooks->HandleMenu_ChooseAppearance()->unregisterHook(&hook_choose_appearance);
 	s_hooks->HandleMenu_ChooseTeam()->unregisterHook(&hook_choose_team);
+	s_hooks->CBasePlayer_RoundRespawn()->unregisterHook(&hook_round_respawn);
+	s_hooks->CBasePlayer_GiveDefaultItems()->unregisterHook(&hook_give_default_items);
 
 	for (int i = 0; i < HOOK_COUNT; i++)
 		s_installed[i] = false;

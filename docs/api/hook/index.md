@@ -96,6 +96,8 @@ end)
 | [`player:choose_model`](gameplay.md#player_choose_model) | Игрок выбрал пункт в меню внешности |
 | [`player:choose_team`](gameplay.md#player_choose_team) | Игрок выбрал пункт в меню команды |
 | [`grenade:explode`](gameplay.md#grenade_explode) | HE, дымовая или флешка вот-вот взорвётся |
+| [`player:round_respawn`](gameplay.md#player_round_respawn) | Игрока вот-вот сбросят на новый раунд — позиция, здоровье, оружие (оставить или нет), наказание за тимкилл |
+| [`player:give_default_items`](gameplay.md#player_give_default_items) | Игроку вот-вот выдадут стандартный набор на раунд — нож, дефолтный пистолет, всё, что задано cvar-ами команды |
 
 ## Раунд и бомба
 

@@ -86,6 +86,8 @@ static const char *const s_event_names[CSLUA_EVENT_COUNT] =
 	"server:cvar_change",
 	"server:precache_generic",
 	"client:bot_created",
+	"player:round_respawn",
+	"player:give_default_items",
 };
 
 static int find_event(const char *name)
@@ -127,7 +129,9 @@ static bool is_cancellable(int ev)
 		|| ev == CSLUA_EVENT_PLAYER_CAN_HEAR
 		|| ev == CSLUA_EVENT_PLAYER_CHOOSE_TEAM
 		|| ev == CSLUA_EVENT_PLAYER_SUICIDE
-		|| ev == CSLUA_EVENT_SERVER_CVAR_CHANGE;
+		|| ev == CSLUA_EVENT_SERVER_CVAR_CHANGE
+		|| ev == CSLUA_EVENT_PLAYER_ROUND_RESPAWN
+		|| ev == CSLUA_EVENT_PLAYER_GIVE_DEFAULT_ITEMS;
 }
 
 static std::string known_events()
@@ -1588,5 +1592,19 @@ void LuaEvents::fire_client_bot_created(int id)
 {
 	notify(CSLUA_EVENT_CLIENT_BOT_CREATED, [=](lua_State *L) {
 		set_player_or_nil(L, id, "player");
+	});
+}
+
+bool LuaEvents::fire_player_round_respawn(int player)
+{
+	return run(CSLUA_EVENT_PLAYER_ROUND_RESPAWN, [=](lua_State *L) {
+		set_player(L, player, "player");
+	});
+}
+
+bool LuaEvents::fire_player_give_default_items(int player)
+{
+	return run(CSLUA_EVENT_PLAYER_GIVE_DEFAULT_ITEMS, [=](lua_State *L) {
+		set_player(L, player, "player");
 	});
 }

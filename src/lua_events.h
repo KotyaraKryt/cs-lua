@@ -89,6 +89,8 @@ enum CsLuaEvent
 	CSLUA_EVENT_SERVER_CVAR_CHANGE,	// pre: ReHLDS Cvar_DirectSet; cancel to block it
 	CSLUA_EVENT_SERVER_PRECACHE_GENERIC,	// ReHLDS PF_precache_generic_I just ran
 	CSLUA_EVENT_CLIENT_BOT_CREATED,	// ReHLDS CreateFakeClient just ran
+	CSLUA_EVENT_PLAYER_ROUND_RESPAWN,	// pre: RoundRespawn; cancel to skip it entirely
+	CSLUA_EVENT_PLAYER_GIVE_DEFAULT_ITEMS,	// pre: GiveDefaultItems; cancel to skip it entirely
 
 	CSLUA_EVENT_COUNT
 };
@@ -542,6 +544,20 @@ public:
 	// ReHLDS CreateFakeClient just ran - a bot connected. Notify only;
 	// id is the slot it was given.
 	void fire_client_bot_created(int id);
+
+	// RoundRespawn is about to run - the actual per-player reset for a new
+	// round (position, health, weapons kept or not, team-kill punishment).
+	// Cancel to skip it entirely: the caller then skips the chain, and this
+	// player is left exactly as they were - no respawn-for-the-new-round at
+	// all this round.
+	bool fire_player_round_respawn(int player);
+
+	// GiveDefaultItems is about to run - the standard round-start loadout
+	// (knife, default secondary, starting money already handled elsewhere).
+	// It starts by stripping whatever the player is currently holding, so
+	// cancelling here does not just skip the gift, it leaves their current
+	// inventory untouched instead of being cleared first.
+	bool fire_player_give_default_items(int player);
 
 private:
 	struct Handler

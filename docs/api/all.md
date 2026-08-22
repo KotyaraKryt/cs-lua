@@ -127,6 +127,7 @@ description: "Плоский список всех функций и метод�
 | [`s:get`](store/kv.md#get) | store | Читает значение по ключу |
 | [`item:give`](hook/gameplay.md#item_give) | hook | Движок вот-вот выдаст игроку предмет по имени classname |
 | [`p:give`](players/cs-state.md#give) | players | Выдаёт игроку предмет по classname |
+| [`player:give_default_items`](hook/gameplay.md#player_give_default_items) | hook | Игроку вот-вот выдадут стандартный набор на раунд — нож, дефолтный пистолет, всё, что задано cvar-ами команды |
 | [`p:godmode`](players/state.md#godmode) | players | Неуязвимость |
 | [`access.grant`](access/grant.md#grant) | access | Выдаёт права по ключу |
 | [`p:gravity`](players/state.md#gravity) | players | Множитель гравитации |
@@ -223,6 +224,7 @@ description: "Плоский список всех функций и метод�
 | [`http.request`](http/index.md#request) | http | Выполняет запрос произвольным методом |
 | [`player:respawn_check`](hook/gameplay.md#player_can_respawn) | hook | Игра вот-вот решит, можно ли игроку возродиться |
 | [`access.revoke`](access/grant.md#revoke) | access | Забирает запись, группу или ноду |
+| [`player:round_respawn`](hook/gameplay.md#player_round_respawn) | hook | Игрока вот-вот сбросят на новый раунд — позиция, здоровье, оружие (оставить или нет), наказание за тимкилл |
 | [`access.rule`](access/declare.md#rule) | access | Задаёт динамическое правило для ноды |
 | [`hook.run`](hook/namespace.md#run) | hook | Запускает своё событие плагина |
 | [`st:run`](db/statement.md#stmt_run) | db | Выполняет выражение, ничего не возвращающее |
@@ -287,4 +289,4 @@ description: "Плоский список всех функций и метод�
 | [`file.write`](file/index.md#write) | file | Перезаписывает файл целиком (или создаёт его) |
 | [`log.write`](log/index.md#write) | log | Пишет строку в лог плагина |
 
-Всего: 273.
+Всего: 275.

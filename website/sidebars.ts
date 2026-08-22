@@ -20,6 +20,7 @@ const sidebars: SidebarsConfig = {
           {type: 'doc', id: 'api/hook/gameplay', label: 'Геймплей'},
           {type: 'doc', id: 'api/hook/round', label: 'Раунд и бомба'},
           {type: 'doc', id: 'api/hook/shop', label: 'Магазин'},
+          {type: 'doc', id: 'api/hook/engine', label: 'Движок и ReHLDS'},
         ]},
         {type: 'category', label: 'msg', collapsed: true, link: {type: 'doc', id: 'api/msg/index'}, items: [
           {type: 'doc', id: 'api/msg/send', label: 'Отправка'},

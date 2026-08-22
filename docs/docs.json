@@ -33,7 +33,8 @@
               "api/hook/lifecycle",
               "api/hook/gameplay",
               "api/hook/round",
-              "api/hook/shop"
+              "api/hook/shop",
+              "api/hook/engine"
             ]
           },
           {
