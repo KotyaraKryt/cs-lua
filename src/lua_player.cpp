@@ -33,6 +33,23 @@ static int self_id(lua_State *L)
 	if (id < 0 || id >= CSLUA_MAXPLAYERS)
 		return luaL_error(L, "p: player index %d out of range", id);
 
+	// "id" lives as a plain table field - every method here reads it that way
+	// without a metamethod round trip - but that means __newindex (l_readonly,
+	// below) never fires for it: the key already exists by the time a script
+	// gets its hands on the object, and __newindex only triggers on an absent
+	// key. p.id = N would otherwise silently repoint this shared, cached
+	// object at a different slot instead of erroring. These objects are one
+	// singleton per slot for the whole process (s_player_ref), so checking
+	// here protects every other plugin, not just the one that wrote it.
+	if (id == 0)
+		cslua_push_all(L);
+	else
+		cslua_push_player(L, id);
+	bool genuine = lua_rawequal(L, 1, -1) != 0;
+	lua_pop(L, 1);
+	if (!genuine)
+		return luaL_error(L, "p: stale player object (its id field was overwritten)");
+
 	return id;
 }
 
@@ -978,8 +995,11 @@ static int l_give(lua_State *L)
 	lua_pop(L, 1);
 
 	lua_getfield(L, 3, "ammo_type");
-	if (lua_isnumber(L, -1) && item->IsWeapon())
-		static_cast<CBasePlayerWeapon *>(item)->m_iPrimaryAmmoType = (int)lua_tointeger(L, -1);
+	if (lua_isnumber(L, -1) && item->IsWeapon()) {
+		int ammo_type = (int)lua_tointeger(L, -1);
+		if (ammo_type >= 0 && ammo_type < MAX_AMMO_SLOTS)
+			static_cast<CBasePlayerWeapon *>(item)->m_iPrimaryAmmoType = ammo_type;
+	}
 	lua_pop(L, 1);
 
 	return 0;

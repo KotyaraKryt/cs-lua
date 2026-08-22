@@ -416,8 +416,11 @@ static int l_trace_hull(lua_State *L)
 	int hull = human_hull;
 	if (!lua_isnoneornil(L, 3)) {
 		lua_getfield(L, 3, "hull");
-		if (lua_isnumber(L, -1))
-			hull = (int)lua_tointeger(L, -1);
+		if (lua_isnumber(L, -1)) {
+			int h = (int)lua_tointeger(L, -1);
+			if (h >= point_hull && h <= head_hull)
+				hull = h;
+		}
 		lua_pop(L, 1);
 	}
 

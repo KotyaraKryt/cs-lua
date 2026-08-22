@@ -291,6 +291,18 @@ void perform(const Request &req, Response &res)
 
 	if (!conn->handle) {
 		conn->handle = mysql_init(NULL);
+
+		// Without these, a host that is down or firewalled leaves
+		// mysql_real_connect()/mysql_real_query() blocked indefinitely on
+		// this worker - and, since l_close() takes the same use_lock,
+		// conn:close() called while that is happening blocks the game
+		// thread right along with it.
+		unsigned int connect_timeout_sec = 5;
+		unsigned int io_timeout_sec = 10;
+		mysql_options(conn->handle, MYSQL_OPT_CONNECT_TIMEOUT, &connect_timeout_sec);
+		mysql_options(conn->handle, MYSQL_OPT_READ_TIMEOUT, &io_timeout_sec);
+		mysql_options(conn->handle, MYSQL_OPT_WRITE_TIMEOUT, &io_timeout_sec);
+
 		MYSQL *ok = mysql_real_connect(conn->handle, conn->cfg.host.c_str(),
 			conn->cfg.user.c_str(), conn->cfg.password.c_str(),
 			conn->cfg.database.empty() ? NULL : conn->cfg.database.c_str(),
@@ -509,14 +521,19 @@ int l_query(lua_State *L)
 	return 1;
 }
 
-// conn:close() - marks the connection unusable. The socket itself is not
-// closed here (a worker may be using it right now); it is left idle until
-// cslua_mysql_shutdown() at process exit, same tradeoff as lua_reload.
+// conn:close() - marks the connection unusable and closes the socket. Taking
+// use_lock first guarantees no worker is touching `handle` right now (connect
+// and query timeouts above bound how long that wait can take), so it is safe
+// to close it here instead of leaving it idle until process exit.
 int l_close(lua_State *L)
 {
 	Conn *conn = self_conn(L, 1);
 	std::lock_guard<std::mutex> guard(conn->use_lock);
 	conn->closed = true;
+	if (conn->handle) {
+		mysql_close(conn->handle);
+		conn->handle = NULL;
+	}
 	return 0;
 }
 
@@ -711,12 +728,38 @@ void cslua_mysql_remove_plugin(int plugin_index)
 		}
 	}
 
-	std::lock_guard<std::mutex> guard(s_done_lock);
-	for (size_t i = 0; i < s_done.size(); i++) {
-		if (s_done[i].plugin == plugin_index) {
-			if (L)
-				luaL_unref(L, LUA_REGISTRYINDEX, s_done[i].callback);
-			s_done[i].callback = LUA_NOREF;
+	{
+		std::lock_guard<std::mutex> guard(s_done_lock);
+		for (size_t i = 0; i < s_done.size(); i++) {
+			if (s_done[i].plugin == plugin_index) {
+				if (L)
+					luaL_unref(L, LUA_REGISTRYINDEX, s_done[i].callback);
+				s_done[i].callback = LUA_NOREF;
+			}
+		}
+	}
+
+	// Connections this plugin opened and never closed would otherwise sit
+	// idle - open socket, live slot on the remote server - until process
+	// exit; a plugin that reconnects on every lua_reload leaks one each time.
+	// try_lock rather than lock: a worker mid-query on one of these must not
+	// stall a reload/unload that is happening on the game thread. Losing that
+	// race just leaves this one connection to the existing shutdown-time
+	// cleanup, same as before this function did anything at all.
+	std::lock_guard<std::mutex> guard(s_conns_lock);
+	for (size_t i = 1; i < s_conns.size(); i++) {
+		Conn *conn = s_conns[i];
+		if (!conn || conn->plugin != plugin_index || conn->closed)
+			continue;
+		if (conn->use_lock.try_lock()) {
+			conn->closed = true;
+			if (conn->handle) {
+				mysql_close(conn->handle);
+				conn->handle = NULL;
+			}
+			conn->use_lock.unlock();
+		} else {
+			conn->closed = true;
 		}
 	}
 }

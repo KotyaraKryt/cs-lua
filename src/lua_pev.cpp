@@ -167,10 +167,23 @@ edict_t *cslua_arg_to_edict(lua_State *L, int idx)
 	luaL_checktype(L, idx, LUA_TTABLE);
 
 	lua_getfield(L, idx, "index");
-	bool has_field = lua_isnumber(L, -1) != 0;
-	int n = has_field ? (int)lua_tointeger(L, -1) : 0;
+	bool has_index = lua_isnumber(L, -1) != 0;
+	int n = has_index ? (int)lua_tointeger(L, -1) : 0;
 	lua_pop(L, 1);
 
+	// Only an entity object carries a serial - a stale one (its slot died and
+	// was handed to something else since) must not silently resolve to
+	// whatever lives there now. Player objects have no such field: a slot
+	// 1..maxplayers does not get reused the way a generic entity's does, so
+	// there is nothing here to go stale against.
+	int serial = 0;
+	if (has_index) {
+		lua_getfield(L, idx, "serial");
+		serial = (int)lua_tointeger(L, -1);
+		lua_pop(L, 1);
+	}
+
+	bool has_field = has_index;
 	if (!has_field) {
 		lua_getfield(L, idx, "id");
 		has_field = lua_isnumber(L, -1) != 0;
@@ -182,7 +195,7 @@ edict_t *cslua_arg_to_edict(lua_State *L, int idx)
 		luaL_error(L, "e:pev: expected an entity or player object, or nil");
 
 	edict_t *e = g_engfuncs.pfnPEntityOfEntIndex(n);
-	if (!e || e->free)
+	if (!e || e->free || (has_index && e->serialnumber != serial))
 		luaL_error(L, "e:pev: target has no valid entity");
 	return e;
 }

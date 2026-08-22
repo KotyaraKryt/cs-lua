@@ -172,6 +172,12 @@ const size_t MAX_HEADER = 16 * 1024;
 const int RECV_TIMEOUT_MS = 5000;
 const int RESPONSE_WAIT_MS = 5000;
 
+// A connection flood that never sends a byte must not be able to grow
+// s_conn_queue - and with it the process's open file descriptors - without
+// bound. 8x the worker count is generous slack for a burst, not an invitation
+// to queue forever.
+const size_t MAX_CONN_QUEUE = 64;
+
 // ---------------------------------------------------------------------------
 // Wire parsing - deliberately minimal. No keep-alive, no chunked bodies, no
 // pipelining: every connection is one request, one response, then closed.
@@ -307,11 +313,21 @@ void write_response(cslua_socket_t fd, const Response &res)
 
 	bool has_content_type = false;
 	for (size_t i = 0; i < res.headers.size(); i++) {
-		if (!cs_stricmp(res.headers[i].name.c_str(), "content-type"))
+		const std::string &name = res.headers[i].name;
+		const std::string &value = res.headers[i].value;
+
+		// A route handler that reflects request data into a response header
+		// unescaped must not be able to split the response - drop the header
+		// outright rather than trying to sanitize it into something valid.
+		if (name.find_first_of("\r\n") != std::string::npos ||
+			value.find_first_of("\r\n") != std::string::npos)
+			continue;
+
+		if (!cs_stricmp(name.c_str(), "content-type"))
 			has_content_type = true;
-		out += res.headers[i].name;
+		out += name;
 		out += ": ";
-		out += res.headers[i].value;
+		out += value;
 		out += "\r\n";
 	}
 
@@ -333,16 +349,22 @@ void write_response(cslua_socket_t fd, const Response &res)
 	}
 }
 
-void set_recv_timeout(cslua_socket_t fd, int ms)
+// Both directions: a client that stops reading its response parks send()
+// forever with only SO_RCVTIMEO set, wedging a worker (and, at shutdown,
+// stop_listening() joining it) just as surely as one that stops sending its
+// request.
+void set_socket_timeouts(cslua_socket_t fd, int ms)
 {
 #ifdef _WIN32
 	DWORD timeout = (DWORD)ms;
 	setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, (const char *)&timeout, sizeof timeout);
+	setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, (const char *)&timeout, sizeof timeout);
 #else
 	struct timeval tv;
 	tv.tv_sec = ms / 1000;
 	tv.tv_usec = (ms % 1000) * 1000;
 	setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, (const char *)&tv, sizeof tv);
+	setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, (const char *)&tv, sizeof tv);
 #endif
 }
 
@@ -433,7 +455,7 @@ void run_sse_session(cslua_socket_t fd)
 
 void handle_connection(cslua_socket_t fd)
 {
-	set_recv_timeout(fd, RECV_TIMEOUT_MS);
+	set_socket_timeouts(fd, RECV_TIMEOUT_MS);
 
 	auto conn = std::make_shared<PendingConn>();
 	if (!read_request(fd, conn->req)) {
@@ -530,6 +552,10 @@ void accept_loop()
 
 		{
 			std::lock_guard<std::mutex> guard(s_conn_lock);
+			if (s_conn_queue.size() >= MAX_CONN_QUEUE) {
+				CSLUA_CLOSESOCKET(fd);
+				continue;
+			}
 			s_conn_queue.push_back(fd);
 		}
 		s_conn_wake.notify_one();

@@ -2,9 +2,16 @@
 #include "lua_regex.h"
 #include "lua_natives.h"
 
+#include <chrono>
+#include <condition_variable>
 #include <map>
+#include <memory>
+#include <mutex>
 #include <regex>
 #include <string>
+#include <thread>
+#include <vector>
+
 #include <string.h>
 
 // Plugins tend to compile the same handful of patterns (a chat command
@@ -17,6 +24,14 @@
 // unboundedly, same trust-the-author tradeoff the rest of this module
 // already makes elsewhere (nothing here validates plugin input for taste,
 // only for safety).
+//
+// Entries here live for the rest of the process, so a reference into this
+// map (the `re` handed to the background thread below) stays valid no matter
+// what l_match/l_find/l_replace insert afterwards: std::map never
+// invalidates references to existing elements on insert, and
+// std::regex_search never mutates the regex it searches with. Reading a
+// cached entry from the watchdog thread while the game thread inserts a
+// different one is safe on both counts.
 static std::map<std::string, std::regex> s_cache;
 
 static const std::regex &compile(lua_State *L, const char *pattern)
@@ -35,6 +50,75 @@ static const std::regex &compile(lua_State *L, const char *pattern)
 		static const std::regex unreachable;
 		return unreachable;
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Watchdog
+//
+// std::regex has no cooperative abort hook the way SQLite's progress handler
+// does (see the watchdog in lua_db.cpp) - nothing can reach into a running
+// std::regex_search and tell it to stop. A hand-written pattern like
+// "(a+)+$" against an unhelpful string backtracks catastrophically, and run
+// on the game thread that is the whole server hung along with it.
+//
+// The only lever left is to not wait on the game thread for it: the match
+// runs on its own std::thread, and the game thread gives up after
+// cslua_regex_timeout_ms instead of joining it. The thread itself is not
+// killed - C++ has no safe way to do that - it is detached and left to run
+// to completion; nothing it touches belongs to the calling Lua frame (see
+// RegexWait below), so a result nobody is waiting for anymore is simply
+// dropped on the floor when the thread exits.
+
+static char s_timeout_name[] = "cslua_regex_timeout_ms";
+static char s_timeout_value[] = "100";
+static cvar_t s_cvar_timeout = { s_timeout_name, s_timeout_value, 0, 100.0f, NULL };
+static bool s_cvar_registered = false;
+
+static void ensure_cvar_registered()
+{
+	if (s_cvar_registered)
+		return;
+	s_cvar_registered = true;
+
+	if (!CVAR_GET_POINTER(s_cvar_timeout.name))
+		CVAR_REGISTER(&s_cvar_timeout);
+}
+
+static int regex_timeout_ms()
+{
+	int ms = (int)CVAR_GET_FLOAT(s_cvar_timeout.name);
+	return ms > 0 ? ms : 100;
+}
+
+// Base for every per-call job below. Deliberately holds nothing Lua-facing
+// and nothing that points into a calling C function's stack: on timeout that
+// frame is gone (l_match/l_find/l_replace already returned an error to Lua),
+// while the detached thread may still be writing into the job for a while
+// yet. shared_ptr keeps it alive for whichever side - the timed-out caller or
+// the still-running thread - lets go of it last.
+struct RegexWait
+{
+	std::mutex mtx;
+	std::condition_variable cv;
+	bool done = false;
+};
+
+// Runs `body` on its own thread and waits for it here, up to timeout_ms.
+// Returns false on timeout; `body` keeps running regardless, and whatever it
+// writes into *job past that point is never looked at again.
+template <typename J, typename F>
+static bool run_with_deadline(const std::shared_ptr<J> &job, F body, int timeout_ms)
+{
+	std::thread([job, body]() {
+		body();
+		std::lock_guard<std::mutex> guard(job->mtx);
+		job->done = true;
+		job->cv.notify_one();
+	}).detach();
+
+	std::unique_lock<std::mutex> lock(job->mtx);
+	return job->cv.wait_for(lock, std::chrono::milliseconds(timeout_ms),
+		[&] { return job->done; });
 }
 
 // regex.match(str, pattern[, init]) -> capture, ... | whole_match | nil
@@ -57,23 +141,53 @@ static int l_match(lua_State *L)
 
 	const std::regex &re = compile(L, pattern);
 
-	std::cmatch m;
-	if (!std::regex_search(str + (init - 1), m, re)) {
+	struct Result : RegexWait
+	{
+		bool matched = false;
+		bool has_groups = false;
+		std::string whole;
+		std::vector<bool> present;
+		std::vector<std::string> captures;
+	};
+	auto job = std::make_shared<Result>();
+	std::string subject(str + (init - 1));
+
+	int timeout_ms = regex_timeout_ms();
+	bool finished = run_with_deadline(job, [job, subject, &re]() {
+		std::smatch m;
+		if (!std::regex_search(subject, m, re))
+			return;
+		job->matched = true;
+		if (m.size() > 1) {
+			job->has_groups = true;
+			for (size_t i = 1; i < m.size(); i++) {
+				job->present.push_back(m[i].matched);
+				job->captures.push_back(m[i].matched ? m[i].str() : std::string());
+			}
+		} else {
+			job->whole = m[0].str();
+		}
+	}, timeout_ms);
+
+	if (!finished)
+		return luaL_error(L, "regex: pattern took too long to match (>%dms), aborted", timeout_ms);
+
+	if (!job->matched) {
 		lua_pushnil(L);
 		return 1;
 	}
 
-	if (m.size() > 1) {
-		for (size_t i = 1; i < m.size(); i++) {
-			if (m[i].matched)
-				lua_pushlstring(L, m[i].first, m[i].length());
+	if (job->has_groups) {
+		for (size_t i = 0; i < job->captures.size(); i++) {
+			if (job->present[i])
+				lua_pushlstring(L, job->captures[i].data(), job->captures[i].size());
 			else
 				lua_pushnil(L);
 		}
-		return (int)(m.size() - 1);
+		return (int)job->captures.size();
 	}
 
-	lua_pushlstring(L, m[0].first, m[0].length());
+	lua_pushlstring(L, job->whole.data(), job->whole.size());
 	return 1;
 }
 
@@ -96,25 +210,52 @@ static int l_find(lua_State *L)
 
 	const std::regex &re = compile(L, pattern);
 
-	std::cmatch m;
-	if (!std::regex_search(str + (init - 1), m, re)) {
+	struct Result : RegexWait
+	{
+		bool matched = false;
+		long long position = 0;
+		long long length = 0;
+		std::vector<bool> present;
+		std::vector<std::string> captures;
+	};
+	auto job = std::make_shared<Result>();
+	std::string subject(str + (init - 1));
+
+	int timeout_ms = regex_timeout_ms();
+	bool finished = run_with_deadline(job, [job, subject, &re]() {
+		std::smatch m;
+		if (!std::regex_search(subject, m, re))
+			return;
+		job->matched = true;
+		job->position = m.position(0);
+		job->length = m.length(0);
+		for (size_t i = 1; i < m.size(); i++) {
+			job->present.push_back(m[i].matched);
+			job->captures.push_back(m[i].matched ? m[i].str() : std::string());
+		}
+	}, timeout_ms);
+
+	if (!finished)
+		return luaL_error(L, "regex: pattern took too long to match (>%dms), aborted", timeout_ms);
+
+	if (!job->matched) {
 		lua_pushnil(L);
 		return 1;
 	}
 
-	lua_Integer start = init + m.position(0);
-	lua_Integer finish = start + (lua_Integer)m.length(0) - 1;
+	lua_Integer start = init + (lua_Integer)job->position;
+	lua_Integer finish = start + (lua_Integer)job->length - 1;
 	lua_pushinteger(L, start);
 	lua_pushinteger(L, finish);
 
-	for (size_t i = 1; i < m.size(); i++) {
-		if (m[i].matched)
-			lua_pushlstring(L, m[i].first, m[i].length());
+	for (size_t i = 0; i < job->captures.size(); i++) {
+		if (job->present[i])
+			lua_pushlstring(L, job->captures[i].data(), job->captures[i].size());
 		else
 			lua_pushnil(L);
 	}
 
-	return (int)(2 + (m.size() > 1 ? m.size() - 1 : 0));
+	return (int)(2 + job->captures.size());
 }
 
 // regex.replace(str, pattern, repl[, limit]) -> result, count
@@ -134,33 +275,44 @@ static int l_replace(lua_State *L)
 
 	const std::regex &re = compile(L, pattern);
 
+	struct Result : RegexWait
+	{
+		std::string out;
+		lua_Integer count = 0;
+	};
+	auto job = std::make_shared<Result>();
 	std::string input(str);
-	std::string out;
-	out.reserve(input.size());
+	std::string repl_copy(repl);
 
-	std::sregex_iterator it(input.begin(), input.end(), re);
-	std::sregex_iterator end;
+	int timeout_ms = regex_timeout_ms();
+	bool finished = run_with_deadline(job, [job, input, repl_copy, limit, &re]() {
+		job->out.reserve(input.size());
 
-	size_t last = 0;
-	lua_Integer count = 0;
+		std::sregex_iterator it(input.begin(), input.end(), re);
+		std::sregex_iterator end;
 
-	for (; it != end; ++it) {
-		if (limit >= 0 && count >= limit)
-			break;
+		size_t last = 0;
+		for (; it != end; ++it) {
+			if (limit >= 0 && job->count >= limit)
+				break;
 
-		const std::smatch &m = *it;
-		size_t pos = (size_t)m.position(0);
+			const std::smatch &m = *it;
+			size_t pos = (size_t)m.position(0);
 
-		out.append(input, last, pos - last);
-		out += m.format(repl);
-		last = pos + (size_t)m.length(0);
-		count++;
-	}
+			job->out.append(input, last, pos - last);
+			job->out += m.format(repl_copy);
+			last = pos + (size_t)m.length(0);
+			job->count++;
+		}
 
-	out.append(input, last, input.size() - last);
+		job->out.append(input, last, input.size() - last);
+	}, timeout_ms);
 
-	lua_pushlstring(L, out.data(), out.size());
-	lua_pushinteger(L, count);
+	if (!finished)
+		return luaL_error(L, "regex: pattern took too long to match (>%dms), aborted", timeout_ms);
+
+	lua_pushlstring(L, job->out.data(), job->out.size());
+	lua_pushinteger(L, job->count);
 	return 2;
 }
 
@@ -174,5 +326,6 @@ static const luaL_Reg s_regex[] =
 
 void cslua_register_regex(lua_State *L)
 {
+	ensure_cvar_registered();
 	cslua_register_namespace(L, "regex", s_regex);
 }
