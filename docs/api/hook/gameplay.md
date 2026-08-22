@@ -731,6 +731,332 @@ end)
 - [weapon:deploy](gameplay.md#weapon_deploy)
 - [ents](../ents/entity.md#index)
 
+## player:disappear {#player_disappear}
+
+Сущность игрока временно убирается из мира.
+
+```lua
+hook.add("player:disappear", id, function(e)
+	...
+end)
+```
+
+### Поля события {#player_disappear-поля события}
+
+| поле | тип |  |
+|---|---|---|
+| `e.player` | player | кого касается событие |
+
+Название и место — по движковому хуку `CBasePlayer::Disappear`. Не отменяемое: к моменту события сущность уже убрана.
+
+<Warning>
+Событие приходит из ReGameDLL. На ванильном `mp.dll` оно не
+срабатывает никогда.
+</Warning>
+
+## player:can_switch_team {#player_can_switch_team}
+
+Игра вот-вот решит, может ли игрок перейти в команду team.
+
+```lua
+hook.add("player:can_switch_team", id, function(e)
+	...
+end)
+```
+
+### Поля события {#player_can_switch_team-поля события}
+
+| поле | тип |  |
+|---|---|---|
+| `e.player` | player | кого касается событие |
+| `e.team` | string | `CT`, `T`, `SPEC` или `NONE` — куда переходит |
+
+**Отмена.** `e:cancel()` принудительно запрещает переход — независимо от того, что решили бы правила игры сами. Разрешить переход, который правила и так запретили бы, этим событием нельзя: только забрать разрешение, не выдать его.
+
+<Warning>
+Событие приходит из ReGameDLL. На ванильном `mp.dll` оно не
+срабатывает никогда.
+</Warning>
+
+### Смотри также
+
+- [player:team_change](gameplay.md#player_team_change)
+
+## player:shield_give {#player_shield_give}
+
+Игроку вот-вот выдадут щит.
+
+```lua
+hook.add("player:shield_give", id, function(e)
+	...
+end)
+```
+
+### Поля события {#player_shield_give-поля события}
+
+| поле | тип |  |
+|---|---|---|
+| `e.player` | player | кого касается событие |
+| `e.deploy` | boolean | щит достаётся из рук сразу же |
+
+<Warning>
+Событие приходит из ReGameDLL. На ванильном `mp.dll` оно не
+срабатывает никогда.
+</Warning>
+
+### Смотри также
+
+- [player:shield_drop](gameplay.md#player_shield_drop)
+
+## player:shield_drop {#player_shield_drop}
+
+У игрока только что забрали щит.
+
+```lua
+hook.add("player:shield_drop", id, function(e)
+	...
+end)
+```
+
+### Поля события {#player_shield_drop-поля события}
+
+| поле | тип |  |
+|---|---|---|
+| `e.player` | player | кого касается событие |
+| `e.deploy` | boolean | то же значение deploy, что было при выдаче |
+
+Не отменяемое: к моменту события щит уже убран.
+
+<Warning>
+Событие приходит из ReGameDLL. На ванильном `mp.dll` оно не
+срабатывает никогда.
+</Warning>
+
+### Смотри также
+
+- [player:shield_give](gameplay.md#player_shield_give)
+
+## player:observer_next {#player_observer_next}
+
+Наблюдатель вот-вот переключится на другую цель.
+
+```lua
+hook.add("player:observer_next", id, function(e)
+	...
+end)
+```
+
+### Поля события {#player_observer_next-поля события}
+
+| поле | тип |  |
+|---|---|---|
+| `e.player` | player | кого касается событие |
+| `e.reverse` | boolean | направление переключения |
+| `e.target` | string \| nil | конкретное имя цели, если оно было задано |
+
+Не отменяемое: к моменту события движок уже выбрал следующую цель.
+
+<Warning>
+Событие приходит из ReGameDLL. На ванильном `mp.dll` оно не
+срабатывает никогда.
+</Warning>
+
+### Смотри также
+
+- [player:observer_mode](gameplay.md#player_observer_mode)
+
+## player:observer_mode {#player_observer_mode}
+
+У наблюдателя только что сменился режим камеры.
+
+```lua
+hook.add("player:observer_mode", id, function(e)
+	...
+end)
+```
+
+### Поля события {#player_observer_mode-поля события}
+
+| поле | тип |  |
+|---|---|---|
+| `e.player` | player | кого касается событие |
+| `e.mode` | number | `0` свободный полёт выключен, `1` слежение без поворота камеры, `2` слежение со свободной камерой, `3` роуминг, `4` вид от первого лица, `5` карта свободно, `6` карта со слежением — см. `OBS_*` в SDK |
+
+Не отменяемое.
+
+<Warning>
+Событие приходит из ReGameDLL. На ванильном `mp.dll` оно не
+срабатывает никогда.
+</Warning>
+
+### Смотри также
+
+- [player:observer_next](gameplay.md#player_observer_next)
+
+## player:score_add {#player_score_add}
+
+Игроку вот-вот изменят личный счёт очков.
+
+```lua
+hook.add("player:score_add", id, function(e)
+	...
+end)
+```
+
+### Поля события {#player_score_add-поля события}
+
+| поле | тип |  |
+|---|---|---|
+| `e.player` | player | кого касается событие |
+| `e.score` | number | запись: на сколько изменить счёт |
+| `e.allow_negative` | boolean | запись: разрешить ли счёту уйти в минус |
+
+**Отмена.** `e:cancel()` — счёт не меняется вообще.
+
+<Warning>
+Событие приходит из ReGameDLL. На ванильном `mp.dll` оно не
+срабатывает никогда.
+</Warning>
+
+### Смотри также
+
+- [team:score_add](gameplay.md#team_score_add)
+
+## team:score_add {#team_score_add}
+
+Команде вот-вот изменят счёт очков.
+
+```lua
+hook.add("team:score_add", id, function(e)
+	...
+end)
+```
+
+### Поля события {#team_score_add-поля события}
+
+| поле | тип |  |
+|---|---|---|
+| `e.player` | player | кого касается событие |
+| `e.score` | number | запись: на сколько изменить счёт |
+| `e.allow_negative` | boolean | запись: разрешить ли счёту уйти в минус |
+
+**Отмена.** `e:cancel()` — счёт не меняется вообще.
+
+`e.player` — не «кому идут очки», а тот, через кого движок дёрнул вызов; какой команде считать очки, смотри через `e.player:team()`.
+
+<Warning>
+Событие приходит из ReGameDLL. На ванильном `mp.dll` оно не
+срабатывает никогда.
+</Warning>
+
+### Смотри также
+
+- [player:score_add](gameplay.md#player_score_add)
+
+## player:userinfo_change {#player_userinfo_change}
+
+У игрока изменился один из userinfo-ключей (модель, имя и т.д.).
+
+```lua
+hook.add("player:userinfo_change", id, function(e)
+	...
+end)
+```
+
+### Поля события {#player_userinfo_change-поля события}
+
+| поле | тип |  |
+|---|---|---|
+| `e.player` | player | кого касается событие |
+
+Сырой буфер движка в событие не попадает — сразу читай нужный ключ через [`p:info(key)`](../players/identity.md#info).
+
+<Warning>
+Событие приходит из ReGameDLL. На ванильном `mp.dll` оно не
+срабатывает никогда.
+</Warning>
+
+## player:can_hear {#player_can_hear}
+
+Игра вот-вот решит, слышит ли listener голос speaker.
+
+```lua
+hook.add("player:can_hear", id, function(e)
+	...
+end)
+```
+
+### Поля события {#player_can_hear-поля события}
+
+| поле | тип |  |
+|---|---|---|
+| `e.listener` | player | кто слушает |
+| `e.speaker` | player | кто говорит |
+
+**Отмена.** `e:cancel()` принудительно запрещает — независимо от того, что решили бы правила игры сами. Разрешить то, что правила и так запретили бы, этим событием нельзя: только забрать разрешение, не выдать его.
+
+<Warning>
+Событие приходит из ReGameDLL. На ванильном `mp.dll` оно не
+срабатывает никогда.
+</Warning>
+
+## player:choose_model {#player_choose_model}
+
+Игрок выбрал пункт в меню внешности.
+
+```lua
+hook.add("player:choose_model", id, function(e)
+	...
+end)
+```
+
+### Поля события {#player_choose_model-поля события}
+
+| поле | тип |  |
+|---|---|---|
+| `e.player` | player | кого касается событие |
+| `e.slot` | number | номер пункта меню, не имя модели |
+
+Не отменяемое: к моменту события выбор уже применён.
+
+<Warning>
+Событие приходит из ReGameDLL. На ванильном `mp.dll` оно не
+срабатывает никогда.
+</Warning>
+
+### Смотри также
+
+- [player:choose_team](gameplay.md#player_choose_team)
+
+## player:choose_team {#player_choose_team}
+
+Игрок выбрал пункт в меню команды.
+
+```lua
+hook.add("player:choose_team", id, function(e)
+	...
+end)
+```
+
+### Поля события {#player_choose_team-поля события}
+
+| поле | тип |  |
+|---|---|---|
+| `e.player` | player | кого касается событие |
+| `e.slot` | number | номер пункта меню, не имя команды |
+
+**Отмена.** `e:cancel()` блокирует сам переход в команду: выбор из этого меню применяется внутри того же вызова, так что отмена до него срабатывает как полный запрет, а не откат задним числом.
+
+<Warning>
+Событие приходит из ReGameDLL. На ванильном `mp.dll` оно не
+срабатывает никогда.
+</Warning>
+
+### Смотри также
+
+- [player:choose_model](gameplay.md#player_choose_model)
+- [player:can_switch_team](gameplay.md#player_can_switch_team)
+
 ## grenade:explode {#grenade_explode}
 
 HE, дымовая или флешка вот-вот взорвётся.

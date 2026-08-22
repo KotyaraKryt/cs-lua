@@ -39,14 +39,20 @@ description: "Плоский список всех функций и метод�
 | [`access.can`](access/read.md#can) | access | Есть ли у игрока право |
 | [`p:can`](players/access.md#can) | players | Есть ли у игрока право |
 | [`player:can_have_item`](hook/gameplay.md#player_can_have_item) | hook | Игра вот-вот решит, может ли игрок вообще получить этот предмет |
+| [`player:can_hear`](hook/gameplay.md#player_can_hear) | hook | Игра вот-вот решит, слышит ли listener голос speaker |
+| [`player:can_switch_team`](hook/gameplay.md#player_can_switch_team) | hook | Игра вот-вот решит, может ли игрок перейти в команду team |
 | [`http.cancel`](http/index.md#cancel) | http | Отменяет запрос по id |
 | [`timer.cancel`](timer/anonymous.md#cancel) | timer | Снимает таймер по id |
+| [`bomb:carrier`](hook/round.md#bomb_carrier) | hook | Игра только что выбрала, кому достанется бомба в этом раунде |
 | [`p:center`](players/messages.md#center) | players | Показывает текст по центру экрана |
 | [`db:changes`](db/database.md#changes) | db | Сколько строк изменил последний запрос |
 | [`msg.char`](msg/fields.md#char) | msg | n — `-128..127` (`WRITE_CHAR` в SDK) |
 | [`p:chat`](players/messages.md#chat) | players | Отправляет строку в чат |
 | [`player:chat`](hook/connection.md#chat) | hook | Игрок написал в чат |
+| [`player:choose_model`](hook/gameplay.md#player_choose_model) | hook | Игрок выбрал пункт в меню внешности |
+| [`player:choose_team`](hook/gameplay.md#player_choose_team) | hook | Игрок выбрал пункт в меню команды |
 | [`e:classname`](ents/entity.md#classname) | ents | Classname сущности |
+| [`round:cleanup`](hook/round.md#round_cleanup) | hook | Карта вот-вот сбросит мир между раундами |
 | [`p:clip`](players/cs-state.md#clip) | players | Читает или задаёт патроны в магазине |
 | [`conn:close`](mysql/connection.md#close) | mysql | Закрывает соединение |
 | [`db:close`](db/database.md#close) | db | Закрывает базу |
@@ -67,6 +73,7 @@ description: "Плоский список всех функций и метод�
 | [`sv.cvar`](sv/cvar.md#cvar) | sv | Возвращает объект существующей переменной движка |
 | [`sv.cvar_register`](sv/cvar.md#cvar_register) | sv | Заводит свою переменную движка |
 | [`plugin.data_dir`](plugin/index.md#data_dir) | plugin | Каталог плагина под данные, переживающий обновление |
+| [`round:dead_weapons`](hook/round.md#round_dead_weapons) | hook | Игра только что решила, что делать с оружием погибшего |
 | [`player:death`](hook/gameplay.md#player_death) | hook | Игрок погиб |
 | [`p:deaths`](players/cs-state.md#deaths) | players | Счётчик смертей |
 | [`access.declare`](access/declare.md#declare) | access | Объявляет ноду прав |
@@ -80,6 +87,7 @@ description: "Плоский список всех функций и метод�
 | [`p:dhud`](players/messages.md#dhud) | players | То же через `SVC_DIRECTOR` — directed HUD |
 | [`datafile.dir`](store/datafile.md#dir) | store | Каталог, к которому привязан модуль |
 | [`plugin.dir`](plugin/index.md#dir) | plugin | Абсолютный путь к папке плагина |
+| [`player:disappear`](hook/gameplay.md#player_disappear) | hook | Сущность игрока временно убирается из мира |
 | [`client:disconnect`](hook/connection.md#disconnect) | hook | Игрок отключился |
 | [`vec.distance`](vec/index.md#distance) | vec | Расстояние между двумя точками |
 | [`p:drop`](players/cs-state.md#drop) | players | Выбрасывает оружие на пол |
@@ -165,6 +173,8 @@ description: "Плоский список всех функций и метод�
 | [`menu.new`](menu/index.md#new) | menu | Создаёт меню |
 | [`p:noclip`](players/state.md#noclip) | players | Полёт сквозь стены |
 | [`vec.normalize`](vec/index.md#normalize) | vec | Вектор единичной длины в том же направлении |
+| [`player:observer_mode`](hook/gameplay.md#player_observer_mode) | hook | У наблюдателя только что сменился режим камеры |
+| [`player:observer_next`](hook/gameplay.md#player_observer_next) | hook | Наблюдатель вот-вот переключится на другую цель |
 | [`p:on_ground`](players/state.md#on_ground) | players | Стоит ли игрок на земле |
 | [`plugin.on_unload`](plugin/index.md#on_unload) | plugin | Регистрирует обработчик выгрузки этого плагина |
 | [`db.open`](db/open.md#open) | db | Открывает базу в каталоге плагина |
@@ -199,6 +209,7 @@ description: "Плоский список всех функций и метод�
 | [`e:remove`](ents/entity.md#remove) | ents | Убирает сущность из мира |
 | [`file.remove`](file/index.md#remove) | file | Удаляет файл из каталога плагина |
 | [`hook.remove`](hook/namespace.md#remove) | hook | Снимает подписку по имени события и id |
+| [`round:remove_guns`](hook/round.md#round_remove_guns) | hook | У всех игроков вот-вот заберут оружие |
 | [`e:render`](ents/entity.md#render) | ents | Читает или задаёт прозрачность и свечение |
 | [`regex.replace`](regex/index.md#replace) | regex | Заменяет совпадения |
 | [`http.request`](http/index.md#request) | http | Выполняет запрос произвольным методом |
@@ -209,12 +220,16 @@ description: "Плоский список всех функций и метод�
 | [`st:run`](db/statement.md#stmt_run) | db | Выполняет выражение, ничего не возвращающее |
 | [`access.save`](access/grant.md#save) | access | Записывает `users.lua` на диск |
 | [`datafile.save`](store/datafile.md#save) | store | Пишет таблицу в `<dir>/<name>.lua` |
+| [`player:score_add`](hook/gameplay.md#player_score_add) | hook | Игроку вот-вот изменят личный счёт очков |
+| [`team:score_add`](hook/gameplay.md#team_score_add) | hook | Команде вот-вот изменят счёт очков |
 | [`weapon:secondary_attack`](hook/gameplay.md#weapon_secondary_attack) | hook | Игрок нажал правую кнопку мыши, держа это оружие |
 | [`menu:select`](hook/connection.md#select) | hook | Игрок нажал клавишу в меню, открытом из Lua |
 | [`msg.send`](msg/send.md#send) | msg | Собирает и отправляет одно сетевое сообщение |
 | [`datafile.serialize`](store/datafile.md#serialize) | store | Превращает таблицу в текст, без записи |
 | [`c:set`](sv/cvar.md#set) | sv | Записывает значение переменной |
 | [`s:set`](store/kv.md#set) | store | Кладёт значение в очередь записи |
+| [`player:shield_drop`](hook/gameplay.md#player_shield_drop) | hook | У игрока только что забрали щит |
+| [`player:shield_give`](hook/gameplay.md#player_shield_give) | hook | Игроку вот-вот выдадут щит |
 | [`msg.short`](msg/fields.md#short) | msg | n — `-32768..32767` (`WRITE_SHORT` в SDK) |
 | [`m:show`](menu/index.md#show) | menu | Показывает меню игроку |
 | [`e:size`](ents/entity.md#size) | ents | Читает или задаёт ограничивающий объём |
@@ -250,6 +265,7 @@ description: "Плоский список всех функций и метод�
 | [`db:transaction`](db/database.md#transaction) | db | Выполняет блок одной транзакцией |
 | [`access.user`](access/read.md#user) | access | Одна запись из `users.lua` |
 | [`p:userid`](players/identity.md#userid) | players | Userid движка |
+| [`player:userinfo_change`](hook/gameplay.md#player_userinfo_change) | hook | У игрока изменился один из userinfo-ключей (модель, имя и т.д.) |
 | [`access.users`](access/read.md#users) | access | Все записи из `users.lua` |
 | [`e:valid`](ents/entity.md#valid) | ents | Жива ли сущность |
 | [`p:velocity`](players/state.md#velocity) | players | Скорость игрока |
@@ -259,4 +275,4 @@ description: "Плоский список всех функций и метод�
 | [`file.write`](file/index.md#write) | file | Перезаписывает файл целиком (или создаёт его) |
 | [`log.write`](log/index.md#write) | log | Пишет строку в лог плагина |
 
-Всего: 245.
+Всего: 261.

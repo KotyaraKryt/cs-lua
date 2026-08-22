@@ -61,6 +61,22 @@ static const char *const s_event_names[CSLUA_EVENT_COUNT] =
 	"player:strip",
 	"player:can_have_item",
 	"weapon:pickup",
+	"player:disappear",
+	"player:can_switch_team",
+	"player:shield_give",
+	"player:shield_drop",
+	"bomb:carrier",
+	"round:remove_guns",
+	"round:dead_weapons",
+	"player:observer_next",
+	"player:observer_mode",
+	"player:score_add",
+	"team:score_add",
+	"round:cleanup",
+	"player:userinfo_change",
+	"player:can_hear",
+	"player:choose_model",
+	"player:choose_team",
 };
 
 static int find_event(const char *name)
@@ -95,7 +111,12 @@ static bool is_cancellable(int ev)
 		|| ev == CSLUA_EVENT_PLAYER_TRACE_ATTACK
 		|| ev == CSLUA_EVENT_PLAYER_HEAL
 		|| ev == CSLUA_EVENT_ITEM_GIVE
-		|| ev == CSLUA_EVENT_PLAYER_CAN_HAVE_ITEM;
+		|| ev == CSLUA_EVENT_PLAYER_CAN_HAVE_ITEM
+		|| ev == CSLUA_EVENT_PLAYER_CAN_SWITCH_TEAM
+		|| ev == CSLUA_EVENT_PLAYER_SCORE_ADD
+		|| ev == CSLUA_EVENT_TEAM_SCORE_ADD
+		|| ev == CSLUA_EVENT_PLAYER_CAN_HEAR
+		|| ev == CSLUA_EVENT_PLAYER_CHOOSE_TEAM;
 }
 
 static std::string known_events()
@@ -1280,5 +1301,187 @@ void LuaEvents::fire_weapon_pickup(int player, const char *weapon)
 	notify(CSLUA_EVENT_WEAPON_PICKUP, [=](lua_State *L) {
 		set_player_or_nil(L, player, "player");
 		set_string(L, name, "weapon");
+	});
+}
+
+void LuaEvents::fire_player_disappear(int player)
+{
+	notify(CSLUA_EVENT_PLAYER_DISAPPEAR, [=](lua_State *L) {
+		set_player_or_nil(L, player, "player");
+	});
+}
+
+bool LuaEvents::fire_player_can_switch_team(int player, const char *team)
+{
+	std::string tname = team ? team : "";
+
+	return run(CSLUA_EVENT_PLAYER_CAN_SWITCH_TEAM, [=](lua_State *L) {
+		set_player_or_nil(L, player, "player");
+		set_string(L, tname, "team");
+	});
+}
+
+void LuaEvents::fire_player_shield_give(int player, bool deploy)
+{
+	notify(CSLUA_EVENT_PLAYER_SHIELD_GIVE, [=](lua_State *L) {
+		set_player_or_nil(L, player, "player");
+		lua_pushboolean(L, deploy);
+		lua_setfield(L, -2, "deploy");
+	});
+}
+
+void LuaEvents::fire_player_shield_drop(int player, bool deploy)
+{
+	notify(CSLUA_EVENT_PLAYER_SHIELD_DROP, [=](lua_State *L) {
+		set_player_or_nil(L, player, "player");
+		lua_pushboolean(L, deploy);
+		lua_setfield(L, -2, "deploy");
+	});
+}
+
+void LuaEvents::fire_bomb_carrier(int player)
+{
+	notify(CSLUA_EVENT_BOMB_CARRIER, [=](lua_State *L) {
+		set_player_or_nil(L, player, "player");
+	});
+}
+
+void LuaEvents::fire_round_remove_guns()
+{
+	notify(CSLUA_EVENT_ROUND_REMOVE_GUNS);
+}
+
+int LuaEvents::fire_round_dead_weapons(int player, int mode)
+{
+	int result = mode;
+
+	run(CSLUA_EVENT_ROUND_DEAD_WEAPONS,
+		[=](lua_State *L) {
+			set_player_or_nil(L, player, "player");
+			lua_pushinteger(L, mode);
+			lua_setfield(L, -2, "mode");
+		},
+		[&result](lua_State *L) {
+			lua_getfield(L, -1, "mode");
+			if (lua_isnumber(L, -1))
+				result = (int)lua_tointeger(L, -1);
+			lua_pop(L, 1);
+		});
+
+	return result;
+}
+
+void LuaEvents::fire_player_observer_next(int player, bool reverse, const char *target)
+{
+	std::string tgt = target ? target : "";
+
+	notify(CSLUA_EVENT_PLAYER_OBSERVER_NEXT, [=](lua_State *L) {
+		set_player_or_nil(L, player, "player");
+		lua_pushboolean(L, reverse);
+		lua_setfield(L, -2, "reverse");
+
+		if (!tgt.empty())
+			set_string(L, tgt, "target");
+	});
+}
+
+void LuaEvents::fire_player_observer_mode(int player, int mode)
+{
+	notify(CSLUA_EVENT_PLAYER_OBSERVER_MODE, [=](lua_State *L) {
+		set_player_or_nil(L, player, "player");
+		lua_pushinteger(L, mode);
+		lua_setfield(L, -2, "mode");
+	});
+}
+
+bool LuaEvents::fire_player_score_add(int player, int &score, bool &allow_negative)
+{
+	int s = score;
+	bool neg = allow_negative;
+
+	bool cancelled = run(CSLUA_EVENT_PLAYER_SCORE_ADD,
+		[=](lua_State *L) {
+			set_player(L, player, "player");
+			lua_pushinteger(L, s);
+			lua_setfield(L, -2, "score");
+			lua_pushboolean(L, neg);
+			lua_setfield(L, -2, "allow_negative");
+		},
+		[&](lua_State *L) {
+			lua_getfield(L, -1, "score");
+			if (lua_isnumber(L, -1))
+				score = (int)lua_tointeger(L, -1);
+			lua_pop(L, 1);
+
+			lua_getfield(L, -1, "allow_negative");
+			allow_negative = lua_toboolean(L, -1) != 0;
+			lua_pop(L, 1);
+		});
+
+	return cancelled;
+}
+
+bool LuaEvents::fire_team_score_add(int player, int &score, bool &allow_negative)
+{
+	int s = score;
+	bool neg = allow_negative;
+
+	bool cancelled = run(CSLUA_EVENT_TEAM_SCORE_ADD,
+		[=](lua_State *L) {
+			set_player(L, player, "player");
+			lua_pushinteger(L, s);
+			lua_setfield(L, -2, "score");
+			lua_pushboolean(L, neg);
+			lua_setfield(L, -2, "allow_negative");
+		},
+		[&](lua_State *L) {
+			lua_getfield(L, -1, "score");
+			if (lua_isnumber(L, -1))
+				score = (int)lua_tointeger(L, -1);
+			lua_pop(L, 1);
+
+			lua_getfield(L, -1, "allow_negative");
+			allow_negative = lua_toboolean(L, -1) != 0;
+			lua_pop(L, 1);
+		});
+
+	return cancelled;
+}
+
+void LuaEvents::fire_round_cleanup()
+{
+	notify(CSLUA_EVENT_ROUND_CLEANUP);
+}
+
+void LuaEvents::fire_player_userinfo_change(int player)
+{
+	notify(CSLUA_EVENT_PLAYER_USERINFO_CHANGE, [=](lua_State *L) {
+		set_player_or_nil(L, player, "player");
+	});
+}
+
+bool LuaEvents::fire_player_can_hear(int listener, int speaker)
+{
+	return run(CSLUA_EVENT_PLAYER_CAN_HEAR, [=](lua_State *L) {
+		set_player(L, listener, "listener");
+		set_player(L, speaker, "speaker");
+	});
+}
+
+void LuaEvents::fire_player_choose_model(int player, int slot)
+{
+	notify(CSLUA_EVENT_PLAYER_CHOOSE_MODEL, [=](lua_State *L) {
+		set_player_or_nil(L, player, "player");
+		lua_pushinteger(L, slot);
+		lua_setfield(L, -2, "slot");
+	});
+}
+
+bool LuaEvents::fire_player_choose_team(int player, int slot)
+{
+	return run(CSLUA_EVENT_PLAYER_CHOOSE_TEAM, [=](lua_State *L) {
+		set_player_or_nil(L, player, "player");
+		lua_pushinteger(L, slot);
+		lua_setfield(L, -2, "slot");
 	});
 }

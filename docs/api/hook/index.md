@@ -83,6 +83,18 @@ end)
 | [`weapon:secondary_attack`](gameplay.md#weapon_secondary_attack) | Игрок нажал правую кнопку мыши, держа это оружие |
 | [`grenade:throw`](gameplay.md#grenade_throw) | HE, дымовая или флешка вот-вот покинёт руку |
 | [`grenade:thrown`](gameplay.md#grenade_thrown) | HE, дымовая или флешка только что покинула руку |
+| [`player:disappear`](gameplay.md#player_disappear) | Сущность игрока временно убирается из мира |
+| [`player:can_switch_team`](gameplay.md#player_can_switch_team) | Игра вот-вот решит, может ли игрок перейти в команду team |
+| [`player:shield_give`](gameplay.md#player_shield_give) | Игроку вот-вот выдадут щит |
+| [`player:shield_drop`](gameplay.md#player_shield_drop) | У игрока только что забрали щит |
+| [`player:observer_next`](gameplay.md#player_observer_next) | Наблюдатель вот-вот переключится на другую цель |
+| [`player:observer_mode`](gameplay.md#player_observer_mode) | У наблюдателя только что сменился режим камеры |
+| [`player:score_add`](gameplay.md#player_score_add) | Игроку вот-вот изменят личный счёт очков |
+| [`team:score_add`](gameplay.md#team_score_add) | Команде вот-вот изменят счёт очков |
+| [`player:userinfo_change`](gameplay.md#player_userinfo_change) | У игрока изменился один из userinfo-ключей (модель, имя и т.д.) |
+| [`player:can_hear`](gameplay.md#player_can_hear) | Игра вот-вот решит, слышит ли listener голос speaker |
+| [`player:choose_model`](gameplay.md#player_choose_model) | Игрок выбрал пункт в меню внешности |
+| [`player:choose_team`](gameplay.md#player_choose_team) | Игрок выбрал пункт в меню команды |
 | [`grenade:explode`](gameplay.md#grenade_explode) | HE, дымовая или флешка вот-вот взорвётся |
 
 ## Раунд и бомба
@@ -98,6 +110,10 @@ end)
 | [`bomb:defusing`](round.md#bomb_defuse_start) | Игрок начал разминирование |
 | [`bomb:defused`](round.md#bomb_defused) | Попытка разминирования завершилась |
 | [`bomb:exploded`](round.md#bomb_exploded) | Бомба взорвалась |
+| [`bomb:carrier`](round.md#bomb_carrier) | Игра только что выбрала, кому достанется бомба в этом раунде |
+| [`round:remove_guns`](round.md#round_remove_guns) | У всех игроков вот-вот заберут оружие |
+| [`round:dead_weapons`](round.md#round_dead_weapons) | Игра только что решила, что делать с оружием погибшего |
+| [`round:cleanup`](round.md#round_cleanup) | Карта вот-вот сбросит мир между раундами |
 
 ## Магазин
 

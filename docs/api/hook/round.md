@@ -217,3 +217,96 @@ end)
 Событие приходит из ReGameDLL. На ванильном `mp.dll` оно не
 срабатывает никогда.
 </Warning>
+
+## bomb:carrier {#bomb_carrier}
+
+Игра только что выбрала, кому достанется бомба в этом раунде.
+
+```lua
+hook.add("bomb:carrier", id, function(e)
+	...
+end)
+```
+
+### Поля события {#bomb_carrier-поля события}
+
+| поле | тип |  |
+|---|---|---|
+| `e.player` | player \| nil | кто несёт бомбу; `nil`, если игра никого не выбрала |
+
+Не отменяемое: кто несёт бомбу, событие не меняет, только сообщает.
+
+<Warning>
+Событие приходит из ReGameDLL. На ванильном `mp.dll` оно не
+срабатывает никогда.
+</Warning>
+
+### Смотри также
+
+- [bomb:planted](round.md#bomb_planted)
+
+## round:remove_guns {#round_remove_guns}
+
+У всех игроков вот-вот заберут оружие.
+
+```lua
+hook.add("round:remove_guns", id, function(e)
+	...
+end)
+```
+
+### Поля события {#round_remove_guns-поля события}
+
+| поле | тип |  |
+|---|---|---|
+| `—` | — | событие без полей |
+
+<Warning>
+Событие приходит из ReGameDLL. На ванильном `mp.dll` оно не
+срабатывает никогда.
+</Warning>
+
+## round:dead_weapons {#round_dead_weapons}
+
+Игра только что решила, что делать с оружием погибшего.
+
+```lua
+hook.add("round:dead_weapons", id, function(e)
+	...
+end)
+```
+
+### Поля события {#round_dead_weapons-поля события}
+
+| поле | тип |  |
+|---|---|---|
+| `e.player` | player | кого касается событие |
+| `e.mode` | number | запись: `GR_PLR_DROP_GUN_ALL`, `GR_PLR_DROP_GUN_ACTIVE` или `GR_PLR_DROP_GUN_NO` из SDK |
+
+Не про разрешить/запретить — про выбор одного из вариантов, поэтому `e:cancel()` тут нет: меняй `e.mode` напрямую.
+
+<Warning>
+Событие приходит из ReGameDLL. На ванильном `mp.dll` оно не
+срабатывает никогда.
+</Warning>
+
+## round:cleanup {#round_cleanup}
+
+Карта вот-вот сбросит мир между раундами.
+
+```lua
+hook.add("round:cleanup", id, function(e)
+	...
+end)
+```
+
+### Поля события {#round_cleanup-поля события}
+
+| поле | тип |  |
+|---|---|---|
+| `—` | — | событие без полей |
+
+<Warning>
+Событие приходит из ReGameDLL. На ванильном `mp.dll` оно не
+срабатывает никогда.
+</Warning>

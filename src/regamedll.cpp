@@ -876,6 +876,193 @@ static void hook_explode_flashbang(IReGameHook_CGrenade_ExplodeFlashbang *chain,
 	chain->callNext(grenade, ptr, bitsDamageType);
 }
 
+static void hook_disappear(IReGameHook_CBasePlayer_Disappear *chain, CBasePlayer *player)
+{
+	chain->callNext(player);
+
+	if (player && player->IsPlayer())
+		g_events.fire_player_disappear(player->entindex());
+}
+
+// lua_player.cpp has its own static team_name() for the same job - it isn't
+// reachable from here, so this is a small local twin rather than an export.
+static const char *team_name_of(TeamName team)
+{
+	switch (team) {
+	case TERRORIST: return "T";
+	case CT:        return "CT";
+	case SPECTATOR: return "SPEC";
+	default:        return "NONE";
+	}
+}
+
+// Pre-check only: cancelling forces "no" without ever asking the game's own
+// rules. There is no way to force a "yes" the game would not have given on
+// its own - this can only take away permission, not grant it.
+static bool hook_can_switch_team(IReGameHook_CBasePlayer_CanSwitchTeam *chain, CBasePlayer *player, TeamName team)
+{
+	int slot = (player && player->IsPlayer()) ? player->entindex() : 0;
+
+	if (g_events.fire_player_can_switch_team(slot, team_name_of(team)))
+		return false;
+
+	return chain->callNext(player, team);
+}
+
+static void hook_shield_give(IReGameHook_CBasePlayer_GiveShield *chain, CBasePlayer *player, bool bDeploy)
+{
+	chain->callNext(player, bDeploy);
+
+	if (player && player->IsPlayer())
+		g_events.fire_player_shield_give(player->entindex(), bDeploy);
+}
+
+static CBaseEntity *hook_shield_drop(IReGameHook_CBasePlayer_DropShield *chain, CBasePlayer *player, bool bDeploy)
+{
+	CBaseEntity *result = chain->callNext(player, bDeploy);
+
+	if (player && player->IsPlayer())
+		g_events.fire_player_shield_drop(player->entindex(), bDeploy);
+
+	return result;
+}
+
+// Notify only - this does not decide who carries the bomb, only reports who
+// the game already picked.
+static CBasePlayer *hook_give_c4(IReGameHook_CSGameRules_GiveC4 *chain)
+{
+	CBasePlayer *result = chain->callNext();
+
+	int slot = (result && result->IsPlayer()) ? result->entindex() : 0;
+	g_events.fire_bomb_carrier(slot);
+
+	return result;
+}
+
+static void hook_remove_guns(IReGameHook_CSGameRules_RemoveGuns *chain)
+{
+	chain->callNext();
+	g_events.fire_round_remove_guns();
+}
+
+// mode is a return value, not an input - the default is only known after
+// asking the chain, so this reads it back rather than passing one in.
+static int hook_dead_weapons(IReGameHook_CSGameRules_DeadPlayerWeapons *chain, CBasePlayer *player)
+{
+	int slot = (player && player->IsPlayer()) ? player->entindex() : 0;
+
+	int mode = chain->callNext(player);
+	mode = g_events.fire_round_dead_weapons(slot, mode);
+
+	return mode;
+}
+
+static void hook_observer_next(IReGameHook_CBasePlayer_Observer_FindNextPlayer *chain,
+	CBasePlayer *player, bool bReverse, const char *name)
+{
+	chain->callNext(player, bReverse, name);
+
+	if (player && player->IsPlayer())
+		g_events.fire_player_observer_next(player->entindex(), bReverse, name);
+}
+
+static void hook_observer_mode(IReGameHook_CBasePlayer_Observer_SetMode *chain, CBasePlayer *player, int iMode)
+{
+	chain->callNext(player, iMode);
+
+	if (player && player->IsPlayer())
+		g_events.fire_player_observer_mode(player->entindex(), iMode);
+}
+
+static void hook_add_points(IReGameHook_CBasePlayer_AddPoints *chain, CBasePlayer *player,
+	int score, BOOL bAllowNegativeScore)
+{
+	if (!player || !player->IsPlayer()) {
+		chain->callNext(player, score, bAllowNegativeScore);
+		return;
+	}
+
+	int new_score = score;
+	bool allow_negative = bAllowNegativeScore != 0;
+
+	if (g_events.fire_player_score_add(player->entindex(), new_score, allow_negative))
+		return;					// blocked: score untouched
+
+	chain->callNext(player, new_score, allow_negative ? TRUE : FALSE);
+}
+
+// Same shape as hook_add_points, for the team's score rather than the
+// player's own - player here is only who triggered the call.
+static void hook_add_points_to_team(IReGameHook_CBasePlayer_AddPointsToTeam *chain, CBasePlayer *player,
+	int score, BOOL bAllowNegativeScore)
+{
+	if (!player || !player->IsPlayer()) {
+		chain->callNext(player, score, bAllowNegativeScore);
+		return;
+	}
+
+	int new_score = score;
+	bool allow_negative = bAllowNegativeScore != 0;
+
+	if (g_events.fire_team_score_add(player->entindex(), new_score, allow_negative))
+		return;					// blocked: score untouched
+
+	chain->callNext(player, new_score, allow_negative ? TRUE : FALSE);
+}
+
+static void hook_cleanup_map(IReGameHook_CSGameRules_CleanUpMap *chain)
+{
+	chain->callNext();
+	g_events.fire_round_cleanup();
+}
+
+// infobuffer is deliberately never forwarded to Lua - p:info(key) is the
+// safe way to read specific keys out of it.
+static void hook_userinfo_changed(IReGameHook_CSGameRules_ClientUserInfoChanged *chain,
+	CBasePlayer *player, char *infobuffer)
+{
+	chain->callNext(player, infobuffer);
+
+	if (player && player->IsPlayer())
+		g_events.fire_player_userinfo_change(player->entindex());
+}
+
+// Pre-check only: cancelling forces "no" without ever asking the game's own
+// rules, same contract as hook_can_switch_team above.
+static bool hook_can_hear_player(IReGameHook_CSGameRules_CanPlayerHearPlayer *chain,
+	CBasePlayer *pListener, CBasePlayer *pSender)
+{
+	int listener = (pListener && pListener->IsPlayer()) ? pListener->entindex() : 0;
+	int speaker = (pSender && pSender->IsPlayer()) ? pSender->entindex() : 0;
+
+	if (g_events.fire_player_can_hear(listener, speaker))
+		return false;
+
+	return chain->callNext(pListener, pSender);
+}
+
+// slot is the menu item chosen, not a model name.
+static void hook_choose_appearance(IReGameHook_HandleMenu_ChooseAppearance *chain, CBasePlayer *player, int slot)
+{
+	chain->callNext(player, slot);
+
+	if (player && player->IsPlayer())
+		g_events.fire_player_choose_model(player->entindex(), slot);
+}
+
+// slot is the menu item chosen, not a TeamName. The real team switch happens
+// inside this call, so a pre-cancel prevents it entirely rather than
+// reverting it after the fact - same contract as hook_can_respawn.
+static BOOL hook_choose_team(IReGameHook_HandleMenu_ChooseTeam *chain, CBasePlayer *player, int slot)
+{
+	int pslot = (player && player->IsPlayer()) ? player->entindex() : 0;
+
+	if (g_events.fire_player_choose_team(pslot, slot))
+		return FALSE;
+
+	return chain->callNext(player, slot);
+}
+
 // Which chains we currently hold a hook on.
 //
 // registerHook is fatal when the same handler is added twice - ReGameDLL kills
@@ -926,6 +1113,22 @@ enum HookSlot
 	HOOK_STRIP_ITEMS,
 	HOOK_CAN_HAVE_ITEM,
 	HOOK_GOT_WEAPON,
+	HOOK_DISAPPEAR,
+	HOOK_CAN_SWITCH_TEAM,
+	HOOK_SHIELD_GIVE,
+	HOOK_SHIELD_DROP,
+	HOOK_GIVE_C4,
+	HOOK_REMOVE_GUNS,
+	HOOK_DEAD_WEAPONS,
+	HOOK_OBSERVER_NEXT,
+	HOOK_OBSERVER_MODE,
+	HOOK_SCORE_ADD,
+	HOOK_TEAM_SCORE_ADD,
+	HOOK_CLEANUP,
+	HOOK_USERINFO_CHANGE,
+	HOOK_CAN_HEAR,
+	HOOK_CHOOSE_MODEL,
+	HOOK_CHOOSE_TEAM,
 	HOOK_COUNT
 };
 
@@ -1069,6 +1272,54 @@ void cslua_regamedll_install_hooks()
 
 	sync_hook(HOOK_GOT_WEAPON, s_hooks->CSGameRules_PlayerGotWeapon(), &hook_got_weapon,
 		g_events.any(CSLUA_EVENT_WEAPON_PICKUP));
+
+	sync_hook(HOOK_DISAPPEAR, s_hooks->CBasePlayer_Disappear(), &hook_disappear,
+		g_events.any(CSLUA_EVENT_PLAYER_DISAPPEAR));
+
+	sync_hook(HOOK_CAN_SWITCH_TEAM, s_hooks->CBasePlayer_CanSwitchTeam(), &hook_can_switch_team,
+		g_events.any(CSLUA_EVENT_PLAYER_CAN_SWITCH_TEAM));
+
+	sync_hook(HOOK_SHIELD_GIVE, s_hooks->CBasePlayer_GiveShield(), &hook_shield_give,
+		g_events.any(CSLUA_EVENT_PLAYER_SHIELD_GIVE));
+
+	sync_hook(HOOK_SHIELD_DROP, s_hooks->CBasePlayer_DropShield(), &hook_shield_drop,
+		g_events.any(CSLUA_EVENT_PLAYER_SHIELD_DROP));
+
+	sync_hook(HOOK_GIVE_C4, s_hooks->CSGameRules_GiveC4(), &hook_give_c4,
+		g_events.any(CSLUA_EVENT_BOMB_CARRIER));
+
+	sync_hook(HOOK_REMOVE_GUNS, s_hooks->CSGameRules_RemoveGuns(), &hook_remove_guns,
+		g_events.any(CSLUA_EVENT_ROUND_REMOVE_GUNS));
+
+	sync_hook(HOOK_DEAD_WEAPONS, s_hooks->CSGameRules_DeadPlayerWeapons(), &hook_dead_weapons,
+		g_events.any(CSLUA_EVENT_ROUND_DEAD_WEAPONS));
+
+	sync_hook(HOOK_OBSERVER_NEXT, s_hooks->CBasePlayer_Observer_FindNextPlayer(), &hook_observer_next,
+		g_events.any(CSLUA_EVENT_PLAYER_OBSERVER_NEXT));
+
+	sync_hook(HOOK_OBSERVER_MODE, s_hooks->CBasePlayer_Observer_SetMode(), &hook_observer_mode,
+		g_events.any(CSLUA_EVENT_PLAYER_OBSERVER_MODE));
+
+	sync_hook(HOOK_SCORE_ADD, s_hooks->CBasePlayer_AddPoints(), &hook_add_points,
+		g_events.any(CSLUA_EVENT_PLAYER_SCORE_ADD));
+
+	sync_hook(HOOK_TEAM_SCORE_ADD, s_hooks->CBasePlayer_AddPointsToTeam(), &hook_add_points_to_team,
+		g_events.any(CSLUA_EVENT_TEAM_SCORE_ADD));
+
+	sync_hook(HOOK_CLEANUP, s_hooks->CSGameRules_CleanUpMap(), &hook_cleanup_map,
+		g_events.any(CSLUA_EVENT_ROUND_CLEANUP));
+
+	sync_hook(HOOK_USERINFO_CHANGE, s_hooks->CSGameRules_ClientUserInfoChanged(), &hook_userinfo_changed,
+		g_events.any(CSLUA_EVENT_PLAYER_USERINFO_CHANGE));
+
+	sync_hook(HOOK_CAN_HEAR, s_hooks->CSGameRules_CanPlayerHearPlayer(), &hook_can_hear_player,
+		g_events.any(CSLUA_EVENT_PLAYER_CAN_HEAR));
+
+	sync_hook(HOOK_CHOOSE_MODEL, s_hooks->HandleMenu_ChooseAppearance(), &hook_choose_appearance,
+		g_events.any(CSLUA_EVENT_PLAYER_CHOOSE_MODEL));
+
+	sync_hook(HOOK_CHOOSE_TEAM, s_hooks->HandleMenu_ChooseTeam(), &hook_choose_team,
+		g_events.any(CSLUA_EVENT_PLAYER_CHOOSE_TEAM));
 }
 
 void cslua_regamedll_remove_hooks()
@@ -1120,6 +1371,22 @@ void cslua_regamedll_remove_hooks()
 	s_hooks->CBasePlayer_RemoveAllItems()->unregisterHook(&hook_strip_items);
 	s_hooks->CSGameRules_CanHavePlayerItem()->unregisterHook(&hook_can_have_item);
 	s_hooks->CSGameRules_PlayerGotWeapon()->unregisterHook(&hook_got_weapon);
+	s_hooks->CBasePlayer_Disappear()->unregisterHook(&hook_disappear);
+	s_hooks->CBasePlayer_CanSwitchTeam()->unregisterHook(&hook_can_switch_team);
+	s_hooks->CBasePlayer_GiveShield()->unregisterHook(&hook_shield_give);
+	s_hooks->CBasePlayer_DropShield()->unregisterHook(&hook_shield_drop);
+	s_hooks->CSGameRules_GiveC4()->unregisterHook(&hook_give_c4);
+	s_hooks->CSGameRules_RemoveGuns()->unregisterHook(&hook_remove_guns);
+	s_hooks->CSGameRules_DeadPlayerWeapons()->unregisterHook(&hook_dead_weapons);
+	s_hooks->CBasePlayer_Observer_FindNextPlayer()->unregisterHook(&hook_observer_next);
+	s_hooks->CBasePlayer_Observer_SetMode()->unregisterHook(&hook_observer_mode);
+	s_hooks->CBasePlayer_AddPoints()->unregisterHook(&hook_add_points);
+	s_hooks->CBasePlayer_AddPointsToTeam()->unregisterHook(&hook_add_points_to_team);
+	s_hooks->CSGameRules_CleanUpMap()->unregisterHook(&hook_cleanup_map);
+	s_hooks->CSGameRules_ClientUserInfoChanged()->unregisterHook(&hook_userinfo_changed);
+	s_hooks->CSGameRules_CanPlayerHearPlayer()->unregisterHook(&hook_can_hear_player);
+	s_hooks->HandleMenu_ChooseAppearance()->unregisterHook(&hook_choose_appearance);
+	s_hooks->HandleMenu_ChooseTeam()->unregisterHook(&hook_choose_team);
 
 	for (int i = 0; i < HOOK_COUNT; i++)
 		s_installed[i] = false;

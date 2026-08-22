@@ -64,6 +64,22 @@ enum CsLuaEvent
 	CSLUA_EVENT_PLAYER_STRIP,		// RemoveAllItems just ran
 	CSLUA_EVENT_PLAYER_CAN_HAVE_ITEM,	// pre: cancel to force "no" regardless of the game's own rules
 	CSLUA_EVENT_WEAPON_PICKUP,		// PlayerGotWeapon: picked a weapon up off the ground
+	CSLUA_EVENT_PLAYER_DISAPPEAR,		// Disappear: the player entity is being pulled from the world
+	CSLUA_EVENT_PLAYER_CAN_SWITCH_TEAM,	// pre: cancel to force "no" regardless of the game's own rules
+	CSLUA_EVENT_PLAYER_SHIELD_GIVE,	// GiveShield just ran
+	CSLUA_EVENT_PLAYER_SHIELD_DROP,	// DropShield just ran
+	CSLUA_EVENT_BOMB_CARRIER,		// GiveC4 just picked who carries the bomb
+	CSLUA_EVENT_ROUND_REMOVE_GUNS,	// RemoveGuns just ran
+	CSLUA_EVENT_ROUND_DEAD_WEAPONS,	// DeadPlayerWeapons: which drop mode to use, read/write
+	CSLUA_EVENT_PLAYER_OBSERVER_NEXT,	// Observer_FindNextPlayer just ran
+	CSLUA_EVENT_PLAYER_OBSERVER_MODE,	// Observer_SetMode just ran
+	CSLUA_EVENT_PLAYER_SCORE_ADD,		// pre: AddPoints; change or block the player's score
+	CSLUA_EVENT_TEAM_SCORE_ADD,		// pre: AddPointsToTeam; change or block the team's score
+	CSLUA_EVENT_ROUND_CLEANUP,		// CleanUpMap just ran
+	CSLUA_EVENT_PLAYER_USERINFO_CHANGE,	// ClientUserInfoChanged just ran
+	CSLUA_EVENT_PLAYER_CAN_HEAR,		// pre: CanPlayerHearPlayer; cancel to force "no"
+	CSLUA_EVENT_PLAYER_CHOOSE_MODEL,	// HandleMenu_ChooseAppearance just ran
+	CSLUA_EVENT_PLAYER_CHOOSE_TEAM,	// pre: HandleMenu_ChooseTeam; cancel to block the switch
 
 	CSLUA_EVENT_COUNT
 };
@@ -384,6 +400,84 @@ public:
 	// ground (the SDK's own comment: "each time a player picks up a weapon
 	// from the ground"), not a GiveNamedItem-style hand-over. Notify only.
 	void fire_weapon_pickup(int player, const char *weapon);
+
+	// Disappear just ran - the player entity is being pulled from the world.
+	// Notify only.
+	void fire_player_disappear(int player);
+
+	// CanSwitchTeam's pre-check: the player is asking to join team. Cancel to
+	// force "no" regardless of what the game's own rules would have said -
+	// this can only take away permission, never grant it.
+	bool fire_player_can_switch_team(int player, const char *team);
+
+	// GiveShield is about to hand the player a shield; deploy says whether
+	// it is drawn immediately. Notify only.
+	void fire_player_shield_give(int player, bool deploy);
+
+	// DropShield just ran; deploy carries the same meaning as
+	// fire_player_shield_give's. Notify only.
+	void fire_player_shield_drop(int player, bool deploy);
+
+	// GiveC4 just picked who carries the bomb this round. player is 0 if the
+	// game did not choose anyone. Notify only - this does not change who
+	// gets the bomb, only reports it.
+	void fire_bomb_carrier(int player);
+
+	// RemoveGuns is about to run - every player's guns are about to be
+	// stripped. Notify only, no fields.
+	void fire_round_remove_guns();
+
+	// DeadPlayerWeapons just decided what happens to a dead player's guns -
+	// mode is one of gamerules.h's GR_PLR_DROP_GUN_* values. Returns the
+	// (possibly changed) mode. Not cancellable - this picks between options
+	// rather than allowing or blocking anything.
+	int fire_round_dead_weapons(int player, int mode);
+
+	// Observer_FindNextPlayer is about to switch who this spectator is
+	// watching. reverse is the direction; target is a specific name to jump
+	// to, NULL/empty when none was given. Notify only.
+	void fire_player_observer_next(int player, bool reverse, const char *target);
+
+	// Observer_SetMode just ran - mode is one of pm_shared.h's OBS_*
+	// constants (OBS_CHASE_LOCKED=1, OBS_CHASE_FREE=2, OBS_ROAMING=3,
+	// OBS_IN_EYE=4, OBS_MAP_FREE=5, OBS_MAP_CHASE=6). Notify only.
+	void fire_player_observer_mode(int player, int mode);
+
+	// AddPoints is about to change a player's personal score. score and
+	// allow_negative come in holding what the game intended and are written
+	// back with whatever a handler left in e.score/e.allow_negative. Returns
+	// true if a handler cancelled: the caller must then skip AddPoints'
+	// own call entirely, so the score is untouched.
+	bool fire_player_score_add(int player, int &score, bool &allow_negative);
+
+	// Same contract as fire_player_score_add, for AddPointsToTeam. player is
+	// just who triggered the call, not who the points belong to - read
+	// e.player:team() for that.
+	bool fire_team_score_add(int player, int &score, bool &allow_negative);
+
+	// CleanUpMap is about to run - end-of-round world reset. Notify only, no
+	// fields.
+	void fire_round_cleanup();
+
+	// ClientUserInfoChanged just ran - some userinfo key changed. The raw
+	// buffer never reaches Lua; read a specific key with p:info(key).
+	// Notify only.
+	void fire_player_userinfo_change(int player);
+
+	// CanPlayerHearPlayer's pre-check: can listener hear speaker over voice.
+	// Cancel to force "no" regardless of what the game's own rules would
+	// have said - this can only take away permission, never grant it.
+	bool fire_player_can_hear(int listener, int speaker);
+
+	// HandleMenu_ChooseAppearance just ran - slot is the menu item picked,
+	// not a model name. Notify only.
+	void fire_player_choose_model(int player, int slot);
+
+	// HandleMenu_ChooseTeam is about to run the player's team pick - slot is
+	// the menu item, not a TeamName. Cancel to block the switch: the actual
+	// team change happens inside this call, so a pre-cancel prevents it
+	// entirely, same contract as fire_player_can_respawn.
+	bool fire_player_choose_team(int player, int slot);
 
 private:
 	struct Handler
