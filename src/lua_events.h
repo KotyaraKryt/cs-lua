@@ -350,13 +350,26 @@ public:
 	// real call and reports no health given.
 	float fire_player_heal(int player, float amount, int bits);
 
-	// FPlayerCanTakeDamage's pre-check: the game is about to decide whether
-	// victim may take damage from attacker at all - the low-level friendly-
-	// fire/immunity gate, ahead of fire_player_hurt and the only one of the
-	// two where attacker can be something other than a player (world, a
-	// trigger, falling debris - 0 in that case). Cancel to force "no": the
-	// caller then returns FALSE without ever asking the chain, and
-	// TakeDamage never runs for this hit at all.
+	// FPlayerCanTakeDamage's pre-check: the low-level friendly-fire/immunity
+	// gate, the only one of the damage events where attacker can be
+	// something other than a player (world, a trigger, falling debris - 0 in
+	// that case). Cancel to force "no" - but note what "no" means depends on
+	// which of the (up to two) real calls this is:
+	//
+	//   - From CBasePlayer::TraceAttack, only when the attacker is a player:
+	//     "no" here does NOT block the hit - it only turns off blood/punch
+	//     and the headshot multiplier for it. The damage still goes on to
+	//     TakeDamage.
+	//   - From CBasePlayer::TakeDamage, always: "no" here is the real
+	//     refusal (`return FALSE`) - UNLESS the damage is from a grenade, in
+	//     which case the engine ignores this check's result entirely and the
+	//     damage happens regardless of what a handler returns.
+	//
+	// So this can fire twice for one player-on-player hit (once from each
+	// call site above) and once for anything else (TakeDamage only, since
+	// TraceAttack's own call is guarded by "is the attacker a player").
+	// There is no way to force a "yes" the game's own rules would not have
+	// given - only to take permission away, and even that not always.
 	bool fire_player_can_take_damage(int victim, int attacker);
 
 	// BalanceTeams just moved one or more players to a different team to even

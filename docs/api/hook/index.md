@@ -64,7 +64,7 @@ end)
 | [`player:hurt_post`](gameplay.md#player_hurt_post) | Урон уже применён; только для наблюдателей |
 | [`player:hit`](gameplay.md#player_hit) | Один хитбокс получил попадание — раньше и точнее, чем `player:hurt`: до брони, до множителей, до суммирования дроби дробовика в одно число |
 | [`player:heal`](gameplay.md#player_heal) | Игроку вот-вот дадут здоровье — аптечка, админ-команда; своей регенерации в CS нет |
-| [`player:can_take_damage`](gameplay.md#player_can_take_damage) | Игра вот-вот решит, может ли жертва вообще получить урон от этого атакующего — самая ранняя точка, ещё до того, как известно, сколько урона |
+| [`player:can_take_damage`](gameplay.md#player_can_take_damage) | Низкоуровневый гейт «может ли жертва вообще получить урон от этого атакующего» — то, на чём стоит тимфрайр |
 | [`player:death`](gameplay.md#player_death) | Игрок погиб |
 | [`player:team_change`](gameplay.md#player_team_change) | Игрок сменил сторону |
 | [`player:jump`](gameplay.md#player_jump) | Игрок прыгнул |

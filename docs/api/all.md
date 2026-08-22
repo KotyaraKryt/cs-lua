@@ -39,7 +39,7 @@ description: "Плоский список всех функций и метод�
 | [`access.can`](access/read.md#can) | access | Есть ли у игрока право |
 | [`p:can`](players/access.md#can) | players | Есть ли у игрока право |
 | [`player:can_have_item`](hook/gameplay.md#player_can_have_item) | hook | Игра вот-вот решит, может ли игрок вообще получить этот предмет |
-| [`player:can_take_damage`](hook/gameplay.md#player_can_take_damage) | hook | Игра вот-вот решит, может ли жертва вообще получить урон от этого атакующего — самая ранняя точка, ещё до того, как известно, сколько урона |
+| [`player:can_take_damage`](hook/gameplay.md#player_can_take_damage) | hook | Низкоуровневый гейт «может ли жертва вообще получить урон от этого атакующего» — то, на чём стоит тимфрайр |
 | [`http.cancel`](http/index.md#cancel) | http | Отменяет запрос по id |
 | [`timer.cancel`](timer/anonymous.md#cancel) | timer | Снимает таймер по id |
 | [`p:center`](players/messages.md#center) | players | Показывает текст по центру экрана |

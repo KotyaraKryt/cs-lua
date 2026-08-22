@@ -741,19 +741,33 @@ static BOOL hook_can_respawn(IReGameHook_CSGameRules_FPlayerCanRespawn *chain, C
 	return chain->callNext(player);
 }
 
-// The friendly-fire/immunity gate, one level below fire_player_hurt: this
-// runs before TakeDamage is even asked, and attacker can be anything the
-// engine considers a damage source, not only a player (world, a trigger,
-// falling debris - resolved to slot 0 in that case).
+// The friendly-fire/immunity gate. attacker can be anything the engine
+// considers a damage source, not only a player (world, a trigger, falling
+// debris - resolved to slot 0 in that case).
+//
+// This single hook function sees every real call the engine makes to
+// FPlayerCanTakeDamage, and there are up to two of them per hit (verified
+// against ReGameDLL's own source, not just the SDK headers - nothing here is
+// guessed):
+//
+//   - CBasePlayer::TraceAttack calls it, but only when the attacker is a
+//     player, and "no" there does NOT stop the hit - it only turns off
+//     blood/punch and the headshot multiplier. Damage still proceeds.
+//   - CBasePlayer::TakeDamage calls it unconditionally, and "no" there is
+//     the real refusal (`return FALSE`, TakeDamage never applies anything) -
+//     UNLESS the damage is from a grenade, in which case ReGameDLL ignores
+//     this check's result outright and the damage happens regardless.
+//
+// So a script's handler can see this event twice for one player-on-player
+// hit, and cancelling it does nothing at all against a grenade. There is no
+// way to force a "yes" the game's own rules would not have given - only to
+// take permission away, and even that not always.
 static BOOL hook_can_take_damage(IReGameHook_CSGameRules_FPlayerCanTakeDamage *chain,
 	CBasePlayer *player, CBaseEntity *attacker)
 {
 	int vslot = (player && player->IsPlayer()) ? player->entindex() : 0;
 	int aslot = (attacker && attacker->IsPlayer()) ? attacker->entindex() : 0;
 
-	// Pre-check only: cancelling forces "no" without ever asking the game's
-	// own rules. There is no way to force a "yes" the game would not have
-	// given on its own - this can only take away permission, not grant it.
 	if (g_events.fire_player_can_take_damage(vslot, aslot))
 		return FALSE;
 
