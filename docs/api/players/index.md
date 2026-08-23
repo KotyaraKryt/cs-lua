@@ -47,6 +47,7 @@ p:health(p:health() + 25)
 
 |  |  |
 |---|---|
+| [`p:model`](state.md#model) | Моделька игрока |
 | [`p:health`](state.md#health) | Здоровье игрока |
 | [`p:armor`](state.md#armor) | Броня игрока |
 | [`p:frags`](state.md#frags) | Счётчик фрагов |

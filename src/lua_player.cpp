@@ -170,6 +170,21 @@ static int vector_field(lua_State *L, Vector &field)
 	return 0;
 }
 
+static int l_model(lua_State *L)
+{
+	int id = self_player_id(L);
+	entvars_t *pev = self_pev(L);
+
+	if (lua_isnoneornil(L, 2)) {
+		lua_pushstring(L, STRING(pev->model));
+		return 1;
+	}
+
+	edict_t *e = g_engfuncs.pfnPEntityOfEntIndex(id);
+	SET_MODEL(e, luaL_checkstring(L, 2));
+	return 0;
+}
+
 static int l_health(lua_State *L)
 {
 	return scalar_field(L, self_pev(L)->health);
@@ -1436,6 +1451,7 @@ static const luaL_Reg s_queries[] =
 	{ "connected", l_connected },
 
 	// entvars: no argument reads, an argument writes
+	{ "model",     l_model },
 	{ "health",    l_health },
 	{ "armor",     l_armor },
 	{ "frags",     l_frags },
