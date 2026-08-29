@@ -497,7 +497,7 @@ int l_query(lua_State *L)
 
 	if (top == 4 && lua_istable(L, 3)) {
 		// conn:query(sql, { value1, value2, ... }, fn)
-		given = (int)lua_rawlen(L, 3);
+		given = (int)lua_objlen(L, 3);
 
 		for (int i = 1; i <= given; i++) {
 			lua_rawgeti(L, 3, i);
