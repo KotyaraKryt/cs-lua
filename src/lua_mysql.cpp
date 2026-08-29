@@ -484,13 +484,7 @@ int l_query(lua_State *L)
 	int top = lua_gettop(L);
 	luaL_checktype(L, top, LUA_TFUNCTION);
 
-	int given = top - 3;			// args strictly between sql (2) and the callback (top)
-	if (given < 0)
-		given = 0;
-
 	int wanted = count_placeholders(sql);
-	if (given != wanted)
-		return luaL_error(L, "conn: query takes %d parameter(s), %d given", wanted, given);
 
 	Request req;
 	req.id = s_next_id++;
@@ -499,8 +493,35 @@ int l_query(lua_State *L)
 	req.generation = s_generation;
 	req.sql = sql;
 
-	for (int i = 3; i < top; i++)
-		req.params.push_back(to_param(L, i));
+	int given = 0;
+
+	if (top == 4 && lua_istable(L, 3)) {
+		// conn:query(sql, { value1, value2, ... }, fn)
+		given = (int)lua_rawlen(L, 3);
+
+		for (int i = 1; i <= given; i++) {
+			lua_rawgeti(L, 3, i);
+			req.params.push_back(to_param(L, -1));
+			lua_pop(L, 1);
+		}
+	} else {
+		// conn:query(sql, value1, value2, ..., fn)
+		given = top - 3;
+
+		if (given < 0)
+			given = 0;
+
+		for (int i = 3; i < top; i++)
+			req.params.push_back(to_param(L, i));
+	}
+
+	if (given != wanted)
+		return luaL_error(
+			L,
+			"conn: query takes %d parameter(s), %d given",
+			wanted,
+			given
+		);
 
 	lua_pushvalue(L, top);
 	req.callback = luaL_ref(L, LUA_REGISTRYINDEX);
@@ -511,10 +532,12 @@ int l_query(lua_State *L)
 		std::lock_guard<std::mutex> guard(s_inflight_lock);
 		s_inflight++;
 	}
+
 	{
 		std::lock_guard<std::mutex> guard(s_pending_lock);
 		s_pending.push_back(req);
 	}
+
 	s_wake.notify_one();
 
 	lua_pushinteger(L, req.id);
