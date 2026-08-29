@@ -4,6 +4,7 @@
 #include "lua_natives.h"
 #include "lua_player.h"
 #include "lua_timers.h"
+#include "lua_time.h"
 #include "lua_cvar.h"
 #include "lua_command.h"
 #include "lua_sound.h"
@@ -266,6 +267,7 @@ void LuaEngine::init()
 	cslua_register_natives(m_L);
 	cslua_register_hooks(m_L);
 	cslua_register_timers(m_L);
+	cslua_register_time(m_L);
 	cslua_player_init(m_L);
 	cslua_register_cvar(m_L);
 	cslua_register_command_api(m_L);

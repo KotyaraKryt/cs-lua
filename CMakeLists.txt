@@ -184,6 +184,7 @@ add_library(lua_mm SHARED
 	src/lua_message.cpp
 	src/lua_msg.cpp
 	src/lua_timers.cpp
+	src/lua_time.cpp
 	src/lua_cvar.cpp
 	src/lua_command.cpp
 	src/lua_sound.cpp
