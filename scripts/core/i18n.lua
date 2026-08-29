@@ -133,6 +133,70 @@ function lang.t(target, key, args)
 	return translate(owner(), target, key, args)
 end
 
+--------------------------------------------------------------------------
+-- plurals
+--------------------------------------------------------------------------
+
+-- Plural category resolvers, one per language family - not one per
+-- language, since ru/uk share the same CLDR categories (one/few/many).
+-- New languages register their own resolver instead of extending this
+-- table's logic: see lang.add_plural_rule below.
+local plural_rules = {}
+
+-- English: "one" only for exactly 1, "other" for everything else (0, 2, 3...).
+plural_rules.en = function(n)
+	return n == 1 and "one" or "other"
+end
+
+-- Russian and Ukrainian: same three CLDR categories (one/few/many).
+-- 1, 21, 31... -> one | 2-4, 22-24... -> few | 0, 5-20, 25-30... -> many.
+local function slavic_plural(n)
+	n = math.abs(n) % 100
+	local n1 = n % 10
+
+	if n1 == 1 and n ~= 11 then return "one" end
+	if n1 >= 2 and n1 <= 4 and (n < 10 or n >= 20) then return "few" end
+	return "many"
+end
+
+plural_rules.ru = slavic_plural
+plural_rules.uk = slavic_plural
+
+-- lang.add_plural_rule(code, fn) - register a category resolver for a
+-- language not covered above. fn(n) returns the category name that
+-- lang.plural then looks up in the caller's forms table for that code.
+function lang.add_plural_rule(code, fn)
+	assert(type(fn) == "function", "lang.add_plural_rule: expected a function(n) -> category")
+	plural_rules[code] = fn
+end
+
+-- lang.plural(target, n, forms) -> "n <word>" in the right form for
+-- target's language.
+--
+--   lang.plural(p, days, {
+--     en = { one = "day",   other = "days" },
+--     ru = { one = "день",  few = "дня",  many = "дней" },
+--     uk = { one = "день",  few = "дні",  many = "днів" },
+--   })
+--
+-- Missing forms for the resolved language fall back to "en", same as
+-- lang.t() falls back for a missing key.
+function lang.plural(target, n, forms)
+	assert(type(forms) == "table", "lang.plural: expected a forms table")
+
+	local code = lang.of(target)
+	local rule = plural_rules[code] or plural_rules.en
+	local set = forms[code] or forms.en
+	if not set then
+		return tostring(n)
+	end
+
+	local category = rule(n)
+	local word = set[category] or set.other or set.many or set.few or set.one
+
+	return n .. " " .. tostring(word)
+end
+
 -- lang.bind() -> a t(target, key[, args]) closure that remembers who called
 -- it, captured right now rather than re-read on every call. Call this once
 -- at the top of a file (manifest.lua or init.lua, outside any callback) and
