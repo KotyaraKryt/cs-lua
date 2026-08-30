@@ -55,6 +55,17 @@ const char *Players::authid(int id) const
 	return valid(id) ? m_players[id].authid.c_str() : "";
 }
 
+void Players::set_drop_reason(int id, const char *reason)
+{
+	if (valid(id))
+		m_players[id].drop_reason = reason ? reason : "";
+}
+
+const char *Players::drop_reason(int id) const
+{
+	return valid(id) ? m_players[id].drop_reason.c_str() : "";
+}
+
 bool Players::authid_pending(int id) const
 {
 	return valid(id) && m_players[id].connected && !m_players[id].authorized;

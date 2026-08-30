@@ -784,12 +784,17 @@ bool LuaEvents::fire_client_connect(int id, const char *name, const char *ip, Re
 		});
 }
 
-void LuaEvents::fire_client_disconnect(int id, const char *name)
+void LuaEvents::fire_client_disconnect(int id, const char *name, const char *reason, bool forced)
 {
 	std::string nm = name ? name : "";
+	// Empty on a stock (non-ReHLDS) HLDS - see Players::drop_reason.
+	std::string why = reason ? reason : "";
 	notify(CSLUA_EVENT_CLIENT_DISCONNECT, [=](lua_State *L) {
 		set_player(L, id, "player");
 		set_string(L, nm, "name");
+		set_string(L, why, "reason");
+		lua_pushboolean(L, forced);
+		lua_setfield(L, -2, "forced");
 	});
 }
 

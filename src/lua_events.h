@@ -174,7 +174,11 @@ public:
 
 	// Returns true if a handler rejected the connection; reason is filled in.
 	bool fire_client_connect(int id, const char *name, const char *ip, RejectInfo &reject);
-	void fire_client_disconnect(int id, const char *name);
+
+	// forced is true when this is the synthesized disconnect from a
+	// ClientConnect rejection (dllapi.cpp) rather than a real engine
+	// ClientDisconnect - see e.forced in docs/api/hook/connection.md.
+	void fire_client_disconnect(int id, const char *name, const char *reason, bool forced);
 
 	// Fires once per client, the moment Steam stops answering
 	// STEAM_ID_PENDING. Anything keyed on the steamid (access rights, stats)

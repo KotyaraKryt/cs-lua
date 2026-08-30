@@ -474,12 +474,19 @@ static bool mentions_overflow(const char *reason)
 
 static void hook_drop_client(IRehldsHook_SV_DropClient *chain, IGameClient *client, bool crash, const char *reason)
 {
-	if (client && mentions_overflow(reason)) {
+	if (client) {
 		edict_t *ed = client->GetEdict();
 		if (ed) {
 			int id = g_engfuncs.pfnIndexOfEdict(ed);
-			if (valid(id))
-				dump_slot(id, ed, reason);
+			if (valid(id)) {
+				// Stashed for dllapi.cpp's ClientDisconnect, which fires
+				// downstream of this same drop but never receives the reason
+				// itself - see Players::set_drop_reason for why it has to
+				// travel through the player cache instead of a parameter.
+				g_players.set_drop_reason(id, reason);
+				if (mentions_overflow(reason))
+					dump_slot(id, ed, reason);
+			}
 		}
 	}
 	chain->callNext(client, crash, reason);

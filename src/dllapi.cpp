@@ -117,7 +117,13 @@ static qboolean ClientConnect(edict_t *pEntity, const char *pszName, const char 
 		strncpy(szRejectReason, reject.reason, 127);
 		szRejectReason[127] = '\0';
 
-		// The engine won't call ClientDisconnect for a refused client.
+		// The engine won't call ClientDisconnect for a refused client - from
+		// a listener's point of view the player still "left" though, so
+		// client:disconnect fires here instead of leaving this case silent.
+		// The reason is always known (it's what we just told the engine to
+		// show the player), unlike the ClientDisconnect path below where it
+		// depends on ReHLDS.
+		g_events.fire_client_disconnect(id, pszName, reject.reason, true);
 		g_players.on_disconnect(id);
 		RETURN_META_VALUE(MRES_SUPERCEDE, FALSE);
 	}
@@ -216,7 +222,7 @@ static void ClientDisconnect(edict_t *pEntity)
 	int id = g_engfuncs.pfnIndexOfEdict(pEntity);
 
 	if (g_players.is_connected(id))
-		g_events.fire_client_disconnect(id, g_players.name(id));
+		g_events.fire_client_disconnect(id, g_players.name(id), g_players.drop_reason(id), false);
 
 	g_players.on_disconnect(id);
 	cslua_menu_reset(id);

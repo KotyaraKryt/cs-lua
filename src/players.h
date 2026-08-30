@@ -16,6 +16,20 @@ public:
 	const char *ip(int id) const;
 	const char *authid(int id) const;
 
+	// The engine's own drop reason, set from the ReHLDS SV_DropClient
+	// hookchain (cslua_netwatch.cpp) *before* ClientDisconnect fires -
+	// SV_DropClient is what actually decides and formats the reason text;
+	// ClientDisconnect downstream never receives it. Stored here rather than
+	// passed as a parameter because on_disconnect() below clears the whole
+	// Info before dllapi.cpp's ClientDisconnect gets a chance to read it, so
+	// the reason has to survive from one call to the other some other way.
+	// Empty string ("") when there was no ReHLDS around to report one - a
+	// stock HLDS, or a disconnect that did not go through SV_DropClient at
+	// all (rare, but the fallback here matches on_connect's own style: never
+	// null, just possibly empty).
+	void set_drop_reason(int id, const char *reason);
+	const char *drop_reason(int id) const;
+
 	// The authid taken at ClientConnect is often still STEAM_ID_PENDING: Steam
 	// answers a moment later. Anything keyed on the steamid has to wait for
 	// that, which is what these two are for - see the poll in dllapi.cpp.
@@ -66,6 +80,7 @@ private:
 		std::string name;
 		std::string ip;
 		std::string authid;
+		std::string drop_reason;
 		bool suppress_attack = false;
 		bool suppress_move = false;
 		bool suppress_drop = false;
