@@ -14,6 +14,9 @@
 static int s_player_ref[CSLUA_MAXPLAYERS];
 static int s_all_ref = LUA_NOREF;
 
+// Cache last valid ping to avoid stale zero values.
+static int s_last_ping[CSLUA_MAXPLAYERS];
+
 // The shared __index table behind every player object. Kept so Lua can add
 // methods to it - see players.method() below.
 static int s_methods_ref = LUA_NOREF;
@@ -123,6 +126,40 @@ static int l_connected(lua_State *L)
 {
 	lua_pushboolean(L, g_players.is_connected(self_player_id(L)));
 	return 1;
+}
+
+static int l_ping(lua_State *L)
+{
+	int id = self_player_id(L);
+
+	if (!g_players.is_connected(id)) {
+		lua_pushinteger(L, -1);
+		return 1;
+	}
+
+	edict_t *e = g_engfuncs.pfnPEntityOfEntIndex(id);
+	if (!e || e->free) {
+		lua_pushinteger(L, -1);
+		return 1;
+	}
+
+	int ping = 0;
+	int loss = 0;
+	g_engfuncs.pfnGetPlayerStats(e, &ping, &loss);
+
+	// A genuine 0ms ping on a real network connection is not realistic -
+	// treat it as a stale read and fall back to the last value we trusted.
+	if (ping > 0)
+		s_last_ping[id] = ping;
+
+	lua_pushinteger(L, s_last_ping[id]);
+	return 1;
+}
+
+void cslua_player_reset_ping(int id)
+{
+	if (id >= 0 && id < CSLUA_MAXPLAYERS)
+		s_last_ping[id] = 0;
 }
 
 // Everything below reads and writes entvars_t directly through the edict, so
@@ -1449,6 +1486,7 @@ static const luaL_Reg s_queries[] =
 	{ "info",      l_info },
 	{ "userid",    l_userid },
 	{ "connected", l_connected },
+	{ "ping",      l_ping },
 
 	// entvars: no argument reads, an argument writes
 	{ "model",     l_model },

@@ -28,3 +28,5 @@ int cslua_sv_hull_free(lua_State *L);
 // arbitrary points rather than a player's eyes but want the same result
 // shape. `start` is only needed to compute distance.
 void cslua_push_trace_result(lua_State *L, const TraceResult &tr, const Vector &start);
+
+void cslua_player_reset_ping(int id);

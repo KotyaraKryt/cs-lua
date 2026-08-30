@@ -796,6 +796,8 @@ void LuaEvents::fire_client_disconnect(int id, const char *name, const char *rea
 		lua_pushboolean(L, forced);
 		lua_setfield(L, -2, "forced");
 	});
+
+	cslua_player_reset_ping(id);
 }
 
 void LuaEvents::fire_player_authorized(int id, const char *authid)
