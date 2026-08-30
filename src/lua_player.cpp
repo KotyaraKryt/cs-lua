@@ -16,6 +16,7 @@ static int s_all_ref = LUA_NOREF;
 
 // Cache last valid ping to avoid stale zero values.
 static int s_last_ping[CSLUA_MAXPLAYERS];
+static float s_next_ping_poll = 0.0f;
 
 // The shared __index table behind every player object. Kept so Lua can add
 // methods to it - see players.method() below.
@@ -137,23 +138,43 @@ static int l_ping(lua_State *L)
 		return 1;
 	}
 
-	edict_t *e = g_engfuncs.pfnPEntityOfEntIndex(id);
-	if (!e || e->free) {
-		lua_pushinteger(L, -1);
-		return 1;
-	}
-
-	int ping = 0;
-	int loss = 0;
-	g_engfuncs.pfnGetPlayerStats(e, &ping, &loss);
-
-	// A genuine 0ms ping on a real network connection is not realistic -
-	// treat it as a stale read and fall back to the last value we trusted.
-	if (ping > 0)
-		s_last_ping[id] = ping;
-
 	lua_pushinteger(L, s_last_ping[id]);
 	return 1;
+}
+
+// Restarts with the map's clock, same as poll_authorization/poll_team_change -
+// otherwise the deadline left over from the previous map sits in the future
+// for as long as that map runs.
+void cslua_reset_ping_poll()
+{
+	s_next_ping_poll = 0.0f;
+}
+
+// Samples pfnGetPlayerStats on our own steady clock rather than whenever a
+// script happens to call p:ping(). The engine only refreshes a client's
+// netchan stats periodically; reading it on an arbitrary Lua-driven frame
+// means sometimes landing between refreshes, which is what produced the
+// intermittent zeroes. Sampling here, once a second, and caching the result
+// is what l_ping() then just reads back.
+void cslua_poll_ping()
+{
+	if (gpGlobals->time < s_next_ping_poll)
+		return;
+	s_next_ping_poll = gpGlobals->time + 1.0f;
+
+	for (int id = 1; id < CSLUA_MAXPLAYERS; id++) {
+		if (!g_players.is_connected(id))
+			continue;
+
+		edict_t *e = g_engfuncs.pfnPEntityOfEntIndex(id);
+		if (!e || e->free)
+			continue;
+
+		int ping = 0, loss = 0;
+		g_engfuncs.pfnGetPlayerStats(e, &ping, &loss);
+		if (ping > 0)
+			s_last_ping[id] = ping;
+	}
 }
 
 void cslua_player_reset_ping(int id)

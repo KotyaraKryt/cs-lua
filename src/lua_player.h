@@ -29,4 +29,7 @@ int cslua_sv_hull_free(lua_State *L);
 // shape. `start` is only needed to compute distance.
 void cslua_push_trace_result(lua_State *L, const TraceResult &tr, const Vector &start);
 
+void cslua_poll_ping();
+void cslua_reset_ping_poll();
+
 void cslua_player_reset_ping(int id);
