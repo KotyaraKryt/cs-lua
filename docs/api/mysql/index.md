@@ -29,6 +29,11 @@ site:query("SELECT id, shilings FROM users WHERE steam_id = ?", p:steamid(),
 Вызов `:query`/`:exec` ничего не ждёт: он возвращается сразу с id, кадр идёт
 дальше, коллбэк приходит когда придёт.
 
+Опциональные хелперы `find` / `create` / `update` / `delete` собирают
+безопасный SQL сами: имена таблиц и колонок — только `[A-Za-z0-9_]`,
+значения идут через `?`. Для JOIN, подзапросов и сложного WHERE остаётся
+сырой `:query` / `:exec`. Миграции схемы — `conn:migrate`.
+
 `mysql.connect` тоже не ждёт: соединение открывается лениво, на рабочем
 потоке, при первом запросе — сам вызов `connect` кадр не блокирует и связку
 не проверяет.
@@ -76,6 +81,7 @@ site:query("SELECT id, shilings FROM users WHERE steam_id = ?", p:steamid(),
 | `res.affected_rows` | number | сколько строк изменил `INSERT`/`UPDATE`/`DELETE` |
 | `res.insert_id` | number | `LAST_INSERT_ID()` после `INSERT` |
 | `res.error` | string \| nil | причина, если `ok` — `false` |
+| `res.applied` | table \| nil | только у `conn:migrate`: id миграций, применённых в этом вызове |
 
 Строка в `res.rows` — таблица с ключами по именам колонок; `NULL` приходит
 как отсутствующий ключ, ровно как в `db`. Тип колонки в SQL решает, придёт
@@ -99,7 +105,8 @@ site:query("SELECT id, shilings FROM users WHERE steam_id = ?", p:steamid(),
 
 ## Обрыв связи
 
-Ошибка запроса закрывает соединение изнутри; следующий вызов `:query`/`:exec`
+Ошибка запроса закрывает соединение изнутри; следующий вызов
+`:query`/`:exec`/`:find`/`:create`/`:update`/`:delete`/`:migrate`
 на этом же объекте переподключается заново сам, без явного `:connect()`.
 Платится это одним лишним переподключением и на обычную опечатку в SQL —
 дёшево по сравнению с тем, чтобы намертво зависнуть на упавшем сайте.
@@ -124,4 +131,9 @@ site:query("SELECT id, shilings FROM users WHERE steam_id = ?", p:steamid(),
 |---|---|
 | [`conn:query`](connection.md#query) | Выполняет запрос и отдаёт строки в коллбэк |
 | [`conn:exec`](connection.md#exec) | То же самое, что conn:query — имя удобнее для запросов без строк |
+| [`conn:find`](connection.md#find) | SELECT по таблице: where / select / order / limit |
+| [`conn:create`](connection.md#create) | INSERT одной строки из таблицы полей |
+| [`conn:update`](connection.md#update) | UPDATE: set + where |
+| [`conn:delete`](connection.md#delete) | DELETE: where |
+| [`conn:migrate`](connection.md#migrate) | Последовательные миграции (SQL или файл в data_dir) |
 | [`conn:close`](connection.md#close) | Закрывает соединение |

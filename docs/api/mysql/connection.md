@@ -167,6 +167,270 @@ site:exec("UPDATE users SET shilings = shilings + ? WHERE id = ?", delta, id,
     end)
 ```
 
+
+## conn:find {#find}
+
+SELECT по одной таблице. Собирает запрос сам; значения в `where` идут через `?`.
+
+```lua
+conn:find(table, opts, fn)
+```
+
+### Аргументы
+
+| # | имя | тип |  |
+|---|---|---|---|
+| 1 | `table` | string | имя таблицы (`[A-Za-z0-9_]+`) |
+| 2 | `opts` | table | см. ниже |
+| 3 | `fn` | function | тот же объект ответа, что у `query` |
+
+### opts
+
+| поле | тип |  |
+|---|---|---|
+| `where` | table \| nil | `{ col = value, ... }` — только равенства, соединяются через `AND` |
+| `select` | table \| nil | список имён колонок; нет или пусто — `*` |
+| `order` | table \| nil | строки `"col"` или `"col ASC"` / `"col DESC"` |
+| `limit` | number \| nil | `LIMIT n` |
+| `offset` | number \| nil | `OFFSET n` |
+
+### Возвращает
+
+| тип |  |
+|---|---|
+| `number` | id запроса |
+
+### Пример
+
+```lua
+site:find("users", {
+    where  = { steam_id = p:steamid() },
+    select = { "id", "shilings" },
+    limit  = 1,
+}, function(res)
+    if not res.ok then return print(res.error) end
+    local row = res.rows[1]
+    if row then print(row.shilings) end
+end)
+```
+
+---
+
+## conn:create {#create}
+
+INSERT одной строки. Ключи таблицы — имена колонок, значения — через `?`.
+
+```lua
+conn:create(table, data, fn)
+```
+
+### Аргументы
+
+| # | имя | тип |  |
+|---|---|---|---|
+| 1 | `table` | string | имя таблицы |
+| 2 | `data` | table | `{ col = value, ... }`, не пустая |
+| 3 | `fn` | function | объект ответа (`insert_id`, `affected_rows`) |
+
+### Возвращает
+
+| тип |  |
+|---|---|
+| `number` | id запроса |
+
+### Пример
+
+```lua
+site:create("users", {
+    steam_id = steamid,
+    name     = name,
+    shilings = 0,
+}, function(res)
+    if res.ok then print("id", res.insert_id) end
+end)
+```
+
+---
+
+## conn:update {#update}
+
+UPDATE: обязательны и `set`, и `where` (оба непустые).
+
+```lua
+conn:update(table, opts, fn)
+```
+
+### Аргументы
+
+| # | имя | тип |  |
+|---|---|---|---|
+| 1 | `table` | string | имя таблицы |
+| 2 | `opts` | table | `set` + `where` |
+| 3 | `fn` | function | объект ответа |
+
+### opts
+
+| поле | тип |  |
+|---|---|---|
+| `set` | table | `{ col = value, ... }` |
+| `where` | table | `{ col = value, ... }` — только `AND` равенств |
+
+### Возвращает
+
+| тип |  |
+|---|---|
+| `number` | id запроса |
+
+### Пример
+
+```lua
+site:update("users", {
+    set   = { shilings = 100 },
+    where = { id = 42 },
+}, function(res)
+    if res.ok then print(res.affected_rows) end
+end)
+```
+
+---
+
+## conn:delete {#delete}
+
+DELETE. `where` обязателен и непустой (защита от «удалить всё»).
+
+```lua
+conn:delete(table, opts, fn)
+```
+
+### Аргументы
+
+| # | имя | тип |  |
+|---|---|---|---|
+| 1 | `table` | string | имя таблицы |
+| 2 | `opts` | table | `where` |
+| 3 | `fn` | function | объект ответа |
+
+### opts
+
+| поле | тип |  |
+|---|---|---|
+| `where` | table | `{ col = value, ... }` |
+
+### Возвращает
+
+| тип |  |
+|---|---|
+| `number` | id запроса |
+
+### Пример
+
+```lua
+site:delete("users", { where = { id = 42 } }, function(res)
+    if res.ok then print(res.affected_rows) end
+end)
+```
+
+---
+
+## conn:migrate {#migrate}
+
+Прогоняет миграции **последовательно** на этом соединении (под одним
+`use_lock`). Уже применённые id пропускаются. Книга учёта —
+
+```sql
+_cslua_migrations (id VARCHAR(128) PRIMARY KEY, applied_at TIMESTAMP)
+```
+
+создаётся сама при первом вызове.
+
+```lua
+conn:migrate(opts, fn)
+```
+
+### Аргументы
+
+| # | имя | тип |  |
+|---|---|---|---|
+| 1 | `opts` | table | `migrations` и/или `files` |
+| 2 | `fn` | function | объект ответа + `res.applied` |
+
+### opts
+
+**`migrations`** — массив шагов:
+
+| поле шага | тип |  |
+|---|---|---|
+| `id` | string | уникальный id (`[A-Za-z0-9_.-]+`, до 128) |
+| `sql` | string \| nil | текст SQL |
+| `file` | string \| nil | имя файла в `plugin.data_dir()` (те же правила, что у `file.read`) |
+
+Нужен `sql` **или** `file`.
+
+**`files`** — массив имён файлов; id миграции = имя файла целиком
+(`001_init.sql`).
+
+Можно передать оба списка: сначала `migrations`, потом `files`.
+
+### Возвращает
+
+| тип |  |
+|---|---|
+| `number` | id запроса |
+
+### Ответ
+
+Как у `query`, плюс:
+
+| поле | тип |  |
+|---|---|---|
+| `res.applied` | table | id, которые реально выполнились в этом вызове (пустой, если всё уже было) |
+
+### Пример
+
+```lua
+site:migrate({
+    migrations = {
+        {
+            id = "001_users",
+            sql = [[
+                CREATE TABLE IF NOT EXISTS users (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    steam_id VARCHAR(32) NOT NULL UNIQUE,
+                    shilings INT NOT NULL DEFAULT 0
+                )
+            ]],
+        },
+        { id = "002_name", file = "002_name.sql" },
+    },
+}, function(res)
+    if not res.ok then return print(res.error) end
+    for _, id in ipairs(res.applied or {}) do
+        print("applied", id)
+    end
+end)
+```
+
+```lua
+-- только файлы из data_dir плагина
+site:migrate({
+    files = { "001_init.sql", "002_vip.sql" },
+}, function(res)
+    if not res.ok then return print(res.error) end
+end)
+```
+
+<Warning>
+Файлы читаются только из каталога плагина (песочница `file.*`): без `../`,
+без подпапок. SQL из файла выполняется как есть — это код плагина.
+</Warning>
+
+<Note>
+Повторный вызов с тем же `id` ничего не делает. Новый шаг — новый `id`.
+Весь batch одной миграции идёт строго по очереди; параллелить шаги нельзя.
+</Note>
+
+---
+
 ## conn:close {#close}
 
 Закрывает соединение.

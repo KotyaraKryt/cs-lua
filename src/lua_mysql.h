@@ -33,6 +33,24 @@
 // A connection is a handle object (id + metatable, like db.open()), but the
 // real TCP connect happens lazily on a worker the first time something is
 // queried on it - mysql.connect() itself never blocks the frame.
+//
+// Optional helpers (same async + callback shape as query/exec):
+//
+//   conn:find("users", { where = { steam_id = id }, limit = 1 }, cb)
+//   conn:create("users", { steam_id = id, name = "x" }, cb)
+//   conn:update("users", { where = { id = 1 }, set = { name = "y" } }, cb)
+//   conn:delete("users", { where = { id = 1 } }, cb)
+//
+// Migrations (sequential, one connection lock for the whole batch):
+//
+//   conn:migrate({
+//     migrations = {
+//       { id = "001_init", sql = "CREATE TABLE ..." },
+//       { id = "002_col",  file = "002_col.sql" },  -- plugin data dir only
+//     },
+//   }, cb)
+//
+// res.applied is the list of migration ids that ran in this call.
 
 void cslua_register_mysql(lua_State *L);
 
