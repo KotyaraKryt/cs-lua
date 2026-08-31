@@ -29,7 +29,7 @@ int cslua_sv_hull_free(lua_State *L);
 // shape. `start` is only needed to compute distance.
 void cslua_push_trace_result(lua_State *L, const TraceResult &tr, const Vector &start);
 
-void cslua_poll_ping();
-void cslua_reset_ping_poll();
-
+// Resets the fallback "last known good" ping/loss cache for a slot -
+// called on disconnect so a reused slot doesn't briefly report the
+// previous occupant's numbers before its own first sample lands.
 void cslua_player_reset_ping(int id);

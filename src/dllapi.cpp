@@ -75,7 +75,6 @@ static void ServerActivate(edict_t *pEdictList, int edictCount, int clientMax)
 	cslua_timers_rebase();
 	cslua_reset_auth_poll();
 	cslua_reset_team_cache();
-	cslua_reset_ping_poll();
 
 	for (int id = 1; id < CSLUA_MAXPLAYERS; id++)
 		cslua_menu_reset(id);
@@ -381,7 +380,6 @@ static void StartFrame()
 
 	poll_authorization();
 	poll_team_change();
-	cslua_poll_ping();
 	cslua_timers_run();
 
 	// Replies land on the game thread, next to the timers.

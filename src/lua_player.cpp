@@ -14,9 +14,14 @@
 static int s_player_ref[CSLUA_MAXPLAYERS];
 static int s_all_ref = LUA_NOREF;
 
-// Cache last valid ping to avoid stale zero values.
+// pfnGetPlayerStats reads client_t->latency, which the engine recomputes
+// every server frame from its own frame_latency[] ring buffer - so this is
+// already live, not something we need to sample on a timer. The only gap is
+// the couple of frames right after connect, before that buffer has any real
+// samples in it, when the engine can hand back 0. This cache exists only to
+// paper over *that* window - it holds the last non-zero reading, nothing else.
 static int s_last_ping[CSLUA_MAXPLAYERS];
-static float s_next_ping_poll = 0.0f;
+static int s_last_loss[CSLUA_MAXPLAYERS];
 
 // The shared __index table behind every player object. Kept so Lua can add
 // methods to it - see players.method() below.
@@ -129,6 +134,14 @@ static int l_connected(lua_State *L)
 	return 1;
 }
 
+// p:ping() -> ms [, loss_pct]
+//
+// Read fresh on every call, not sampled on a timer: client_t->latency is
+// already kept current by the engine's own SV_CalcPing, once per server
+// frame, whether or not any Lua script is asking for it. A zero here means
+// "no samples yet" (right after connect) rather than "currently 0ms", so a
+// zero reading falls back to the last non-zero one instead of being
+// reported as-is.
 static int l_ping(lua_State *L)
 {
 	int id = self_player_id(L);
@@ -138,49 +151,27 @@ static int l_ping(lua_State *L)
 		return 1;
 	}
 
-	lua_pushinteger(L, s_last_ping[id]);
-	return 1;
-}
-
-// Restarts with the map's clock, same as poll_authorization/poll_team_change -
-// otherwise the deadline left over from the previous map sits in the future
-// for as long as that map runs.
-void cslua_reset_ping_poll()
-{
-	s_next_ping_poll = 0.0f;
-}
-
-// Samples pfnGetPlayerStats on our own steady clock rather than whenever a
-// script happens to call p:ping(). The engine only refreshes a client's
-// netchan stats periodically; reading it on an arbitrary Lua-driven frame
-// means sometimes landing between refreshes, which is what produced the
-// intermittent zeroes. Sampling here, once a second, and caching the result
-// is what l_ping() then just reads back.
-void cslua_poll_ping()
-{
-	if (gpGlobals->time < s_next_ping_poll)
-		return;
-	s_next_ping_poll = gpGlobals->time + 1.0f;
-
-	for (int id = 1; id < CSLUA_MAXPLAYERS; id++) {
-		if (!g_players.is_connected(id))
-			continue;
-
-		edict_t *e = g_engfuncs.pfnPEntityOfEntIndex(id);
-		if (!e || e->free)
-			continue;
-
+	edict_t *e = g_engfuncs.pfnPEntityOfEntIndex(id);
+	if (e && !e->free) {
 		int ping = 0, loss = 0;
 		g_engfuncs.pfnGetPlayerStats(e, &ping, &loss);
-		if (ping > 0)
+		if (ping > 0) {
 			s_last_ping[id] = ping;
+			s_last_loss[id] = loss;
+		}
 	}
+
+	lua_pushinteger(L, s_last_ping[id]);
+	lua_pushinteger(L, s_last_loss[id]);
+	return 2;
 }
 
 void cslua_player_reset_ping(int id)
 {
-	if (id >= 0 && id < CSLUA_MAXPLAYERS)
+	if (id >= 0 && id < CSLUA_MAXPLAYERS) {
 		s_last_ping[id] = 0;
+		s_last_loss[id] = 0;
+	}
 }
 
 // Everything below reads and writes entvars_t directly through the edict, so
