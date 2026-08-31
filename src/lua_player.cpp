@@ -1417,9 +1417,10 @@ static int l_play_sound(lua_State *L)
 	const char *sample = luaL_checkstring(L, 2);
 
 	float volume = VOL_NORM;
-	float attenuation = ATTN_NORM;
+	float attenuation = ATTN_NONE;
 	int channel = CHAN_AUTO;
 	int pitch = PITCH_NORM;
+	bool priv = false;
 
 	if (!lua_isnoneornil(L, 3)) {
 		luaL_checktype(L, 3, LUA_TTABLE);
@@ -1439,6 +1440,15 @@ static int l_play_sound(lua_State *L)
 		lua_getfield(L, 3, "pitch");
 		if (lua_isnumber(L, -1)) pitch = (int)lua_tointeger(L, -1);
 		lua_pop(L, 1);
+
+		lua_getfield(L, 3, "private");
+		priv = lua_toboolean(L, -1) != 0;
+		lua_pop(L, 1);
+	}
+
+	if (priv) {
+		cslua_play_sound_private(id, sample);
+		return 0;
 	}
 
 	cslua_play_sound(id, sample, channel, volume, attenuation, pitch);

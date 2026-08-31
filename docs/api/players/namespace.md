@@ -51,6 +51,9 @@ players.list([filter])
 |---|---|---|
 | `alive` | boolean | только живые или только мёртвые |
 | `team` | string | `CT`, `T`, `SPEC` |
+| `bot` | boolean | серверные боты (`FL_FAKECLIENT`) или только люди |
+| `hltv` | boolean | HLTV-прокси (`FL_PROXY`) или без них |
+| `name` | string | подстрока ника, регистр не важен |
 
 ### Пример
 
@@ -58,12 +61,29 @@ players.list([filter])
 for _, p in ipairs(players.list{ alive = true, team = "CT" }) do
 	p:chat("живой контр")
 end
+
+-- люди, не боты, с «kot» в нике
+for _, p in ipairs(players.list{ bot = false, name = "kot" }) do
+	print(p:name())
+end
 ```
 
 <Warning>
-Фильтры читают живое CS-состояние и требуют ReGameDLL.
-Без фильтра метод работает и на ванильном `mp.dll`.
+`alive` и `team` читают живое CS-состояние и требуют ReGameDLL.
+`bot`, `hltv` и `name` работают и на ванильном `mp.dll`.
+Без любого фильтра метод работает везде.
 </Warning>
+
+Права и группы (`p:can`, `p:group`) живут в core-слое, не в native.
+Их удобнее дописать в Lua:
+
+```lua
+for _, p in ipairs(players.list{ alive = true }) do
+	if p:can("admin.slay") and not p:group("vip") then
+		-- ...
+	end
+end
+```
 
 ## players.find {#find}
 

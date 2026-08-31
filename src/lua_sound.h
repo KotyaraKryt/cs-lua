@@ -30,6 +30,13 @@ void cslua_sound_set_window(bool open);
 void cslua_play_sound(int id, const char *sample, int channel, float volume,
 	float attenuation, int pitch);
 
+// Plays a sound locally on one client only, via the client's own "spk"
+// console command - no EMIT_SOUND, no PAS, no attenuation, nobody standing
+// next to this player hears it. Only valid for a specific player slot (id
+// must be > 0); the sound still needs to be precached via res.sound() like
+// any other sample.
+void cslua_play_sound_private(int id, const char *sample);
+
 // For the lua_precache report: how full each table is, and how much of it we
 // registered ourselves. used is -1 before anything has been precached.
 int cslua_precache_used(bool models);
