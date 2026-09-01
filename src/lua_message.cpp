@@ -5,25 +5,20 @@
 #include <string.h>
 #include <vector>
 
-// Spelled out rather than pulled from the SDK: dlls/util.h and common/hltv.h
-// drag in the whole CBaseEntity hierarchy for three integers.
+// Spelled out rather than pulled from the SDK: the dlls headers drag in the
+// whole CBaseEntity hierarchy for three integers.
 #define SVC_TEMPENTITY		23
 #define SVC_DIRECTOR		51
 #define DRC_CMD_MESSAGE		6
 
-// Same reason, from dlls/gamerules.h. The client stitches the panel back
-// together from pieces this size and stops at this total.
+// From dlls/gamerules.h - the panel's chunk size and total cap.
 #define MAX_MOTD_CHUNK		60
 #define MAX_MOTD_LENGTH		1536
 
-// SayText is a game DLL user message, so it only exists once the game DLL has
-// registered it. Resolved on first use and cached.
+// SayText is a game DLL user message: resolved on first use and cached. A miss
+// keeps id at -1 so the next call retries.
 static int msg_saytext()
 {
-	// A zero result means the game DLL had not registered this message yet -
-	// possible this early - not that it never will. Only a successful lookup
-	// gets cached; a miss keeps id at -1 so the next call tries again instead
-	// of leaving chat silently broken for the rest of the process.
 	static int id = -1;
 	if (id < 0) {
 		id = GET_USER_MSG_ID(PLID, "SayText", NULL);
@@ -51,7 +46,6 @@ static int msg_textmsg()
 int cslua_msg_saytext_id() { return msg_saytext(); }
 int cslua_msg_textmsg_id() { return msg_textmsg(); }
 
-// Also game-DLL user messages, same lazy-resolve-and-cache as SayText/TextMsg.
 static int msg_screenshake()
 {
 	static int id = -1;
@@ -78,22 +72,15 @@ static int msg_screenfade()
 	return id;
 }
 
-// dlls/const.h flags for ScreenFade, spelled out rather than pulled from the
-// SDK - same call this file already made for SVC_TEMPENTITY/SVC_DIRECTOR.
-#define FFADE_IN		0x0001	// present in the SDK only so 0 isn't passed in; 0 already fades in
+// dlls/const.h ScreenFade flags, spelled out.
+#define FFADE_IN		0x0001
 #define FFADE_OUT		0x0002
 #define FFADE_MODULATE		0x0004
 #define FFADE_STAYOUT		0x0008
 
-// Text encoding, and why this is a switch rather than a rule.
-//
-// Modern CS 1.6 clients (current Steam builds) render chat as UTF-8, which is
-// also what .lua files normally are - so the right thing is to send the text
-// untouched. Older clients expect single-byte CP1251 and show UTF-8 as
-// garbage; for those, cslua_cp1251 1 turns on the conversion below.
-//
-// Default is off: it matches current clients, and a wrong conversion is
-// invisible on the server - you only find out from players.
+// Text encoding. Modern CS 1.6 clients render chat as UTF-8, which is also what
+// .lua files are; older clients expect CP1251. cslua_cp1251 1 turns on the
+// conversion below. Default off.
 static cvar_t s_cvar_cp1251 = { "cslua_cp1251", "0", 0, 0.0f, nullptr };
 static cvar_t *s_cp1251 = nullptr;
 
@@ -108,9 +95,7 @@ static bool cp1251_enabled()
 	return s_cp1251 && s_cp1251->value != 0.0f;
 }
 
-// Converts UTF-8 to CP1251. Only used when the switch above is on; a string
-// that is not valid multi-byte UTF-8 (plain ASCII, or text already CP1251) is
-// passed through untouched.
+// UTF-8 -> CP1251. Text that is not valid multi-byte UTF-8 is passed through.
 static unsigned short utf8_decode(const unsigned char *s, int &len)
 {
 	if (s[0] < 0x80) {
@@ -159,7 +144,7 @@ static void to_cp1251(const char *in, char *out, size_t outsz)
 {
 	const unsigned char *s = (const unsigned char *)in;
 
-	// First pass: is this actually UTF-8 with something to convert?
+	// Is this actually UTF-8 with something to convert?
 	bool multibyte = false;
 	for (size_t i = 0; s[i]; ) {
 		if (s[i] < 0x80) {
@@ -168,7 +153,7 @@ static void to_cp1251(const char *in, char *out, size_t outsz)
 		}
 		int len = 0;
 		if (!utf8_decode(s + i, len)) {
-			cslua_snprintf(out, outsz, "%s", in);	// not UTF-8, leave it alone
+			cslua_snprintf(out, outsz, "%s", in);	// not UTF-8, leave it
 			out[outsz - 1] = '\0';
 			return;
 		}
@@ -266,16 +251,9 @@ static float opt_number(lua_State *L, int table, const char *key, float def)
 	return value;
 }
 
-// The shared colour palette.
-//
-// Named colours are what make one `color = "green"` work in every channel.
-// Each one renders it as closely as it can: the HUD takes the RGB as it is, a
-// menu has four codes and chat has three, so most names collapse there. The
-// alternative - a different colour type per channel - is what made "colour"
-// mean three unrelated things in v1.
-//
-// include/color.lua reads this same table out of ui.palette, so the degrading
-// rules live in one place and never disagree with these values.
+// The shared colour palette. Each channel renders a name as closely as it can
+// (HUD takes RGB, a menu has four codes, chat has three). include/color.lua
+// reads the same table out of ui.palette.
 struct NamedColor
 {
 	const char *name;
@@ -327,7 +305,6 @@ static bool parse_color_name(const char *s, unsigned char &r, unsigned char &g,
 		return true;
 	}
 
-	// "gray" is common enough to be worth not making anyone look it up.
 	const char *want = !strcmp(s, "gray") ? "grey" : s;
 
 	for (const NamedColor *c = s_palette; c->name; c++) {
@@ -372,7 +349,6 @@ static void opt_color(lua_State *L, int table, const char *key,
 	lua_pop(L, 1);
 }
 
-// The game DLL registers this one; without it the client has no MOTD panel.
 static int msg_motd()
 {
 	static int id = -1;
@@ -384,23 +360,15 @@ static int msg_motd()
 	return id;
 }
 
-// The panel takes the text in fixed-size pieces with a "this was the last one"
-// flag; the client stitches them back together. Sizes are the game's own
-// (gamerules.h), not ours to pick.
-// Turns plain text into what the panel actually renders.
-//
-// The charset comes first so the renderer knows what the bytes are before it
-// reads any of them; with cslua_cp1251 on they are CP1251, otherwise UTF-8.
-// Then newlines become <br>, because in HTML they are ordinary whitespace and
-// a whole message collapses into one paragraph without this.
+// Turns plain text into what the panel renders: the charset first (so the
+// renderer knows the encoding), then newlines -> <br>, then HTML escaping.
 static std::string as_html(const std::string &text)
 {
 	std::string out = cp1251_enabled()
 		? "<meta charset=\"windows-1251\">"
 		: "<meta charset=\"utf-8\">";
 
-	// Monospace: this panel shows tables of numbers - a shop price list, a
-	// top-10 - and a proportional font pulls the columns apart.
+	// Monospace: this panel shows tables of numbers.
 	out += "<body style=\"font-family:monospace;white-space:pre-wrap\">";
 
 	for (size_t i = 0; i < text.size(); i++) {
@@ -409,8 +377,6 @@ static std::string as_html(const std::string &text)
 		switch (c) {
 		case '\n': out += "<br>";   break;
 		case '\r': break;
-		// Escaped so a nickname with an angle bracket in it cannot become
-		// markup - the same reason a query takes ? instead of concatenation.
 		case '<':  out += "&lt;";   break;
 		case '>':  out += "&gt;";   break;
 		case '&':  out += "&amp;";  break;
@@ -427,8 +393,7 @@ void cslua_send_motd(int id, const char *text, bool raw)
 	if (!msg)
 		return;
 
-	// Encode before splitting: the conversion changes byte lengths, so
-	// chunking the UTF-8 could cut a character in half.
+	// Encode before splitting: the conversion changes byte lengths.
 	std::string encoded = cslua_text_for_client(text);
 	if (!raw)
 		encoded = as_html(encoded);
@@ -465,8 +430,7 @@ void cslua_send_motd(int id, const char *text, bool raw)
 	}
 }
 
-// ui.palette = { green = { 0, 255, 0 }, ... } - the one source of truth for
-// what a colour name means, shared with include/color.lua.
+// ui.palette = { green = { 0, 255, 0 }, ... } - shared with include/color.lua.
 void cslua_register_ui(lua_State *L)
 {
 	lua_newtable(L);				// ui
@@ -504,8 +468,7 @@ void cslua_read_hud_params(lua_State *L, int index, HudParams &out)
 	out.channel = channel & 0xFF;
 
 	opt_color(L, index, "color", out.r1, out.g1, out.b1, out.a1);
-	// Effect 2 fades from color to color2; default it to color so a script
-	// that only sets one colour still looks right.
+	// Effect 2 fades from color to color2; default color2 to color.
 	out.r2 = out.r1; out.g2 = out.g1; out.b2 = out.b1; out.a2 = out.a1;
 	opt_color(L, index, "color2", out.r2, out.g2, out.b2, out.a2);
 }
@@ -519,9 +482,6 @@ static void prepare(const char *text, char *out, size_t outsz, bool newline)
 	if (cp1251_enabled()) {
 		to_cp1251(text, out, room);
 	} else {
-		// Copied, not formatted: the truncation here is the point - `room` is
-		// what the channel carries - and spelling it out this way says so,
-		// where snprintf only looked like an oversight the compiler warned about.
 		size_t len = strlen(text);
 		if (len > room - 1)
 			len = room - 1;
@@ -536,8 +496,7 @@ static void prepare(const char *text, char *out, size_t outsz, bool newline)
 	}
 }
 
-// Menus build their own packets but need the same encoding treatment. They can
-// also be a lot longer than one chat line, so this one sizes itself: CP1251 is
+// Menus build their own packets but need the same encoding. CP1251 is
 // single-byte, so the result never grows.
 std::string cslua_text_for_client(const char *text)
 {
@@ -571,9 +530,8 @@ void cslua_send_center(int id, const char *text)
 	});
 }
 
-// SayText understands three control bytes. There is no free RGB: {team} takes
-// its colour from the player whose slot is in the message's first byte, which
-// is how you get blue and red at all.
+// SayText control bytes. There is no free RGB: {team} takes its colour from the
+// player whose slot is the message's first byte.
 static const struct { const char *tag; char code; } s_chat_tags[] =
 {
 	{ "{default}", '\x01' },
@@ -617,8 +575,7 @@ void cslua_send_chat(int id, const char *text, int from)
 	char tagged[256];
 	expand_chat_tags(text, tagged, sizeof tagged);
 
-	// SayText's buffer is 192 bytes and it needs the trailing newline,
-	// otherwise the next line runs into this one.
+	// SayText's buffer is 192 bytes and needs the trailing newline.
 	char buf[190];
 	prepare(tagged, buf, sizeof buf, true);
 
@@ -656,7 +613,6 @@ void cslua_chat_probe(int id)
 			MESSAGE_END();
 		}
 
-		// Plain engine call, no user message involved.
 		CLIENT_PRINTF(e, print_chat, "[probe 4] ClientPrintf print_chat\n");
 	});
 }
@@ -692,8 +648,7 @@ void cslua_send_hud(int id, const char *text, const HudParams &p)
 
 void cslua_send_dhud(int id, const char *text, const HudParams &p)
 {
-	// The directed HUD is an engine message, not a game DLL user message, so
-	// it needs no registration. The client caps it at 128 chars.
+	// The directed HUD is an engine message, no registration. Client caps at 128.
 	char buf[128];
 	prepare(text, buf, sizeof buf, false);
 
@@ -716,9 +671,7 @@ void cslua_send_dhud(int id, const char *text, const HudParams &p)
 	});
 }
 
-// UTIL_ScreenShake's own fixed-point scales (dlls/util.cpp): amplitude and
-// duration at 1<<12, frequency at 1<<8. Not ours to pick - the client decodes
-// with the same constants.
+// UTIL_ScreenShake's own fixed-point scales (dlls/util.cpp).
 void cslua_send_screen_shake(int id, float amplitude, float frequency, float duration)
 {
 	int msg = msg_screenshake();

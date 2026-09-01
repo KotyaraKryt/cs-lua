@@ -68,29 +68,22 @@ int LuaEngine::push_errfunc()
 	return lua_gettop(m_L);
 }
 
-// A handler that throws does it every time it runs. In weapon_fire that is
-// once per shot on the server, in player_hurt once per hit: a full traceback
-// each, thousands of lines a second into the console and the log. The disk
-// fills up and everything else worth reading is buried.
-//
-// So the same error from the same place is printed a few times, then muted for
-// a while, and the mute reports how much it swallowed. Keyed by the error text
-// as well as the place, so a second, different failure in the same handler is
-// not hidden behind the first.
+// A handler that throws does it every time. So the same error from the same
+// place is printed a few times, then muted for a while, keyed by error text +
+// place so a second failure is not hidden behind the first.
 static const int ERROR_BURST = 3;
 static const double ERROR_MUTE_SECONDS = 60.0;
 
 struct ErrorRecord
 {
-	int seen;			// since this record was last reported
+	int seen;			// since last reported
 	int muted;			// swallowed while muted
 	double until;		// server time the mute expires
 };
 
 static std::map<std::string, ErrorRecord> s_errors;
 
-// gpGlobals->time restarts on every map, so it cannot be trusted for a
-// duration that spans one. This only needs to be monotonic.
+// gpGlobals->time restarts every map; this only needs to be monotonic.
 static double error_clock()
 {
 	return (double)clock() / (double)CLOCKS_PER_SEC;
@@ -106,8 +99,7 @@ void LuaEngine::report_error(const char *where)
 	const char *msg = lua_tostring(m_L, -1);
 	std::string text = msg ? msg : "(unknown error)";
 
-	// First line only: the traceback below it repeats per call and would make
-	// every occurrence look unique.
+	// First line only for the key: the traceback below it repeats per call.
 	size_t first_break = text.find('\n');
 	std::string key = std::string(where) + "\n" +
 		(first_break == std::string::npos ? text : text.substr(0, first_break));
@@ -130,8 +122,7 @@ void LuaEngine::report_error(const char *where)
 
 	cslua_error("error in %s:", where);
 
-	// The traceback is multi-line; the console eats everything after the
-	// first newline, so print it line by line.
+	// The console eats everything after the first newline; print line by line.
 	size_t start = 0;
 	while (start <= text.size()) {
 		size_t end = text.find('\n', start);
@@ -151,13 +142,10 @@ void LuaEngine::report_error(const char *where)
 	lua_pop(m_L, 1);
 }
 
-// Fills `out` with the paths a module name maps to, in search order, and
-// returns how many there are. Plugin-local files win over the shared include/
-// directory, so two plugins can both have a lib/util.lua without seeing each
-// other's.
+// Fills `out` with the paths a module name maps to, in search order. Plugin-
+// local files win over the shared include/ directory.
 int LuaEngine::module_paths(int plugin_index, const char *modname, std::string out[4]) const
 {
-	// "lib.util" -> "lib/util"
 	std::string rel = modname;
 	std::replace(rel.begin(), rel.end(), '.', '/');
 
@@ -220,8 +208,6 @@ int LuaEngine::l_require(lua_State *L)
 
 	std::string path = g_lua.resolve_module(index, modname);
 	if (path.empty()) {
-		// Say where we looked: nine times out of ten the fix is visible right
-		// there (a file sitting in lib/ wants require("lib.name")).
 		std::string tried = g_lua.module_candidates(index, modname);
 		return luaL_error(L, "require: module '%s' not found for plugin '%s'. Looked in:%s",
 			modname, plugin.id.c_str(), tried.c_str());
@@ -238,8 +224,7 @@ int LuaEngine::l_require(lua_State *L)
 	lua_rawgeti(L, LUA_REGISTRYINDEX, plugin.env_ref);
 	lua_setfenv(L, -2);
 
-	// Not pcall: let the error travel up to whoever is loading the plugin,
-	// so the traceback covers the whole require chain.
+	// Not pcall: let the error travel up so the traceback covers the chain.
 	lua_call(L, 0, 1);
 
 	if (lua_isnil(L, -1)) {
@@ -296,16 +281,14 @@ void LuaEngine::init()
 	}
 	lua_pop(m_L, 1);
 
-	// The core layer runs before any plugin and defines the shared base API
-	// (chat commands and friends). Plugins see it through _G.
+	// The core layer runs before any plugin and defines the shared base API.
 	load_core();
 
 	discover_plugins();
 	for (size_t i = 0; i < m_plugins.size(); i++)
 		load_plugin((int)i);
 
-	// Now that every plugin has declared what it listens for, wire up only the
-	// gameplay hookchains that are actually used.
+	// Now that every plugin has declared what it listens for, wire up hooks.
 	cslua_regamedll_install_hooks();
 
 	int failed = 0;
@@ -320,24 +303,18 @@ void LuaEngine::init()
 
 void LuaEngine::shutdown()
 {
-	// Plugins get told first, while everything they might need still works:
-	// this is where they undo whatever they did to the world. After this line
-	// the state is being taken apart and nothing Lua-side is safe to call.
-	//
-	// Guarded because a handler is free to do something that shuts us down
-	// again - blowing the precache budget does exactly that - and the second
-	// pass would run every handler a second time against a half-dead state.
+	// Plugins get told first, while everything they need still works. Guarded
+	// because a handler is free to shut us down again (blowing the precache
+	// budget does exactly that).
 	if (m_L && !m_unloading) {
 		m_unloading = true;
 		g_events.fire_plugin_unload();
 	}
 
-	// Detach from the game DLL before the lua_State dies, or a spawn/kill hook
-	// could fire into freed handler refs.
+	// Detach from the game DLL before the lua_State dies.
 	cslua_regamedll_remove_hooks();
 
-	// Disowns replies still on the wire. Not a join: waiting for the slowest
-	// request here would freeze the server for the length of a lua_reload.
+	// Disowns replies still on the wire; not a join.
 	cslua_http_reset();
 	cslua_httpserver_reset();
 	cslua_mysql_reset();
@@ -350,8 +327,8 @@ void LuaEngine::shutdown()
 	cslua_sound_clear();
 	cslua_player_shutdown();
 	cslua_entity_shutdown();
-	// Last of the API modules, and the only one holding an OS resource: the
-	// files have to be closed for real, not left for lua_close to forget.
+	// The only one holding an OS resource: files closed for real, not left for
+	// lua_close to forget.
 	cslua_db_shutdown();
 	m_plugins.clear();
 	m_loading = -1;
@@ -410,15 +387,13 @@ void LuaEngine::add_unload_handler(int plugin_index, int ref)
 }
 
 // Everything a plugin leaves behind, in the order that keeps it safe: its own
-// cleanup code runs first, while its handlers, timers and databases still
-// work, and only then does any of that go away.
+// cleanup runs first, then everything else goes away.
 void LuaEngine::unload_plugin(int index, bool run_handlers)
 {
 	LuaPlugin &plugin = m_plugins[index];
 
 	if (run_handlers && m_L) {
-		// Last in, first out: a plugin undoes its setup in reverse, the same
-		// way it would if this were one function.
+		// Last in, first out.
 		for (size_t i = plugin.unload_refs.size(); i-- > 0; ) {
 			PluginScope scope(index);
 			int errfunc = push_errfunc();
@@ -437,9 +412,8 @@ void LuaEngine::unload_plugin(int index, bool run_handlers)
 	}
 	plugin.unload_refs.clear();
 
-	// Now tell everyone else, while this plugin's registrations are still in
-	// place: the core export registry drops its entries here, and a plugin
-	// with a soft dependency on it gets to fall back.
+	// Tell everyone else while this plugin's registrations are still in place:
+	// the core export registry drops its entries here.
 	if (run_handlers)
 		g_events.fire_plugin_unload(plugin.id.c_str());
 
@@ -452,11 +426,9 @@ void LuaEngine::unload_plugin(int index, bool run_handlers)
 	cslua_mysql_remove_plugin(index);
 }
 
-// One plugin, torn down and started again, with everyone else left alone.
-//
-// The precached resources are deliberately not released: the engine has no way
-// to take a model back out of the map's table mid-round, and re-running the
-// plugin's precache calls simply resolves to the slots it already owns.
+// One plugin, torn down and started again. Precached resources are not released:
+// the engine cannot take a model back out mid-round, and re-running precache
+// calls just resolves to the slots it already owns.
 bool LuaEngine::reload_plugin(const char *id)
 {
 	if (!m_L)
@@ -477,9 +449,8 @@ bool LuaEngine::reload_plugin(const char *id)
 
 	LuaPlugin &plugin = m_plugins[index];
 
-	// A fresh environment and a fresh module cache: reloading has to pick up
-	// edits to the plugin's lib/ files too, and the old cache would hand back
-	// the versions from last time.
+	// A fresh environment and module cache: reloading has to pick up edits to
+	// the plugin's lib/ files too.
 	luaL_unref(m_L, LUA_REGISTRYINDEX, plugin.env_ref);
 	luaL_unref(m_L, LUA_REGISTRYINDEX, plugin.modules_ref);
 	plugin.env_ref = LUA_NOREF;
@@ -490,9 +461,8 @@ bool LuaEngine::reload_plugin(const char *id)
 
 	load_plugin(index);
 
-	// Gameplay hookchains are installed once for the whole state based on what
-	// is listened for. A reloaded plugin may listen for something new, so ask
-	// again - installing an already-installed hook is a no-op.
+	// A reloaded plugin may listen for something new; installing an already-
+	// installed hook is a no-op.
 	cslua_regamedll_install_hooks();
 
 	return true;
@@ -519,8 +489,8 @@ bool LuaEngine::check_plugin(const char *id, std::string &out)
 		return false;
 	}
 
-	// Appended past every real plugin, so its index cannot collide with one
-	// require() closures elsewhere already captured by value.
+	// Appended past every real plugin so its index cannot collide with one a
+	// require() closure already captured by value.
 	int index = (int)m_plugins.size();
 
 	LuaPlugin plugin;
@@ -531,8 +501,8 @@ bool LuaEngine::check_plugin(const char *id, std::string &out)
 	plugin.name = plugin.id;
 	m_plugins.push_back(plugin);
 
-	// Same environment setup as load_plugin(): its own globals table and its
-	// own require() cache, so a check sees exactly what a real load would.
+	// Same environment setup as load_plugin(): its own globals table and
+	// require() cache, so a check sees exactly what a real load would.
 	lua_newtable(m_L);
 	lua_newtable(m_L);
 	lua_pushvalue(m_L, LUA_GLOBALSINDEX);
@@ -572,8 +542,7 @@ bool LuaEngine::check_plugin(const char *id, std::string &out)
 		out = "manifest.lua failed - see console";
 	}
 
-	// Nothing it registered is meant to outlive the check: undo it the same
-	// way a failed real load would, whether or not this one succeeded.
+	// Nothing it registered is meant to outlive the check.
 	unload_plugin(index, false);
 	luaL_unref(m_L, LUA_REGISTRYINDEX, m_plugins[index].env_ref);
 	luaL_unref(m_L, LUA_REGISTRYINDEX, m_plugins[index].modules_ref);
@@ -582,13 +551,10 @@ bool LuaEngine::check_plugin(const char *id, std::string &out)
 	return ok;
 }
 
-// Starts plugins/<id> that is not currently running. Two cases: an existing,
-// `lua_unload`ed slot (reuse it, same reset reload_plugin() does before its
-// own load_plugin() call - a fresh env/module cache, or edits to lib/ files
-// would keep resolving to what require() cached last time), or a folder
-// nobody has ever loaded this run (append a slot the same way
-// discover_plugins() would have at startup, had it existed then). Either
-// way every other plugin's index is untouched.
+// Starts plugins/<id> that is not currently running: either an existing
+// lua_unload'ed slot (reuse it, with a fresh env/module cache) or a folder
+// nobody has loaded this run (append a slot). Every other plugin's index is
+// untouched.
 bool LuaEngine::load_plugin_by_name(const char *id, std::string &out)
 {
 	if (!m_L) {
@@ -657,11 +623,8 @@ bool LuaEngine::load_plugin_by_name(const char *id, std::string &out)
 	return !loaded.failed;
 }
 
-// The other half of load_plugin_by_name(): tears the plugin down exactly
-// like a reload would (its own on_unload handlers run, every
-// handler/timer/command/db it registered goes away), but does not run
-// init.lua again - the slot just sits there marked unloaded until
-// lua_load brings it back.
+// Tears the plugin down like a reload would, but does not run init.lua again -
+// the slot sits marked unloaded until lua_load brings it back.
 bool LuaEngine::unload_plugin_by_name(const char *id, std::string &out)
 {
 	if (!m_L) {
@@ -681,10 +644,8 @@ bool LuaEngine::unload_plugin_by_name(const char *id, std::string &out)
 		unload_plugin((int)i, true);
 		m_plugins[i].loaded = false;
 
-		// This plugin may have been the last one listening for some
-		// gameplay event - ask again so sync_hook() can unregister that
-		// hookchain instead of leaving it installed (and firing into an
-		// empty handler list) until the next load/reload of anything else.
+		// This plugin may have been the last listener for some hookchain; ask
+		// again so it can be unregistered.
 		cslua_regamedll_install_hooks();
 
 		out = "unloaded '" + std::string(id) + "'";
@@ -701,7 +662,7 @@ void LuaEngine::load_core()
 
 	std::vector<CsLuaDirEntry> entries;
 	if (!cslua_list_dir(dir, entries))
-		return;			// no core layer installed; base API just won't exist
+		return;			// no core layer installed
 
 	std::vector<std::string> files;
 	for (size_t i = 0; i < entries.size(); i++) {
@@ -714,10 +675,8 @@ void LuaEngine::load_core()
 
 	std::sort(files.begin(), files.end());
 
-	// Core runs in the global environment: unlike plugins it is meant to
-	// define globals (chat_command, ...) that everyone sees. Its handlers are
-	// tagged with plugin index -1, so they survive plugin unloads but die on a
-	// full reload like everything else.
+	// Core runs in the global environment: it is meant to define globals that
+	// everyone sees. Its handlers are tagged plugin index -1.
 	for (size_t i = 0; i < files.size(); i++) {
 		std::string path = dir + "/" + files[i];
 		int errfunc = push_errfunc();
@@ -781,8 +740,8 @@ void LuaEngine::discover_plugins()
 	apply_load_order();
 }
 
-// Reads addons/lua/load_order.txt: one plugin id per line, blanks and lines
-// starting with # ignored. Returns them in file order.
+// Reads addons/lua/load_order.txt: one plugin id per line, blanks and # lines
+// ignored. Returns them in file order.
 static std::vector<std::string> read_load_order()
 {
 	std::vector<std::string> order;
@@ -807,8 +766,7 @@ static std::vector<std::string> read_load_order()
 			first++;
 		name.erase(0, first);
 
-		// A .lua on the end is what people type for a single-file plugin; the
-		// id it loads under has no extension.
+		// A .lua on the end is what people type for a single-file plugin.
 		if (name.size() > 4 && name.compare(name.size() - 4, 4, ".lua") == 0)
 			name.erase(name.size() - 4);
 
@@ -820,19 +778,13 @@ static std::vector<std::string> read_load_order()
 	return order;
 }
 
-// Handlers run in the order they were registered, which is the order plugins
-// load in. Alphabetical is fine until two plugins care who goes first - and on
-// a cancellable event that decides who wins, since e:cancel() ends the chain.
-//
-// The lever for that belongs to whoever runs the server, not to plugin
-// authors: a priority number in hook.add() only works until every plugin sets
-// it, and then it means nothing again. load_order.txt is one file, in one
-// place, that says exactly what happens.
+// Handlers run in plugin load order, which matters on a cancellable event. The
+// lever belongs to whoever runs the server: load_order.txt, one file in one
+// place.
 void LuaEngine::apply_load_order()
 {
 	std::vector<std::string> order = read_load_order();
 
-	// Position in the file, or the end for anything not listed.
 	std::map<std::string, int> rank;
 	for (size_t i = 0; i < order.size(); i++)
 		rank[order[i]] = (int)i;
@@ -847,16 +799,13 @@ void LuaEngine::apply_load_order()
 			int pa = ra == rank.end() ? unlisted : ra->second;
 			int pb = rb == rank.end() ? unlisted : rb->second;
 
-			// Everything the file did not mention keeps sorting by name, so a
-			// half-filled file still gives a predictable order.
+			// Anything the file did not mention keeps sorting by name.
 			if (pa != pb)
 				return pa < pb;
 			return a.id < b.id;
 		});
 
-	// A name in the file that matches no plugin is almost always a typo or a
-	// plugin that was removed; either way the file no longer says what the
-	// server does.
+	// A name in the file that matches no plugin is almost always a typo.
 	for (size_t i = 0; i < order.size(); i++) {
 		bool found = false;
 		for (size_t j = 0; j < m_plugins.size() && !found; j++)
@@ -896,14 +845,10 @@ void LuaEngine::load_plugin(int index)
 	{
 		PluginScope scope(index);
 
-		// manifest.lua runs first and has one job: call plugin{}. Its rules
-		// (requires, api_version, ...) are enforced right there, before a
-		// single line of init.lua runs.
+		// manifest.lua runs first and has one job: call plugin{}.
 		ok = run_file(plugin.manifest, plugin.env_ref, plugin.id.c_str());
 
 		if (ok && !plugin.declared) {
-			// A very easy typo: `plugin = { ... }` assigns a table instead of
-			// calling plugin{ ... }, silently shadowing the manifest function.
 			cslua_error("plugin '%s': manifest.lua must call plugin{} - "
 				"did you write 'plugin = {' instead of 'plugin {'?", plugin.id.c_str());
 			ok = false;
@@ -915,9 +860,8 @@ void LuaEngine::load_plugin(int index)
 	m_loading = -1;
 
 	if (!ok) {
-		// Drop whatever it registered before blowing up, so we never run
-		// half-initialized code. Its own on_unload handlers do not run: the
-		// plugin never finished starting, so there is nothing it undid.
+		// Drop whatever it registered before blowing up. Its on_unload handlers
+		// do not run: it never finished starting.
 		plugin.failed = true;
 		unload_plugin(index, false);
 		return;

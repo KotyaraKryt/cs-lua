@@ -30,8 +30,6 @@ bool cslua_rehlds_init()
 	if (s_api)
 		return true;
 
-	// Which file the engine lives in depends on the platform and on how the
-	// server was started; the list is in platform.cpp.
 	void *engine = NULL;
 	for (int i = 0; CSLUA_ENGINE_MODULES[i] && !engine; i++)
 		engine = cslua_module_open(CSLUA_ENGINE_MODULES[i]);
@@ -60,11 +58,8 @@ bool cslua_rehlds_init()
 	int major = api->GetMajorVersion();
 	int minor = api->GetMinorVersion();
 
-	// Refusing on a mismatch is the safe move, not a pedantic one: the hooks we
-	// want sit at the very end of the interface's vtable, so a single method
-	// added in a newer version shifts every slot and our call would jump into
-	// the wrong function - a crash, which is exactly what this module exists to
-	// prevent.
+	// The hooks we want sit at the end of the vtable, so a version mismatch
+	// would shift every slot and our call would jump into the wrong function.
 	if (major != REHLDS_API_VERSION_MAJOR || minor < REHLDS_API_VERSION_MINOR) {
 		cslua_print("ReHLDS API is %d.%d, we build against %d.%d - skipping engine hooks",
 			major, minor, REHLDS_API_VERSION_MAJOR, REHLDS_API_VERSION_MINOR);
@@ -81,9 +76,7 @@ bool cslua_rehlds_init()
 	return true;
 }
 
-// Any cvar changing - the engine's own, another plugin's, this module's,
-// through any path (console, rcon, a server.cfg exec) - goes through here.
-// Pre: cancelling skips the chain entirely, so the cvar keeps its old value.
+// Any cvar changing goes through here. Pre: cancelling keeps the old value.
 static void hook_cvar_direct_set(IRehldsHook_Cvar_DirectSet *chain, cvar_s *var, const char *value)
 {
 	if (g_events.fire_server_cvar_change(var && var->name ? var->name : "", value ? value : ""))
@@ -92,8 +85,7 @@ static void hook_cvar_direct_set(IRehldsHook_Cvar_DirectSet *chain, cvar_s *var,
 	chain->callNext(var, value);
 }
 
-// A bot connected. Notify only - id is the slot it was given, resolved
-// after the real CreateFakeClient has already run so the edict exists.
+// A bot connected. Notify only; id is resolved after the real call.
 static edict_t *hook_create_fake_client(IRehldsHook_CreateFakeClient *chain, const char *netname)
 {
 	edict_t *result = chain->callNext(netname);

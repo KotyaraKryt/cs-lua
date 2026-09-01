@@ -20,16 +20,13 @@ static int msg_showmenu()
 	return id;
 }
 
-// One menu open per player at most, which is all the engine can draw anyway.
-// Storing the key mask lets us ignore a stale answer: the client will happily
-// send menuselect for a menu that has already been replaced.
+// One menu open per player. The key mask lets us ignore a stale answer.
 static bool s_menu_open[CSLUA_MAXPLAYERS];
 static int s_menu_keys[CSLUA_MAXPLAYERS];
 
-// When the panel stops being ours, in server time. CS draws its own team and
-// buy menus with the same `menuselect` command, so a menu we keep claiming
-// after it left the screen would eat the player's buy keys. 0 = no deadline,
-// which is what a menu shown with time < 0 gets.
+// When the panel stops being ours, in server time. CS draws its own menus with
+// the same `menuselect` command, so a stale claim would eat the player's keys.
+// 0 = no deadline (menu shown with time < 0).
 static float s_menu_until[CSLUA_MAXPLAYERS];
 
 static void forget_menu(int id)
@@ -39,8 +36,7 @@ static void forget_menu(int id)
 	s_menu_until[id] = 0.0f;
 }
 
-// The panel body is capped per packet; longer text is split across follow-up
-// messages with the "more" flag set, exactly as the engine expects.
+// The panel body is capped per packet; longer text splits with the "more" flag.
 static const size_t MENU_CHUNK = 175;
 
 static void send_menu(int id, int keys, int time, const char *raw)
@@ -53,8 +49,7 @@ static void send_menu(int id, int keys, int time, const char *raw)
 	if (!e || e->free)
 		return;
 
-	// Encode first, split second: the conversion changes the byte length, so
-	// chunking the UTF-8 could cut a character in half.
+	// Encode first, split second: the conversion changes byte length.
 	std::string encoded = cslua_text_for_client(raw);
 	const char *text = encoded.c_str();
 
@@ -100,8 +95,7 @@ static int l_show_menu(lua_State *L)
 
 	s_menu_open[id] = true;
 	s_menu_keys[id] = keys;
-	// Match the deadline the client draws with, plus a second of slack for the
-	// round trip, so a key pressed on the last frame still counts.
+	// The client's deadline plus a second of slack for the round trip.
 	s_menu_until[id] = time > 0 ? gpGlobals->time + (float)time + 1.0f : 0.0f;
 	return 0;
 }
@@ -121,7 +115,6 @@ static int l_close_menu(lua_State *L)
 	return 0;
 }
 
-// A slot changing hands must not inherit the previous occupant's menu.
 void cslua_menu_reset(int id)
 {
 	if (id >= 1 && id < CSLUA_MAXPLAYERS)
@@ -134,10 +127,9 @@ bool cslua_menu_handle_select(int id, const char *cmd)
 		return false;
 
 	if (id < 1 || id >= CSLUA_MAXPLAYERS || !s_menu_open[id])
-		return false;			// not ours: let the game have it
+		return false;			// not ours
 
-	// Timed out and gone from the screen - the key belongs to whatever the
-	// game is showing now.
+	// Timed out and gone from the screen - the key belongs to the game now.
 	if (s_menu_until[id] != 0.0f && gpGlobals->time > s_menu_until[id]) {
 		forget_menu(id);
 		return false;
@@ -147,12 +139,12 @@ bool cslua_menu_handle_select(int id, const char *cmd)
 	if (key < 1 || key > 10)
 		return false;
 
-	// Ignore a key the menu never offered - a client can send anything.
+	// A key the menu never offered - a client can send anything.
 	if (!(s_menu_keys[id] & (1 << (key - 1))))
 		return false;
 
-	// One answer per menu. Clearing first means a handler is free to open the
-	// next menu without this one swallowing its reply.
+	// Clear first so a handler can open the next menu without this one
+	// swallowing its reply.
 	forget_menu(id);
 
 	g_events.fire_menu_select(id, key);
@@ -161,14 +153,11 @@ bool cslua_menu_handle_select(int id, const char *cmd)
 
 void cslua_register_menu(lua_State *L)
 {
-	// Reset on every state: a reload drops the Lua handlers, so a menu still
-	// on someone's screen has nothing left to answer to.
 	for (int i = 0; i < CSLUA_MAXPLAYERS; i++)
 		forget_menu(i);
 
 	// Raw panel drawing, not the menu API. core/ui.lua picks these up into
-	// locals and clears them before any plugin runs, so what a plugin sees on
-	// `menu` is menu.new() and nothing else.
+	// locals and clears them before any plugin runs.
 	static const luaL_Reg s_internal[] =
 	{
 		{ "_show",  l_show_menu },

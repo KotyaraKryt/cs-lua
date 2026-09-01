@@ -15,28 +15,21 @@ struct Timer
 	float interval;		// 0 for a one-shot
 	bool dead;
 
-	// Set by timer.create(). Empty for the anonymous after/every ones, which
-	// are identified by their id instead.
+	// Set by timer.create(); empty for the anonymous after/every ones.
 	std::string name;
 
-	// Survives a changelevel. On by default: a timer set up in the body of a
-	// plugin - a stats flush, an ad rotation - is infrastructure, and dropping
-	// it on the first map change would break the plugin silently for the rest
-	// of the server's life. Turn it off for anything tied to the map that is
-	// running right now.
+	// Survives a changelevel. On by default: a timer set up in a plugin's body
+	// is infrastructure. Turn it off for anything tied to the current map.
 	bool persist;
 };
 
 static std::vector<Timer> s_timers;
 static int s_next_id = 1;
 
-// Set while running callbacks: a timer that starts or cancels another timer
-// must not reshuffle the vector we are walking.
+// Set while running callbacks: a timer must not reshuffle the vector we walk.
 static bool s_running = false;
 
-// The clock as of the last frame we saw. gpGlobals->time restarts from zero on
-// every map, and the Lua state outlives a map change, so this is what tells
-// "the server clock went backwards" apart from "time passed".
+// The clock as of the last frame. gpGlobals->time restarts from zero every map.
 static float s_last_now = 0.0f;
 
 static int add_timer(lua_State *L, float delay, float interval, bool persist)
@@ -59,8 +52,8 @@ static int add_timer(lua_State *L, float delay, float interval, bool persist)
 	return t.id;
 }
 
-// persist defaults to true; an explicit `persist = false` drops the timer at
-// the next changelevel.
+// persist defaults to true; an explicit `persist = false` drops it at the next
+// changelevel.
 static bool opt_persist(lua_State *L, int index)
 {
 	if (!lua_istable(L, index))
@@ -124,10 +117,8 @@ static Timer *find_named(int plugin, const char *name)
 
 // timer.create(name, seconds, fn [, { once = true, persist = false }])
 //
-// The named counterpart of every(): registering the same name twice replaces
-// the timer instead of stacking a second one, so running a plugin's load code
-// again - which is what `lua_reload <plugin>` does - leaves one timer ticking,
-// not two. The name only has to be unique within the plugin.
+// Registering the same name twice replaces the timer instead of stacking one.
+// The name only has to be unique within the plugin.
 static int l_create(lua_State *L)
 {
 	const char *name = luaL_checkstring(L, 1);
@@ -158,8 +149,7 @@ static int l_create(lua_State *L)
 		return 0;
 	}
 
-	// add_timer reads the callback from stack slot 2, the way after/every
-	// hand it over.
+	// add_timer reads the callback from stack slot 2.
 	lua_pushvalue(L, 3);
 	lua_replace(L, 2);
 	int id = add_timer(L, seconds, once ? 0.0f : seconds, persist);
@@ -204,20 +194,14 @@ void cslua_register_timers(lua_State *L)
 
 void cslua_timers_clear()
 {
-	// The refs die with the state; just forget them.
 	s_timers.clear();
 	s_next_id = 1;
 	s_last_now = 0.0f;
 }
 
-// A new map restarts the server clock, which would leave every pending timer
-// with a deadline far in the future's past - they would all fire at once on the
-// first frame. Carry the remaining wait over to the new clock instead, so
-// after(600, ...) still means "ten minutes from when it was set".
-//
-// A timer created with `persist = false` does not make the trip: it was tied to
-// the map that just ended, and firing it on the next one would run against a
-// world that no longer matches what it was scheduled for.
+// A new map restarts the server clock. Carry the remaining wait over to the new
+// clock so after(600, ...) still means "ten minutes from when it was set". A
+// `persist = false` timer does not make the trip.
 void cslua_timers_rebase()
 {
 	lua_State *L = g_lua.state();
@@ -280,8 +264,8 @@ static const char *timer_owner(int plugin_index)
 
 void cslua_timers_run()
 {
-	// Tracked every frame, not only when there is something to run: a timer
-	// created later still needs a sane baseline for the next rebase.
+	// Tracked every frame so a timer created later still has a sane baseline
+	// for the next rebase.
 	float now = gpGlobals->time;
 	if (!s_running)
 		s_last_now = now;
@@ -295,7 +279,7 @@ void cslua_timers_run()
 
 	s_running = true;
 
-	// Index-based: a callback may append to s_timers and invalidate iterators.
+	// Index-based: a callback may append to s_timers.
 	for (size_t i = 0; i < s_timers.size(); i++) {
 		if (s_timers[i].dead || s_timers[i].next > now)
 			continue;

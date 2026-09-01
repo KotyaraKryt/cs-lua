@@ -11,10 +11,8 @@ namespace {
 
 const char *const REPO = "KotyaraKryt/cs-lua";
 
-// core/, include/ and data/ have never had subfolders, so a flat, hand-kept
-// list is simpler than teaching this step to walk GitHub's directory-listing
-// JSON for a tree that will not grow deep. Add a line here when a file is
-// added to one of these three folders.
+// core/, include/ and data/ have never had subfolders, so a flat hand-kept
+// list. Add a line here when a file is added to one of these three folders.
 struct BootstrapFile
 {
 	const char *dir;
@@ -41,8 +39,6 @@ const BootstrapFile FILES[] =
 };
 
 // Pulls "tag_name":"v1.0.0" out of the /releases/latest response by hand.
-// The module has no other use for a JSON parser anywhere in its own C++, and
-// one field of one response at startup does not earn it one.
 bool extract_tag(const std::string &json, std::string &tag)
 {
 	const std::string key = "\"tag_name\"";
@@ -79,8 +75,7 @@ bool write_file(const std::string &path, const std::string &body)
 
 void cslua_bootstrap_if_missing()
 {
-	// access.lua is the sentinel: if it is there, the runtime layer counts as
-	// installed and this never runs again.
+	// access.lua is the sentinel: if it is there, this never runs again.
 	std::string sentinel = cslua_base_dir() + "/core/access.lua";
 	if (cslua_file_exists(sentinel))
 		return;
@@ -142,10 +137,7 @@ void cslua_bootstrap_if_missing()
 		}
 	}
 
-	// data/ is seed content, not a hard requirement - access.lua treats a
-	// missing groups.lua/users.lua as "nobody has rights yet", not an error.
-	// core/ and include/ are not: a plugin whose first line is `require`ing
-	// something from include/ dies immediately if this silently left it out.
+	// data/ is seed content, not a hard requirement; core/ and include/ are.
 	if (failed == 0)
 		cslua_print("bootstrap: installed %d file(s) from release %s", done, tag.c_str());
 	else

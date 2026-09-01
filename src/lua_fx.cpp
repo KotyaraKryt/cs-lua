@@ -2,16 +2,12 @@
 #include "lua_fx.h"
 #include "lua_natives.h"
 
-// Not in common/const.h - it lives in the dlls/hltv headers we don't want to
-// drag in for one integer. Same call lua_message.cpp already made.
 #define SVC_TEMPENTITY 23
 
 static int model_index(const char *path)
 {
-	// Idempotent: the engine looks the name up if it is already precached
-	// rather than adding a new slot, so this never risks the 512-slot table -
-	// as long as the path went through res.model first, same contract as
-	// p:play_sound and res.sound.
+	// Idempotent: an already-precached name is looked up, not re-added. Callers
+	// must have run the path through res.model first.
 	return PRECACHE_MODEL((char *)path);
 }
 
@@ -60,7 +56,7 @@ static void opt_color(lua_State *L, int table, int &r, int &g, int &b)
 	lua_pop(L, 1);
 }
 
-// Reads opts.to = { x, y, z } if present, otherwise start + (0, 0, height).
+// opts.to = { x, y, z } if present, otherwise start + (0, 0, height).
 static void opt_endpoint(lua_State *L, int table, const Vector &start, float default_height, Vector &out)
 {
 	lua_getfield(L, table, "to");
@@ -103,8 +99,7 @@ static int l_explosion(lua_State *L)
 	return 0;
 }
 
-// fx.beam_cylinder(x, y, z, opts) - a ring that expands outward from the
-// point up to opts.height, same shape the old plugin used for its shockwave.
+// fx.beam_cylinder(x, y, z, opts) - a ring expanding outward up to opts.height.
 static int l_beam_cylinder(lua_State *L)
 {
 	Vector origin, endpoint;
@@ -147,8 +142,7 @@ static int l_beam_cylinder(lua_State *L)
 	return 0;
 }
 
-// fx.sprite_trail(x, y, z, opts) - a stream of glowing sprites drifting from
-// the point to opts.to (or straight up opts.height units).
+// fx.sprite_trail(x, y, z, opts) - glowing sprites drifting to opts.to.
 static int l_sprite_trail(lua_State *L)
 {
 	Vector origin, endpoint;
@@ -183,13 +177,8 @@ static int l_sprite_trail(lua_State *L)
 	return 0;
 }
 
-// fx.firefield(x, y, z, opts) - a field of N sprites scattered in a square
-// around the point, one network message for the whole batch. TE_EXPLOSION
-// (fx.explosion) plays a sprite's own animation frames additively and once;
-// this is the other shape entirely - alpha-blended by default, an explicit
-// duration independent of the sprite's frame count, and count sprites for
-// the cost of a single message instead of one message each. What the
-// reference AmxModX smoke plugin actually built its cloud from.
+// fx.firefield(x, y, z, opts) - N sprites scattered in a square, one message.
+// Alpha-blended by default (smoke/gas); pass alpha = false for a solid look.
 static int l_firefield(lua_State *L)
 {
 	Vector origin;
@@ -207,8 +196,6 @@ static int l_firefield(lua_State *L)
 	lua_getfield(L, 4, "loop");       if (lua_toboolean(L, -1)) flags |= TEFIRE_FLAG_LOOP;      lua_pop(L, 1);
 	lua_getfield(L, 4, "planar");     if (lua_toboolean(L, -1)) flags |= TEFIRE_FLAG_PLANAR;    lua_pop(L, 1);
 	lua_getfield(L, 4, "additive");   if (lua_toboolean(L, -1)) flags |= TEFIRE_FLAG_ADDITIVE;  lua_pop(L, 1);
-	// alpha-blended (not additive-glow) is the sane default for smoke/gas -
-	// opt in to a solid look with alpha = false rather than the reverse.
 	lua_getfield(L, 4, "alpha");
 	bool alpha = lua_isnil(L, -1) ? true : lua_toboolean(L, -1);
 	lua_pop(L, 1);
@@ -229,10 +216,7 @@ static int l_firefield(lua_State *L)
 	return 0;
 }
 
-// fx.beam(x1, y1, z1, x2, y2, z2, opts) - a straight line between two exact
-// points, unlike beam_cylinder/sprite_trail which only take one point plus a
-// height. For drawing a line between two known things (a shot's path, a
-// visibility check) rather than an effect radiating from a single origin.
+// fx.beam(x1, y1, z1, x2, y2, z2, opts) - a straight line between two points.
 static int l_beam(lua_State *L)
 {
 	Vector start, endpoint;

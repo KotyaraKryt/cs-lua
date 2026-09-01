@@ -14,17 +14,15 @@
 static int s_player_ref[CSLUA_MAXPLAYERS];
 static int s_all_ref = LUA_NOREF;
 
-// pfnGetPlayerStats reads client_t->latency, which the engine recomputes
-// every server frame from its own frame_latency[] ring buffer - so this is
-// already live, not something we need to sample on a timer. The only gap is
-// the couple of frames right after connect, before that buffer has any real
-// samples in it, when the engine can hand back 0. This cache exists only to
-// paper over *that* window - it holds the last non-zero reading, nothing else.
+// pfnGetPlayerStats reads client_t->latency, which the engine keeps live from
+// its own frame_latency[] ring. The only gap is the couple of frames right
+// after connect, when it can hand back 0; this cache holds the last non-zero
+// reading to paper over just that window.
 static int s_last_ping[CSLUA_MAXPLAYERS];
 static int s_last_loss[CSLUA_MAXPLAYERS];
 
-// The shared __index table behind every player object. Kept so Lua can add
-// methods to it - see players.method() below.
+// The shared __index table behind every player object. Kept so players.method()
+// can extend it.
 static int s_methods_ref = LUA_NOREF;
 
 // Reads self.id. Works for both a player object and `all` (id 0).
@@ -42,14 +40,9 @@ static int self_id(lua_State *L)
 	if (id < 0 || id >= CSLUA_MAXPLAYERS)
 		return luaL_error(L, "p: player index %d out of range", id);
 
-	// "id" lives as a plain table field - every method here reads it that way
-	// without a metamethod round trip - but that means __newindex (l_readonly,
-	// below) never fires for it: the key already exists by the time a script
-	// gets its hands on the object, and __newindex only triggers on an absent
-	// key. p.id = N would otherwise silently repoint this shared, cached
-	// object at a different slot instead of erroring. These objects are one
-	// singleton per slot for the whole process (s_player_ref), so checking
-	// here protects every other plugin, not just the one that wrote it.
+	// "id" is a plain table field, so __newindex (l_readonly) never fires for
+	// it - the key already exists. p.id = N would silently repoint this shared,
+	// cached object, so check here that it still matches the slot it claims.
 	if (id == 0)
 		cslua_push_all(L);
 	else
@@ -89,10 +82,9 @@ static int l_steamid(lua_State *L)
 	return 1;
 }
 
-// p:info("_pw") - a key from the client's own infobuffer, set client-side with
-// `setinfo`. The access layer uses it for the nick+password login, the way
-// AmxModX does; anything the client sets is client-controlled, so never trust
-// it for more than matching against a stored secret.
+// p:info("_pw") - a key from the client's own infobuffer (setinfo). Anything
+// the client sets is client-controlled; never trust it for more than matching
+// against a stored secret.
 static int l_info(lua_State *L)
 {
 	int id = self_player_id(L);
@@ -134,14 +126,8 @@ static int l_connected(lua_State *L)
 	return 1;
 }
 
-// p:ping() -> ms [, loss_pct]
-//
-// Read fresh on every call, not sampled on a timer: client_t->latency is
-// already kept current by the engine's own SV_CalcPing, once per server
-// frame, whether or not any Lua script is asking for it. A zero here means
-// "no samples yet" (right after connect) rather than "currently 0ms", so a
-// zero reading falls back to the last non-zero one instead of being
-// reported as-is.
+// p:ping() -> ms [, loss_pct]. Read fresh every call; a zero (no samples yet)
+// falls back to the last non-zero reading.
 static int l_ping(lua_State *L)
 {
 	int id = self_player_id(L);
@@ -174,9 +160,8 @@ void cslua_player_reset_ping(int id)
 	}
 }
 
-// Everything below reads and writes entvars_t directly through the edict, so
-// it needs no offsets and works on any game DLL. A missing player is an error
-// rather than a silent zero: use p:connected() if you are unsure.
+// Everything below reads and writes entvars_t directly through the edict, so it
+// works on any game DLL. A missing player is an error, not a silent zero.
 static entvars_t *self_pev(lua_State *L)
 {
 	int id = self_player_id(L);
@@ -259,8 +244,7 @@ static int l_maxspeed(lua_State *L)
 	return scalar_field(L, self_pev(L)->maxspeed);
 }
 
-// Writing origin goes through the engine so the entity gets relinked; setting
-// pev->origin by hand leaves the player stuck in the old spot for collisions.
+// Writing origin goes through the engine so the entity gets relinked.
 static int l_origin(lua_State *L)
 {
 	int id = self_player_id(L);
@@ -307,24 +291,21 @@ static int l_aim(lua_State *L)
 	return 3;
 }
 
-// p:pev(name[, v...]) - generic read/write for any entvars_t field by its
-// real name, sharing the field table and dispatch in lua_pev.cpp with
-// e:pev() in lua_entity.cpp so both objects agree on it byte for byte.
+// p:pev(name[, v...]) - generic read/write for any entvars_t field by name,
+// sharing the field table and dispatch in lua_pev.cpp with e:pev().
 static int l_pev(lua_State *L)
 {
 	return cslua_pev_call(L, self_pev(L), 2);
 }
 
-// Shared by l_trace and l_trace_to: turns a finished TraceResult into the
-// { kind, player, classname, x, y, z, distance, hitgroup } table both hand
-// back. `start` is only needed to compute distance.
+// Shared by l_trace and l_trace_to: turns a TraceResult into the
+// { kind, player, classname, x, y, z, distance, hitgroup } table both return.
 void cslua_push_trace_result(lua_State *L, const TraceResult &tr, const Vector &start)
 {
 	lua_newtable(L);
 
-	// A trace that ran the whole way hit nothing. The coordinates are still
-	// filled in with the ray's end, so a plugin drawing an effect there does
-	// not have to special-case it.
+	// A trace that ran the whole way hit nothing; the coordinates are still the
+	// ray's end.
 	edict_t *hit = tr.pHit;
 	int hit_index = (hit && !hit->free) ? ENTINDEX(hit) : -1;
 
@@ -363,21 +344,13 @@ void cslua_push_trace_result(lua_State *L, const TraceResult &tr, const Vector &
 	lua_setfield(L, -2, "hitgroup");
 }
 
-// p:trace([distance]) - fire a ray from the player's eyes along their aim and
-// report the first thing it meets. p:aim() gives the direction but nothing to
-// aim at; everything of the "what am I looking at" kind (HP over the crosshair,
-// a laser, zone triggers) needs the ray.
-//
-// The result is a table rather than a row of returns: the fields are of mixed
-// types, and a positional kind, player, classname, x, y, z, distance reads
-// badly and cannot grow later.
+// p:trace([distance]) - fire a ray from the player's eyes along their aim.
 static int l_trace(lua_State *L)
 {
 	int id = self_player_id(L);
 	entvars_t *pev = self_pev(L);
 	float distance = (float)luaL_optnumber(L, 2, 8192.0);
 
-	// v_angle is the client's view; MAKE_VECTORS turns it into v_forward.
 	MAKE_VECTORS(pev->v_angle);
 
 	Vector start = pev->origin + pev->view_ofs;
@@ -390,13 +363,8 @@ static int l_trace(lua_State *L)
 	return 1;
 }
 
-// p:trace_to(other) - a line from p's eyes straight to other's eyes, not
-// along p's current crosshair. p:trace() answers "what is p looking at
-// right now"; this answers "is there anything solid between p and other" -
-// the question that actually matters for "did p have a clear shot at other",
-// since weapon spread and recoil can point the crosshair somewhere other
-// than where the bullet that hit `other` actually went. Aiming at the real
-// target instead of guessing the shot's direction sidesteps that entirely.
+// p:trace_to(other) - a line from p's eyes to other's eyes, for "was there a
+// clear shot" (weapon spread means the crosshair isn't where the bullet went).
 static int l_trace_to(lua_State *L)
 {
 	int id = self_player_id(L);
@@ -428,13 +396,9 @@ static int l_trace_to(lua_State *L)
 	return 1;
 }
 
-// sv.hull_free(x, y, z[, ducking]) - would a standing (or, with `ducking`,
-// crouching) player fit at this point without spawning stuck in world
-// geometry? A zero-length TRACE_HULL at the point is the standard GoldSrc
-// way to ask that: fStartSolid/fAllSolid come back true when the human hull
-// (or head_hull while ducked) is already overlapping something solid there.
-// Not a player method - nobody has to already exist at the point in question,
-// unlike trace()/trace_to() which fire from a player's own eyes.
+// sv.hull_free(x, y, z[, ducking]) - would a player fit here without spawning
+// stuck? A zero-length TRACE_HULL at the point; fStartSolid/fAllSolid come back
+// true when the hull already overlaps something solid.
 int cslua_sv_hull_free(lua_State *L)
 {
 	Vector point;
@@ -469,8 +433,7 @@ static int l_ducking(lua_State *L)
 	return 1;
 }
 
-// Name -> IN_* bit, for p:button(). Only the ones a script can plausibly want
-// to poll; the rest of usercmd (mouse deltas, impulse) has no bit to check.
+// Name -> IN_* bit, for p:button().
 static int button_bit(const char *name)
 {
 	if (!strcmp(name, "attack"))   return IN_ATTACK;
@@ -486,13 +449,8 @@ static int button_bit(const char *name)
 	return 0;
 }
 
-// p:button("use") - true while the player holds that key down, read fresh off
-// pev->button every call. This is the same field AMXX's var_button reads: the
-// engine writes it from the client's usercmd before every PlayerPreThink, live
-// entvars, no hook needed on our side.
-//
-// Read-only: the client owns this field, and writing it would just get
-// overwritten by the next usercmd a frame later.
+// p:button("use") - true while the player holds that key, read fresh off
+// pev->button. Read-only: the client owns this field.
 static int l_button(lua_State *L)
 {
 	const char *name = luaL_checkstring(L, 2);
@@ -504,8 +462,7 @@ static int l_button(lua_State *L)
 	return 1;
 }
 
-// FL_FAKECLIENT marks a server-side bot; FL_PROXY marks an HLTV spectator
-// proxy. Both live in entvars, so they work without ReGameDLL.
+// FL_FAKECLIENT marks a server-side bot; FL_PROXY marks an HLTV proxy.
 static int l_is_bot(lua_State *L)
 {
 	lua_pushboolean(L, (self_pev(L)->flags & FL_FAKECLIENT) != 0);
@@ -518,8 +475,7 @@ static int l_is_hltv(lua_State *L)
 	return 1;
 }
 
-// Read/write in one method for a single bit of pev->flags, the way
-// scalar_field does it for a whole field.
+// Read/write in one method for a single bit of pev->flags.
 static int flag_field(lua_State *L, entvars_t *pev, int bit)
 {
 	if (lua_isnoneornil(L, 2)) {
@@ -534,17 +490,15 @@ static int flag_field(lua_State *L, entvars_t *pev, int bit)
 	return 0;
 }
 
-// p:freeze([bool]) - the engine's own freeze: PM_Move sees FL_FROZEN and stops
-// the player where they stand. The usual workaround, maxspeed(1), leaves the
-// client predicting movement the server refuses, which is the stutter you see.
+// p:freeze([bool]) - FL_FROZEN, the engine's own freeze. maxspeed(1) leaves the
+// client predicting movement the server refuses, which is the stutter.
 static int l_freeze(lua_State *L)
 {
 	return flag_field(L, self_pev(L), FL_FROZEN);
 }
 
-// p:godmode([bool]) - takedamage is what the damage path actually checks, so
-// that is the source of truth here; FL_GODMODE is set alongside it because
-// that is the bit other mods and the engine's own `god` command look at.
+// p:godmode([bool]) - takedamage is the source of truth; FL_GODMODE is set
+// alongside because that is what other mods and `god` look at.
 static int l_godmode(lua_State *L)
 {
 	entvars_t *pev = self_pev(L);
@@ -564,8 +518,7 @@ static int l_godmode(lua_State *L)
 	return 0;
 }
 
-// p:noclip([bool]) - fly through walls. MOVETYPE_WALK is what a live player
-// normally has, so that is what turning it off restores.
+// p:noclip([bool]) - fly through walls. MOVETYPE_WALK is the live-player value.
 static int l_noclip(lua_State *L)
 {
 	entvars_t *pev = self_pev(L);
@@ -579,12 +532,9 @@ static int l_noclip(lua_State *L)
 	return 0;
 }
 
-// p:noblock([bool]) - true lets other players walk through this one instead
-// of shoving them apart. SOLID_NOT only affects how OTHER entities treat this
-// one (their hull traces skip it); it does not touch this player's own
-// movement against the level, which PM_Move clips against the world
-// directly - so unlike noclip this cannot drop someone through the floor.
-// SOLID_SLIDEBOX is the normal value a live player has.
+// p:noblock([bool]) - true lets other players walk through this one. SOLID_NOT
+// only affects how other entities treat this one, not its own movement against
+// the world, so unlike noclip this cannot drop someone through the floor.
 static int l_noblock(lua_State *L)
 {
 	entvars_t *pev = self_pev(L);
@@ -598,10 +548,9 @@ static int l_noblock(lua_State *L)
 	return 0;
 }
 
-// p:suppress_attack([bool]) - true drops IN_ATTACK/IN_ATTACK2 from this
-// player's button state every frame (dllapi.cpp's pfnPlayerPreThink),
-// before the weapon code sees it: held-down fire never happens at all,
-// rather than firing and then having its damage or effects undone.
+// p:suppress_attack([bool]) - true drops IN_ATTACK/IN_ATTACK2 from the button
+// state every frame (dllapi.cpp's PlayerPreThink), before the weapon code sees
+// it.
 static int l_suppress_attack(lua_State *L)
 {
 	int id = self_player_id(L);
@@ -615,12 +564,8 @@ static int l_suppress_attack(lua_State *L)
 	return 0;
 }
 
-// p:suppress_move([bool]) - true drops IN_FORWARD/IN_BACK/IN_MOVELEFT/
-// IN_MOVERIGHT from this player's button state every frame, the same way
-// p:suppress_attack drops the fire buttons. Pins them in place without
-// FL_FROZEN (p:freeze) - that flag turned out to zero pev->button along
-// with movement, which is exactly the field a "hold USE to keep going"
-// mechanic reads every tick to see if the key is still down.
+// p:suppress_move([bool]) - same for IN_FORWARD/IN_BACK/IN_MOVELEFT/IN_MOVERIGHT.
+// Pins them in place without FL_FROZEN, which also zeroes pev->button.
 static int l_suppress_move(lua_State *L)
 {
 	int id = self_player_id(L);
@@ -635,9 +580,7 @@ static int l_suppress_move(lua_State *L)
 }
 
 // p:suppress_drop([bool]) - true blocks the "drop" console command outright
-// (dllapi.cpp's ClientCommand, before the game DLL sees it), so the current
-// weapon can never become a separate on-the-ground entity with its own ammo
-// in the first place.
+// (dllapi.cpp's ClientCommand).
 static int l_suppress_drop(lua_State *L)
 {
 	int id = self_player_id(L);
@@ -652,7 +595,6 @@ static int l_suppress_drop(lua_State *L)
 }
 
 // The CS-specific methods below need ReGameDLL: they reach into CBasePlayer.
-// On a vanilla mp.dll they raise a clear error instead of reading garbage.
 static CBasePlayer *self_cbase(lua_State *L)
 {
 	int id = self_player_id(L);
@@ -667,13 +609,7 @@ static CBasePlayer *self_cbase(lua_State *L)
 	return player;
 }
 
-// Reads a flag out of an options table. Every method that used to take a bare
-// positional boolean takes one of these instead: p:money(500, true) never said
-// what the true meant, and the same slot meant something different on the next
-// method along.
-//
-// A bare boolean is refused rather than quietly accepted - taking it would
-// leave half a codebase written the old way and half the new.
+// Reads a flag out of an options table. A bare boolean is refused.
 static bool opt_flag(lua_State *L, int index, const char *key, const char *method)
 {
 	if (lua_isnoneornil(L, index))
@@ -700,12 +636,8 @@ static const char *team_name(int team)
 	}
 }
 
-// p:progress_bar(seconds) - the same under-crosshair progress bar the game
-// shows for planting/defusing the bomb, driven by CSPlayer's own
-// SetProgressBarTime (ICSPlayer, CSPlayer.h). The client counts it down on
-// its own once sent - there is nothing to update per frame - so this is a
-// one-shot trigger, not a readable value. 0 clears the bar early, the way
-// letting go of the plant/defuse key does.
+// p:progress_bar(seconds) - the same under-crosshair bar the game shows for
+// planting/defusing (CSPlayer::SetProgressBarTime). One-shot; 0 clears it.
 static int l_progress_bar(lua_State *L)
 {
 	CBasePlayer *player = self_cbase(L);
@@ -717,13 +649,11 @@ static int l_progress_bar(lua_State *L)
 	return 0;
 }
 
-// p:team() reads "CT"/"T"/"SPEC"/"NONE".
+// p:team() reads.
 // p:team("CT")                    soft move: change side, keep the player alive.
-// p:team("CT", { force = true })  the player dies and joins fresh, the way the
-//                                 game does it (JoinTeam kills a living player
-//                                 on switch).
-// The soft path can't put a spectator into a round on its own, so it upgrades
-// to a force join for that case.
+// p:team("CT", { force = true })  the player dies and rejoins (JoinTeam).
+// The soft path can't put a spectator into a round, so it upgrades to force for
+// that case.
 static int l_team(lua_State *L)
 {
 	CBasePlayer *player = self_cbase(L);
@@ -744,10 +674,8 @@ static int l_team(lua_State *L)
 	bool from_limbo = player->m_iTeam == SPECTATOR || player->m_iTeam == UNASSIGNED;
 
 	if (force || from_limbo || team == SPECTATOR) {
-		// JoinTeam does the full transition (and the kill, if alive).
 		player->CSPlayer()->JoinTeam(team);
 	} else {
-		// Just move sides: swap the team, refresh model and scoreboard.
 		player->m_iTeam = team;
 		player->m_bTeamChanged = true;
 		player->CSPlayer()->TeamChangeUpdate();
@@ -757,20 +685,11 @@ static int l_team(lua_State *L)
 
 // Admin actions.
 //
-// kick and ban go through the engine's own console commands - that is the only
-// way to drop a client, and it keeps the ban in the same list the server admin
-// already manages. They are addressed by userid, never by name: a nickname can
-// contain spaces or quotes and would break the command line.
+// kick and ban go through the engine's own console commands, addressed by
+// userid (a nickname can contain spaces or quotes).
 
-// p:kick([reason]) - the engine's own "kick #<userid> [reason]" takes a
-// trailing reason argument (see Host_Kick_f) and folds it straight into the
-// SV_DropClient message ("Kicked :<reason>"), which is what actually shows
-// up on the client's disconnect screen. A bare "kick #<userid>" with no
-// reason argument at all falls through to the engine's generic "Kicked" -
-// this used to only print the reason to the player's own console
-// (cslua_send_console), invisible unless their console happened to already
-// be open, and gone by the time it would matter anyway since the drop
-// follows immediately after.
+// p:kick([reason]) - "kick #<userid> [reason]" folds the reason straight into
+// the SV_DropClient message the client sees.
 static int l_kick(lua_State *L)
 {
 	int id = self_player_id(L);
@@ -785,10 +704,8 @@ static int l_kick(lua_State *L)
 
 	char cmd[256];
 	if (reason && *reason) {
-		// The reason rides the same console command line as a quoted
-		// argument, so it can't carry a '"' of its own - Cmd_TokenizeString
-		// would end the argument right there and split the rest into
-		// further tokens.
+		// The reason rides the console command line as a quoted argument, so it
+		// can't carry a '"' of its own.
 		char escaped[192];
 		size_t w = 0;
 		for (const char *p = reason; *p && w < sizeof escaped - 1; p++)
@@ -804,8 +721,8 @@ static int l_kick(lua_State *L)
 	return 0;
 }
 
-// p:ban(minutes [, reason]) - 0 minutes means permanent. The id is written to
-// the ban list so it survives a restart, which is what an admin expects.
+// p:ban(minutes [, reason]) - 0 minutes = permanent. Written to the ban list so
+// it survives a restart.
 static int l_ban(lua_State *L)
 {
 	int id = self_player_id(L);
@@ -825,7 +742,6 @@ static int l_ban(lua_State *L)
 	if (reason && *reason)
 		cslua_send_console(id, reason);
 
-	// banid takes minutes; "kick" makes it drop the player right away.
 	char cmd[96];
 	cslua_snprintf(cmd, sizeof cmd, "banid %d #%d kick\n", minutes, g_engfuncs.pfnGetPlayerUserId(e));
 	cmd[sizeof cmd - 1] = '\0';
@@ -834,10 +750,8 @@ static int l_ban(lua_State *L)
 	return 0;
 }
 
-// p:exec("spec_mode 1") - make the client run a console command, the way
-// amx_client_cmd does. The command runs on the player's machine, so it only
-// reaches what their engine and their config expose; a client can also have
-// unbound or removed it, and nothing reports back when that happens.
+// p:exec("spec_mode 1") - make the client run a console command. It runs on the
+// player's machine and nothing reports back.
 static int l_exec(lua_State *L)
 {
 	int id = self_player_id(L);
@@ -850,8 +764,7 @@ static int l_exec(lua_State *L)
 	if (!e || e->free)
 		return 0;
 
-	// The engine's buffer for this is 128 bytes and it does not truncate
-	// politely, so refuse anything that would not fit.
+	// The engine's buffer for this is 128 bytes and does not truncate politely.
 	if (strlen(cmd) > 120)
 		return luaL_error(L, "p:exec: command is too long (%d chars, 120 max)", (int)strlen(cmd));
 
@@ -859,17 +772,15 @@ static int l_exec(lua_State *L)
 	return 0;
 }
 
-// Damage dealt "by the world", so the kill is not credited to anybody and the
-// scoreboard stays honest.
+// Damage dealt "by the world", so the kill is not credited to anybody.
 static entvars_t *world_pev()
 {
 	edict_t *world = g_engfuncs.pfnPEntityOfEntIndex(0);
 	return world ? &world->v : NULL;
 }
 
-// p:slay() - kill without blaming a player. Goes through TakeDamage so the
-// game does the whole death properly: dropped weapons, death message, round
-// win check. Setting health to 0 by hand does none of that.
+// p:slay() - kill without blaming a player. Goes through TakeDamage so the game
+// does the whole death (dropped weapons, death message, round win check).
 static int l_slay(lua_State *L)
 {
 	CBasePlayer *player = self_cbase(L);
@@ -885,20 +796,13 @@ static int l_slay(lua_State *L)
 	return 0;
 }
 
-// p:spawn() - put the player into the round alive, from either state. This is
-// the respawn the game itself runs between rounds, so money, score and team
-// survive it untouched.
-//
-// The alternative people reach for, p:team(t, true), goes through JoinTeam:
-// that kills a living player and re-enters them, which blinks the screen and
-// resets the scoreboard. This does neither.
+// p:spawn() - the between-rounds respawn: money, score and team survive it.
+// Unlike p:team(t, true), which blinks the screen and resets the scoreboard.
 static int l_spawn(lua_State *L)
 {
 	CBasePlayer *player = self_cbase(L);
 
-	// Nothing to respawn into without a side. RoundRespawn on a spectator
-	// would drop them into the map with no team, so refuse quietly - the same
-	// way kick does nothing for an empty slot.
+	// RoundRespawn on a spectator would drop them into the map with no team.
 	if (player->m_iTeam != TERRORIST && player->m_iTeam != CT)
 		return 0;
 
@@ -906,8 +810,8 @@ static int l_spawn(lua_State *L)
 	return 0;
 }
 
-// p:slap([damage]) - the classic: a little damage and a shove in a random
-// direction. Damage defaults to 1 and can be 0 for a pure shove.
+// p:slap([damage]) - a little damage and a shove. Damage defaults to 1, 0 for a
+// pure shove.
 static int l_slap(lua_State *L)
 {
 	CBasePlayer *player = self_cbase(L);
@@ -946,9 +850,7 @@ static void sync_money(int id, int amount, bool flash)
 	MESSAGE_END();
 }
 
-// p:money() reads, p:money(1000) sets.
-// p:money(1000, { hud = true }) also flashes the on-screen figure, the way
-// picking up cash does.
+// p:money() reads, p:money(1000) sets. p:money(1000, { hud = true }) flashes.
 static int l_money(lua_State *L)
 {
 	CBasePlayer *player = self_cbase(L);
@@ -968,7 +870,7 @@ static int l_money(lua_State *L)
 	return 0;
 }
 
-// Refreshes the scoreboard row so a changed death/frag count actually shows.
+// Refreshes the scoreboard row so a changed death/frag count shows.
 static void sync_score(CBasePlayer *player, int id)
 {
 	int msg = GET_USER_MSG_ID(PLID, "ScoreInfo", NULL);
@@ -998,10 +900,8 @@ static int l_deaths(lua_State *L)
 	return 0;
 }
 
-// p:defuser([bool]) - whether the player is carrying a defuse kit. A plain
-// public bool on CBasePlayer (player.h), the same GiveDefuser/CS_DropWeapon
-// logic already checks - setting it here is exactly what buying one does to
-// this field, just without paying for it.
+// p:defuser([bool]) - whether the player carries a defuse kit. m_bHasDefuser is
+// the same field GiveDefuser/CS_DropWeapon check.
 static int l_defuser(lua_State *L)
 {
 	CBasePlayer *player = self_cbase(L);
@@ -1015,30 +915,13 @@ static int l_defuser(lua_State *L)
 	return 0;
 }
 
-// p:give("weapon_ak47"[, opts]) - GiveNamedItemEx does the full pickup (ammo
-// included), same as walking over the weapon.
+// p:give("weapon_ak47"[, opts]) - GiveNamedItemEx does the full pickup.
 //
-// opts lets a script disguise the result as a different weapon for
-// inventory-bookkeeping purposes only - what "already have this weapon"
-// checks see and which ammo pool it draws from, not what the item actually
-// does:
-//
-//   id        - classname of a real weapon whose WeaponIdType to borrow
-//               (m_iId), resolved through ReGameDLL's own weapon table
-//               (GetWeaponInfo), not a hardcoded number. Also decides the
-//               HUD icon: the client already has that weapon's WeaponList
-//               entry from map load, so borrowing its id borrows its icon
-//               for free, no custom art or WeaponList hook needed.
-//   ammo_type - a spare index (0..31) into the player's ammo array
-//               (m_iPrimaryAmmoType), so this item's reserve is tracked
-//               separately from whatever it shares a real ammo type with.
-//               Pick one no real weapon in cfg uses.
-//
-// Same trick the reference AmxModX plugins reach for ReAPI's
-// rg_set_iteminfo for, minus the fragile part: m_iId and m_iPrimaryAmmoType
-// are plain public members on CBasePlayerItem/CBasePlayerWeapon
-// (weapons.h), not something that needs signature-scanning to reach - as
-// safe to write as m_pActiveItem already is elsewhere in this file.
+// opts disguises the result for inventory-bookkeeping only:
+//   id        - classname of a real weapon whose m_iId (and HUD icon) to borrow,
+//               resolved through ReGameDLL's weapon table (GetWeaponInfo).
+//   ammo_type - a spare index (0..31) into m_iPrimaryAmmoType so this item's
+//               reserve is tracked separately.
 static int l_give(lua_State *L)
 {
 	CBasePlayer *player = self_cbase(L);
@@ -1078,7 +961,7 @@ static int l_strip(lua_State *L)
 	return 0;
 }
 
-// p:weapon() -> classname of the active weapon ("weapon_ak47"), or nil.
+// p:weapon() -> classname of the active weapon, or nil.
 static int l_weapon(lua_State *L)
 {
 	CBasePlayer *player = self_cbase(L);
@@ -1093,11 +976,8 @@ static int l_weapon(lua_State *L)
 	return 1;
 }
 
-// p:switch_weapon(classname) -> true if the player was carrying it and the
-// game agreed to switch (same call the weapon-select key makes), false if
-// they don't have it. p:give() alone never makes the new weapon active on
-// its own unless the slot it lands in was empty - a script that wants a
-// just-given weapon in hand right away needs this too.
+// p:switch_weapon(classname) -> true if the player had it and the game agreed
+// to switch. p:give() alone rarely makes the new weapon active.
 static int l_switch_weapon(lua_State *L)
 {
 	CBasePlayer *player = self_cbase(L);
@@ -1113,9 +993,8 @@ static int l_switch_weapon(lua_State *L)
 	return 1;
 }
 
-// p:weapons() -> array of classnames the player is carrying. The inventory is
-// six HUD slots, each a linked list, so a plain loop over the array misses
-// everything but the first grenade.
+// p:weapons() -> array of classnames. The inventory is six HUD slots, each a
+// linked list.
 static int l_weapons(lua_State *L)
 {
 	CBasePlayer *player = self_cbase(L);
@@ -1135,13 +1014,9 @@ static int l_weapons(lua_State *L)
 	return 1;
 }
 
-// Both weapon accessors take an optional classname first: p:clip() works on
-// the weapon in hand, p:clip("weapon_ak47") on a named one. This resolves the
-// weapon and reports where the value argument landed, so the caller does not
-// have to count arguments twice.
-//
-// NULL means the player has no such weapon - an answer, not an error, so the
-// caller decides what to push.
+// Both weapon accessors take an optional classname first: p:clip() works on the
+// weapon in hand, p:clip("weapon_ak47") on a named one. NULL means the player
+// has no such weapon.
 static CBasePlayerWeapon *weapon_arg(lua_State *L, CBasePlayer *player, int &value_at)
 {
 	CBasePlayerItem *item;
@@ -1161,9 +1036,7 @@ static CBasePlayerWeapon *weapon_arg(lua_State *L, CBasePlayer *player, int &val
 	return static_cast<CBasePlayerWeapon *>(item);
 }
 
-// Pushes the "AmmoX" HUD update for one ammo type. Without it the reserve
-// changes in memory while the client keeps drawing the old figure - the same
-// trap sync_money() exists for.
+// Pushes the "AmmoX" HUD update for one ammo type.
 static void sync_ammo(int id, int type, int count)
 {
 	int msg = GET_USER_MSG_ID(PLID, "AmmoX", NULL);
@@ -1180,13 +1053,9 @@ static void sync_ammo(int id, int type, int count)
 	MESSAGE_END();
 }
 
-// p:ammo([weapon]) reads the reserve, p:ammo(weapon, 90) sets it. Ammo is keyed
-// by the weapon that fires it, not by the game's internal ammo name: that name
-// is not reachable from the SDK we vendor, and "ammo for the AK" is what a shop
-// wants to sell anyway. Weapons sharing a calibre share the pool, so buying for
-// the AK also fills a Galil.
-//
-// nil means the player has no such weapon; a knife has no ammo either.
+// p:ammo([weapon]) reads the reserve, p:ammo(weapon, 90) sets it. Keyed by the
+// weapon that fires it; weapons sharing a calibre share the pool. nil = no such
+// weapon (or a knife).
 static int l_ammo(lua_State *L)
 {
 	CBasePlayer *player = self_cbase(L);
@@ -1212,8 +1081,7 @@ static int l_ammo(lua_State *L)
 	if (count < 0)
 		count = 0;
 
-	// The game's own cap, so a plugin cannot hand out a reserve the HUD cannot
-	// draw and the weapon would never reload from. AmmoX carries one byte.
+	// The game's own cap. AmmoX carries one byte.
 	ItemInfo info;
 	memset(&info, 0, sizeof info);
 	int cap = weapon->GetItemInfo(&info) ? info.iMaxAmmo1 : 255;
@@ -1245,13 +1113,9 @@ static void sync_clip(int id, int weapon_id, int clip)
 	MESSAGE_END();
 }
 
-// p:clip([weapon, ]v) - rounds in the magazine. A knife and the grenades keep
-// m_iClip at -1; that reads back as nil rather than -1, so a plugin can tell
-// "empty" from "has no magazine at all".
-//
-// Writing only reaches the HUD for the weapon in hand - the client is told
-// about one clip at a time - but the field is right either way, and switching
-// to the weapon shows it.
+// p:clip([weapon, ]v) - rounds in the magazine. A knife/grenade keeps m_iClip
+// at -1, which reads back as nil. Writing only reaches the HUD for the weapon
+// in hand.
 static int l_clip(lua_State *L)
 {
 	CBasePlayer *player = self_cbase(L);
@@ -1289,9 +1153,8 @@ static int l_clip(lua_State *L)
 	return 0;
 }
 
-// p:drop([weapon]) - throw a weapon on the floor, the way the player's own
-// drop command does: the game makes the box, keeps the clip in it and picks
-// the next weapon to hold. Without an argument it drops what is in hand.
+// p:drop([weapon]) - throw a weapon on the floor the way the drop command does.
+// Without an argument it drops what is in hand.
 static int l_drop(lua_State *L)
 {
 	CBasePlayer *player = self_cbase(L);
@@ -1366,9 +1229,8 @@ static int l_dhud(lua_State *L)
 	return 0;
 }
 
-// p:screen_shake([opts]) - opts = { amplitude, frequency, duration }, all in
-// UTIL_ScreenShake's own units. Sent straight to the target(s), no radius/PVS
-// filtering - id already says who gets it.
+// p:screen_shake([opts]) - opts = { amplitude, frequency, duration } in
+// UTIL_ScreenShake units. No radius/PVS filtering.
 static int l_screen_shake(lua_State *L)
 {
 	int id = self_id(L);
@@ -1395,8 +1257,8 @@ static int l_screen_shake(lua_State *L)
 	return 0;
 }
 
-// p:screen_fade([opts]) - a full-screen colour fade. opts = { color, alpha,
-// duration, hold, out, modulate, stay }; see ScreenFadeParams for defaults.
+// p:screen_fade([opts]) - opts = { color, alpha, duration, hold, out, modulate,
+// stay }.
 static int l_screen_fade(lua_State *L)
 {
 	int id = self_id(L);
@@ -1407,10 +1269,8 @@ static int l_screen_fade(lua_State *L)
 	return 0;
 }
 
-// p:play_sound("misc/foo.wav") or with options:
-//   { volume = 1.0, channel = 0, pitch = 100, attenuation = 0.8 }
-// attenuation 0 means "no falloff" - the same loudness anywhere on the map,
-// which is what you want for UI-ish sounds.
+// p:play_sound("misc/foo.wav") or with { volume, channel, pitch, attenuation }.
+// attenuation 0 = no falloff (UI-ish sounds).
 static int l_play_sound(lua_State *L)
 {
 	int id = self_id(L);
@@ -1470,13 +1330,10 @@ static int l_readonly(lua_State *L)
 	return luaL_error(L, "player objects are shared and read-only, keep your own state in a table");
 }
 
-// p:motd(text[, { raw = true }]) - the client's own MOTD panel. The one
-// multi-line surface the game has: a menu is nine keys and the HUD is a single
-// string, so a shop catalogue, a top-10 or the server rules go here.
-//
-// The panel renders HTML, which the caller should not have to care about: by
-// default the text is wrapped so newlines break lines and Cyrillic arrives
-// readable. raw = true sends it untouched, for markup written on purpose.
+// p:motd(text[, { raw = true }]) - the client's own MOTD panel, the one
+// multi-line surface the game has. Renders HTML; by default the text is wrapped
+// so newlines break lines and Cyrillic arrives readable. raw = true sends it
+// untouched.
 static int l_motd(lua_State *L)
 {
 	const char *text = luaL_checkstring(L, 2);
@@ -1578,8 +1435,7 @@ static void finish_metatable(lua_State *L)
 	lua_pushcfunction(L, l_tostring);
 	lua_setfield(L, -2, "__tostring");
 
-	// These objects are shared by every plugin, so one plugin bolting a field
-	// onto a player would leak it into all the others.
+	// These objects are shared by every plugin.
 	lua_pushcfunction(L, l_readonly);
 	lua_setfield(L, -2, "__newindex");
 
@@ -1601,12 +1457,8 @@ static void push_player_metatable(lua_State *L)
 	finish_metatable(L);
 }
 
-// players.broadcast carries the messaging methods and nothing else - there is
-// no single health to read from "everyone".
-//
-// A miss raises instead of returning nil. Handing back nil is what made the v1
-// `all` object a trap: `all:alive()` died three frames later with "attempt to
-// call a nil value" and no hint that the object simply never had the method.
+// players.broadcast carries the messaging methods and nothing else. A miss
+// raises instead of returning nil.
 static int l_broadcast_index(lua_State *L)
 {
 	lua_pushvalue(L, 2);					// key
@@ -1635,11 +1487,8 @@ static void push_broadcast_metatable(lua_State *L)
 
 // players.method("can", function(self, node) ... end)
 //
-// The player metatable is sealed (no __metatable, __newindex refuses), so Lua
-// cannot bolt methods on by itself - which is what keeps one plugin from
-// redefining p:health() for everybody. This is the one sanctioned door: it
-// refuses to replace an existing method, so the core layer can extend the
-// player object (p:can(), p:groups()) without opening it up to hijacking.
+// The player metatable is sealed, so this is the one sanctioned door for the
+// core layer to extend the player object. Refuses to replace an existing method.
 static int l_player_method(lua_State *L)
 {
 	const char *name = luaL_checkstring(L, 1);
@@ -1705,7 +1554,6 @@ void cslua_player_init(lua_State *L)
 
 void cslua_player_shutdown()
 {
-	// The refs die with the state; just forget them.
 	for (int id = 0; id < CSLUA_MAXPLAYERS; id++)
 		s_player_ref[id] = LUA_NOREF;
 	s_all_ref = LUA_NOREF;

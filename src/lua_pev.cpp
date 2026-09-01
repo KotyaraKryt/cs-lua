@@ -6,12 +6,8 @@
 #include <cstddef>
 #include <string.h>
 
-// AmxModX's fakemeta has to read entvars_t by raw byte offset because it only
-// ever sees the engine headers - it has no idea what field lives where beyond
-// what its own hand-maintained offset tables say. This project links against
-// the actual ReGameDLL SDK, so every field below is offsetof() against the
-// real struct in progdefs.h: a field that gets renamed or reordered upstream
-// fails the build instead of silently reading the wrong bytes.
+// Every field below is offsetof() against the real entvars_t in progdefs.h, so
+// a rename/reorder upstream fails the build instead of reading wrong bytes.
 enum PevType
 {
 	PEV_INT,
@@ -77,8 +73,7 @@ static const PevField s_pev_fields[] =
 	F(frame,         PEV_FLOAT),
 	F(animtime,      PEV_FLOAT),
 	F(framerate,     PEV_FLOAT),
-	// controller[4]/blending[2] are byte arrays, not scalar fields - left out
-	// until something actually needs per-element access to them.
+	// controller[4]/blending[2] are byte arrays, left out.
 	F(scale,         PEV_FLOAT),
 	F(rendermode,    PEV_INT),
 	F(renderamt,     PEV_FLOAT),
@@ -157,8 +152,6 @@ static const PevField *find_pev_field(const char *name)
 }
 
 // Accepts an entity object ({index=...}), a player object ({id=...}), or nil.
-// The two Lua-side object shapes differ, so an edict-pointer pev field (owner,
-// aiment, enemy, ...) has to be willing to unwrap either one.
 edict_t *cslua_arg_to_edict(lua_State *L, int idx)
 {
 	if (lua_isnoneornil(L, idx))
@@ -171,11 +164,8 @@ edict_t *cslua_arg_to_edict(lua_State *L, int idx)
 	int n = has_index ? (int)lua_tointeger(L, -1) : 0;
 	lua_pop(L, 1);
 
-	// Only an entity object carries a serial - a stale one (its slot died and
-	// was handed to something else since) must not silently resolve to
-	// whatever lives there now. Player objects have no such field: a slot
-	// 1..maxplayers does not get reused the way a generic entity's does, so
-	// there is nothing here to go stale against.
+	// Only an entity object carries a serial - a stale one must not resolve to
+	// whatever lives in the slot now. Player slots are not reused that way.
 	int serial = 0;
 	if (has_index) {
 		lua_getfield(L, idx, "serial");
@@ -209,11 +199,9 @@ int cslua_pev_call(lua_State *L, entvars_t *pev, int name_arg)
 
 	int value_arg = name_arg + 1;
 
-	// lua_isnoneornil() can't tell "no value given" from "nil given on
-	// purpose" - both look like LUA_TNIL on the stack. That distinction
-	// matters here: e:pev("owner", nil) clearing an edict field is a real,
-	// meaningful write, not a read. Whether the caller supplied an argument
-	// slot at all (regardless of what's in it) is what lua_gettop() answers.
+	// lua_isnoneornil can't tell "no value" from "nil on purpose", and
+	// e:pev("owner", nil) clearing an edict field is a real write. Whether an
+	// argument slot exists at all is what matters.
 	bool write = lua_gettop(L) >= value_arg;
 	char *base = (char *)pev + field->offset;
 

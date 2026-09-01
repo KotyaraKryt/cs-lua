@@ -14,24 +14,11 @@
 
 #include <string.h>
 
-// Plugins tend to compile the same handful of patterns (a chat command
-// shape, a log line format) and run them against many strings - a chat
-// filter checked on every message, say. Caching the compiled std::regex
-// keyed by its source text means only the first call per pattern pays for
-// compilation. Unbounded on purpose: this assumes patterns are static
-// strings plugin authors wrote, not built dynamically per call. A plugin
-// that generates truly unique patterns in a loop would grow this
-// unboundedly, same trust-the-author tradeoff the rest of this module
-// already makes elsewhere (nothing here validates plugin input for taste,
-// only for safety).
-//
-// Entries here live for the rest of the process, so a reference into this
-// map (the `re` handed to the background thread below) stays valid no matter
-// what l_match/l_find/l_replace insert afterwards: std::map never
-// invalidates references to existing elements on insert, and
-// std::regex_search never mutates the regex it searches with. Reading a
-// cached entry from the watchdog thread while the game thread inserts a
-// different one is safe on both counts.
+// Compiled std::regex cache keyed by source text; only the first call per
+// pattern pays for compilation. Unbounded on purpose - assumes static patterns.
+// std::map never invalidates references to existing elements on insert, and
+// std::regex_search never mutates the regex, so the watchdog thread reading a
+// cached entry while the game thread inserts another is safe.
 static std::map<std::string, std::regex> s_cache;
 
 static const std::regex &compile(lua_State *L, const char *pattern)
@@ -45,29 +32,18 @@ static const std::regex &compile(lua_State *L, const char *pattern)
 		return s_cache.emplace(pattern, std::move(re)).first->second;
 	} catch (const std::regex_error &e) {
 		luaL_error(L, "regex: invalid pattern '%s': %s", pattern, e.what());
-		// unreachable - luaL_error longjmps out - but every path needs a
-		// return to satisfy the compiler.
+		// unreachable - luaL_error longjmps out
 		static const std::regex unreachable;
 		return unreachable;
 	}
 }
 
-// ---------------------------------------------------------------------------
 // Watchdog
 //
-// std::regex has no cooperative abort hook the way SQLite's progress handler
-// does (see the watchdog in lua_db.cpp) - nothing can reach into a running
-// std::regex_search and tell it to stop. A hand-written pattern like
-// "(a+)+$" against an unhelpful string backtracks catastrophically, and run
-// on the game thread that is the whole server hung along with it.
-//
-// The only lever left is to not wait on the game thread for it: the match
-// runs on its own std::thread, and the game thread gives up after
-// cslua_regex_timeout_ms instead of joining it. The thread itself is not
-// killed - C++ has no safe way to do that - it is detached and left to run
-// to completion; nothing it touches belongs to the calling Lua frame (see
-// RegexWait below), so a result nobody is waiting for anymore is simply
-// dropped on the floor when the thread exits.
+// std::regex has no abort hook; a pattern like "(a+)+$" can backtrack
+// catastrophically and hang the game thread. The match runs on its own thread
+// and the game thread gives up after cslua_regex_timeout_ms. The thread is
+// detached, not killed; its result is dropped when nobody is waiting.
 
 static char s_timeout_name[] = "cslua_regex_timeout_ms";
 static char s_timeout_value[] = "100";
@@ -90,12 +66,10 @@ static int regex_timeout_ms()
 	return ms > 0 ? ms : 100;
 }
 
-// Base for every per-call job below. Deliberately holds nothing Lua-facing
-// and nothing that points into a calling C function's stack: on timeout that
-// frame is gone (l_match/l_find/l_replace already returned an error to Lua),
-// while the detached thread may still be writing into the job for a while
-// yet. shared_ptr keeps it alive for whichever side - the timed-out caller or
-// the still-running thread - lets go of it last.
+// Base for every per-call job. Holds nothing Lua-facing and nothing pointing
+// into a calling frame's stack: on timeout that frame is gone while the
+// detached thread may still write here. shared_ptr keeps it alive for whichever
+// side lets go last.
 struct RegexWait
 {
 	std::mutex mtx;
@@ -103,9 +77,8 @@ struct RegexWait
 	bool done = false;
 };
 
-// Runs `body` on its own thread and waits for it here, up to timeout_ms.
-// Returns false on timeout; `body` keeps running regardless, and whatever it
-// writes into *job past that point is never looked at again.
+// Runs `body` on its own thread, waits up to timeout_ms. Returns false on
+// timeout; `body` keeps running and its later writes are never looked at.
 template <typename J, typename F>
 static bool run_with_deadline(const std::shared_ptr<J> &job, F body, int timeout_ms)
 {
@@ -122,11 +95,6 @@ static bool run_with_deadline(const std::shared_ptr<J> &job, F body, int timeout
 }
 
 // regex.match(str, pattern[, init]) -> capture, ... | whole_match | nil
-//
-// Same shape as Lua's own string.match: with groups in the pattern, returns
-// one value per group (nil for one that did not participate); with none,
-// returns the whole match. No match at all is a bare nil, not an error -
-// "does this match" is a query, not a mistake.
 static int l_match(lua_State *L)
 {
 	const char *str = luaL_checkstring(L, 1);
@@ -192,10 +160,6 @@ static int l_match(lua_State *L)
 }
 
 // regex.find(str, pattern[, init]) -> start, finish, capture, ... | nil
-//
-// Same shape as Lua's own string.find: 1-based, inclusive start/finish
-// (so str:sub(start, finish) reproduces the match), plus one value per
-// capture group if the pattern has any.
 static int l_find(lua_State *L)
 {
 	const char *str = luaL_checkstring(L, 1);
@@ -261,11 +225,7 @@ static int l_find(lua_State *L)
 // regex.replace(str, pattern, repl[, limit]) -> result, count
 //
 // `repl` may reference capture groups with $1, $2, ... ($& for the whole
-// match), the same substitution syntax std::regex already uses. Replaces
-// every match by default; `limit` caps how many (leftmost first), same idea
-// as Lua's own string.gsub taking an optional count. Named replace rather
-// than gsub - this is not a Lua pattern, and "gsub" already means something
-// specific to anyone who knows Lua.
+// match). Replaces every match by default; `limit` caps how many.
 static int l_replace(lua_State *L)
 {
 	const char *str = luaL_checkstring(L, 1);

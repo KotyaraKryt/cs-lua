@@ -31,9 +31,8 @@ plugin_info_t Plugin_info =
 	"https://github.com/KotyaraKryt/cs-lua",	// url
 	"CSLUA",					// logtag
 	PT_STARTUP,					// (when) loadable
-	PT_NEVER,					// (when) unloadable - we hand out function pointers
-								// to the engine via AddServerCommand, so unloading
-								// the DLL would leave them dangling.
+	PT_NEVER,					// (when) unloadable - we hand function pointers
+								// to the engine via AddServerCommand
 };
 
 static void cslua_vprint(bool is_error, const char *fmt, va_list ap)
@@ -41,30 +40,25 @@ static void cslua_vprint(bool is_error, const char *fmt, va_list ap)
 	char msg[1024];
 	int n = cslua_vsnprintf(msg, sizeof msg - 1, fmt, ap);
 	// _vsnprintf (MSVC) returns -1 on overflow; vsnprintf (C99) returns the
-	// length it WANTED, which can be past the buffer. Clamp for both.
+	// wanted length. Clamp for both.
 	if (n < 0 || n > (int)sizeof msg - 1)
 		n = (int)sizeof msg - 1;
 	msg[n] = '\0';
 
-	// Straight to the server console. Con_Printf is what a command reply has to
-	// go through: it reaches the interactive console, an rcon caller (it honours
-	// the rcon redirect), and a game panel's stdout alike. metamod's LOG_MESSAGE
-	// does not - it lands in the metamod log file and nowhere a person watching
-	// a console would see it, which reads as "the command printed nothing".
+	// pfnServerPrint reaches the interactive console, an rcon caller and a game
+	// panel's stdout alike; metamod's LOG_MESSAGE does not.
 	char raw[1024 + 32];
 	cslua_snprintf(raw, sizeof raw, "%s%s\n", CSLUA_TAG, msg);
 	raw[sizeof raw - 1] = '\0';
 	if (g_engfuncs.pfnServerPrint)
 		g_engfuncs.pfnServerPrint(raw);
 
-	// An error also goes to the metamod log, so a plugin blowing up at load
-	// leaves a trace after the console has scrolled away.
+	// An error also goes to the metamod log, so a load-time failure leaves a
+	// trace after the console has scrolled.
 	if (is_error && gpMetaUtilFuncs)
 		LOG_ERROR(PLID, "%s", msg);
 }
 
-// Profiling is off by default: the clock read per handler is cheap but not
-// free, and a server that is not being investigated should not pay for it.
 static cvar_t s_cvar_profile = { "cslua_profile", "0", 0, 0.0f, nullptr };
 static cvar_t *s_profile = nullptr;
 
@@ -111,11 +105,9 @@ const std::string &cslua_base_dir()
 	return dir;
 }
 
-// pfnMessageBegin and its Write*/pfnMessageEnd siblings, so a script asking
-// to hide a death's native ragdoll (hook.add("player_corpse", ...) +
-// e:cancel()) can have that message swallowed before any client sees it -
-// see cslua_corpse.cpp for why blocking has to happen at this level and not
-// after the fact.
+// pfnMessageBegin and its Write*/pfnMessageEnd siblings, so a script hiding a
+// death's native ragdoll can have the message swallowed before any client sees
+// it - see cslua_corpse.cpp.
 C_DLLEXPORT int GetEngineFunctions(enginefuncs_t *pengfuncsFromEngine, int *interfaceVersion)
 {
 	if (!pengfuncsFromEngine) {
@@ -133,8 +125,7 @@ C_DLLEXPORT int GetEngineFunctions(enginefuncs_t *pengfuncsFromEngine, int *inte
 }
 
 // pfnRegUserMsg only, so cslua_netwatch.cpp can learn a custom usermessage's
-// real name from the id the real engine just assigned it - see
-// cslua_netwatch.h for why that has to be a post-hook.
+// name from the id the real engine just assigned it.
 C_DLLEXPORT int GetEngineFunctions_Post(enginefuncs_t *pengfuncsFromEngine, int *interfaceVersion)
 {
 	if (!pengfuncsFromEngine) {
@@ -153,14 +144,14 @@ C_DLLEXPORT int GetEngineFunctions_Post(enginefuncs_t *pengfuncsFromEngine, int 
 
 META_FUNCTIONS gMetaFunctionTable =
 {
-	NULL,						// pfnGetEntityAPI			HL SDK; called before game DLL
-	NULL,						// pfnGetEntityAPI_Post		META; called after game DLL
-	GetEntityAPI2,				// pfnGetEntityAPI2			HL SDK2; called before game DLL
-	GetEntityAPI2_Post,			// pfnGetEntityAPI2_Post	META; called after game DLL
-	GetNewDLLFunctions,			// pfnGetNewDLLFunctions	HL SDK2; called before game DLL
-	GetNewDLLFunctions_Post,	// pfnGetNewDLLFunctions_Post	META; called after game DLL
-	GetEngineFunctions,			// pfnGetEngineFunctions	META; called before HL engine
-	GetEngineFunctions_Post,	// pfnGetEngineFunctions_Post	META; called after HL engine
+	NULL,						// pfnGetEntityAPI
+	NULL,						// pfnGetEntityAPI_Post
+	GetEntityAPI2,				// pfnGetEntityAPI2
+	GetEntityAPI2_Post,			// pfnGetEntityAPI2_Post
+	GetNewDLLFunctions,			// pfnGetNewDLLFunctions
+	GetNewDLLFunctions_Post,	// pfnGetNewDLLFunctions_Post
+	GetEngineFunctions,			// pfnGetEngineFunctions
+	GetEngineFunctions_Post,	// pfnGetEngineFunctions_Post
 };
 
 C_DLLEXPORT int Meta_Query(char *interfaceVersion, plugin_info_t **plinfo, mutil_funcs_t *pMetaUtilFuncs)
@@ -181,17 +172,15 @@ C_DLLEXPORT int Meta_Attach(PLUG_LOADTIME now, META_FUNCTIONS *pFunctionTable, m
 	cslua_profile_init();
 	cslua_regamedll_init();
 
-	// Engine-level accounting: with ReHLDS we can watch every precache on the
-	// server and stop plugins before the 512-slot tables overflow.
+	// With ReHLDS we can watch every precache and stop plugins before the
+	// 512-slot tables overflow.
 	if (cslua_rehlds_init()) {
 		cslua_sound_install_hooks();
 		cslua_netwatch_install_hooks();
 		cslua_rehlds_install_hooks();
 	}
 
-	// Before anything reads addons/lua/core: a module dropped in on its own,
-	// with no scripts/ copied over by hand, gets the runtime layer fetched
-	// here instead of failing to find a single core function.
+	// Fetch the runtime layer if a module was dropped in without scripts/.
 	cslua_bootstrap_if_missing();
 
 	cslua_register_commands();
@@ -205,8 +194,8 @@ C_DLLEXPORT int Meta_Detach(PLUG_LOADTIME now, PL_UNLOAD_REASON reason)
 {
 	g_lua.shutdown();
 
-	// Only here, never on a reload: this is the one place where waiting for a
-	// worker costs nothing, because the process is on its way out.
+	// Only here, never on a reload: waiting for a worker costs nothing when the
+	// process is on its way out.
 	cslua_http_shutdown();
 	cslua_httpserver_shutdown();
 	cslua_mysql_shutdown();

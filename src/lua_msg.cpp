@@ -9,15 +9,12 @@
 #include <string.h>
 #include <vector>
 
-// A single WRITE_STRING inside a user message. There is no hard engine limit
-// worth hard-coding here, but sharing a packet with other fields means it
-// should stay well under the ~192-byte ceiling lua_message.cpp already uses
-// for SayText - this is the same number for the same reason.
+// One WRITE_STRING in a user message. Stays under the ~192-byte ceiling
+// lua_message.cpp uses for SayText.
 #define MSG_MAX_STRING 192
 
-// msg.byte(1) etc build one of these {kind, value} pairs rather than writing
-// anything themselves - msg.send is the only place that ever opens a
-// message, so this is just a validated, inert description of one field.
+// msg.byte(1) etc build a {kind, value} pair; msg.send is the only place that
+// opens a message.
 static int push_number_field(lua_State *L, FieldKind kind, lua_Number value)
 {
 	lua_createtable(L, 2, 0);
@@ -93,8 +90,8 @@ static bool table_int_field(lua_State *L, int index, const char *key, int &out)
 	return ok;
 }
 
-// A player object carries "id", an ents entity carries "index" - either one
-// names a live edict. -1 means neither, or the value named the world (0).
+// A player object carries "id", an ents entity carries "index". -1 means
+// neither, or the value named the world (0).
 static int resolve_ent_index(lua_State *L, int index)
 {
 	if (!lua_istable(L, index))
@@ -116,8 +113,7 @@ static int l_field_entity(lua_State *L)
 	return push_number_field(L, MSGF_ENTITY, (lua_Number)index);
 }
 
-// PVS/PAS need a point, not a recipient. Accepts a player, an ents entity
-// (both read straight off their edict's origin) or a plain {x, y, z}.
+// PVS/PAS need a point. Accepts a player, an ents entity or a plain {x, y, z}.
 static bool read_origin_arg(lua_State *L, int index, Vector &out)
 {
 	if (!lua_istable(L, index))
@@ -152,9 +148,8 @@ struct Field
 	std::string str;
 };
 
-// Reads back one {kind, value} table built by msg.byte/.../.entity above.
-// Anything else at this argument position - wrong shape, a value swapped for
-// the wrong type - fails here, before msg.send has touched the engine.
+// Reads back one {kind, value} table built by msg.byte/... above. Anything of
+// the wrong shape fails here, before msg.send has touched the engine.
 static bool read_field(lua_State *L, int index, Field &out)
 {
 	if (!lua_istable(L, index))
@@ -198,11 +193,8 @@ static bool read_field(lua_State *L, int index, Field &out)
 	return ok;
 }
 
-// Message ids are assigned once by the engine and never change for the rest
-// of the process - REG_USER_MSG is idempotent, so this just avoids paying
-// the lookup again on every send. Same name for something the game DLL
-// already registered (e.g. "TextMsg") returns its existing id; a name
-// nothing has claimed yet registers a brand new message for a custom client.
+// Message ids are assigned once and never change. REG_USER_MSG is idempotent;
+// an existing name returns its id, a new one registers a message.
 static int resolve_message_id(const char *name)
 {
 	static std::map<std::string, int> s_cache;
@@ -223,11 +215,10 @@ static int resolve_message_id(const char *name)
 //   name   message name; resolved through the engine, existing or new
 //   target player for one/one_unreliable; player, entity or {x,y,z} for
 //          pvs/pas; ignored (pass nil) for all
-//   fields msg.byte/char/short/long/angle/coord/string/entity(...) values,
-//          in wire order
+//   fields msg.byte/char/short/long/angle/coord/string/entity(...) in wire order
 //
 // Everything is read and validated up front. MESSAGE_BEGIN only runs once
-// there is nothing left that could fail - see lua_msg.h for why.
+// nothing left can fail.
 static int l_msg_send(lua_State *L)
 {
 	const char *dest_name = luaL_checkstring(L, 1);

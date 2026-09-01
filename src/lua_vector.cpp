@@ -3,8 +3,6 @@
 #include "lua_vector.h"
 #include "lua_natives.h"
 
-// Reads three numbers starting at stack index `idx` into a Vector - the same
-// triple every other vector-shaped method here already takes and returns.
 static Vector arg_vector(lua_State *L, int idx)
 {
 	return Vector(
@@ -37,8 +35,7 @@ static int l_length(lua_State *L)
 	return 1;
 }
 
-// vec.normalize(x,y,z) -> x, y, z, a unit vector in the same direction.
-// The zero vector normalizes to itself rather than dividing by zero.
+// vec.normalize(x,y,z) -> unit vector. The zero vector normalizes to itself.
 static int l_normalize(lua_State *L)
 {
 	Vector v = arg_vector(L, 1);
@@ -47,8 +44,7 @@ static int l_normalize(lua_State *L)
 	return push_vector(L, v);
 }
 
-// vec.to_angle(x,y,z) -> pitch, yaw, roll - the engine's own pfnVecToAngles,
-// the inverse of vec.angle_vector.
+// vec.to_angle(x,y,z) -> pitch, yaw, roll (pfnVecToAngles).
 static int l_to_angle(lua_State *L)
 {
 	Vector v = arg_vector(L, 1);
@@ -57,10 +53,7 @@ static int l_to_angle(lua_State *L)
 	return push_vector(L, angles);
 }
 
-// vec.angle_vector(pitch,yaw,roll) -> x, y, z - a unit forward vector for
-// those angles, the same engine call MAKE_VECTORS uses for a player's aim
-// (see p:trace() in lua_player.cpp), just without needing a player to own
-// the angles.
+// vec.angle_vector(pitch,yaw,roll) -> unit forward vector.
 static int l_angle_vector(lua_State *L)
 {
 	Vector angles = arg_vector(L, 1);

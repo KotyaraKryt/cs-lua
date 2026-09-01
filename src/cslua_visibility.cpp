@@ -12,23 +12,20 @@ struct Row
 	CsluaRenderOverride v = {};
 };
 
-// One per entity index; a fixed CSLUA_MAXPLAYERS-sized row array rather than
-// a map, so cslua_visibility_apply - the hot path, once per (recipient,
-// visible entity) on every network update - is a couple of array indexes and
-// nothing else once s_active_total says there is anything to look up at all.
+// One per entity index. A fixed CSLUA_MAXPLAYERS-sized row array keeps
+// cslua_visibility_apply (once per recipient/entity pair per network update) to
+// a couple of array indexes.
 struct Slot
 {
-	// -1 never matches a real serialnumber, so a fresh (never-resized-into)
-	// slot reads as "nothing here" without a separate flag.
+	// -1 never matches a real serialnumber, so a fresh slot reads as empty.
 	int serial = -1;
 	Row rows[CSLUA_MAXPLAYERS];
 };
 
 std::vector<Slot> s_slots;
 
-// Total active rows across every entity, checked first in the hot path.
-// Every server that never calls e:render_for/e:visible_to pays exactly one
-// int compare per pfnAddToFullPack call for this feature existing at all.
+// Total active rows, checked first in the hot path so a server that never uses
+// e:render_for pays one int compare.
 int s_active_total = 0;
 
 Slot *slot_for(edict_t *e, bool create)
@@ -52,8 +49,7 @@ Slot *slot_for(edict_t *e, bool create)
 		if (!create)
 			return nullptr;
 
-		// A different life of this index - whatever the previous occupant
-		// had here is not this entity's to keep.
+		// A different life of this index - the previous occupant's rows go.
 		for (int i = 0; i < CSLUA_MAXPLAYERS; i++) {
 			if (slot.rows[i].active) {
 				slot.rows[i].active = false;

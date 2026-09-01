@@ -6,9 +6,8 @@
 #include <string>
 #include <vector>
 
-// A cvar registered from Lua. The engine keeps a pointer to this cvar_t and to
-// its name/string buffers forever, so they must never move or be freed while
-// the server runs. We hand out stable storage and never release it.
+// A cvar registered from Lua. The engine keeps a pointer to this cvar_t and its
+// name/string buffers forever, so they must never move or be freed.
 struct OwnedCvar
 {
 	std::string name;
@@ -16,9 +15,7 @@ struct OwnedCvar
 	cvar_t var;
 };
 
-// Pointers are handed to the engine, so the list must never reallocate its
-// elements out from under it - hence a deque-like stable container. A vector of
-// pointers gives the same guarantee and is simplest here.
+// Vector of pointers: elements never move out from under the engine.
 static std::vector<OwnedCvar *> s_owned;
 
 static OwnedCvar *find_owned(const char *name)
@@ -29,9 +26,8 @@ static OwnedCvar *find_owned(const char *name)
 	return nullptr;
 }
 
-// A cvar object is just { name = "..." }; every access resolves the live
-// cvar_t by name, exactly like a player object resolves its edict. That keeps
-// the value current and never dangles.
+// A cvar object is just { name = "..." }; every access resolves the live cvar_t
+// by name, so the value stays current and never dangles.
 static const char *cvar_object_name(lua_State *L)
 {
 	luaL_checktype(L, 1, LUA_TTABLE);
@@ -66,7 +62,6 @@ static int l_cvar_set(lua_State *L)
 {
 	const char *name = cvar_object_name(L);
 
-	// Set from a number or a string, whichever the script passed.
 	if (lua_isnumber(L, 2))
 		CVAR_SET_FLOAT(name, (float)lua_tonumber(L, 2));
 	else
@@ -90,10 +85,8 @@ static const luaL_Reg s_cvar_methods[] =
 	{ NULL, NULL }
 };
 
-// The shared metatable, kept in the registry so every object reuses it.
 static int s_cvar_mt_ref = LUA_NOREF;
 
-// Builds and returns a fresh cvar object bound to `name`.
 static void push_cvar_object(lua_State *L, const char *name)
 {
 	lua_newtable(L);
@@ -119,15 +112,13 @@ static int l_cvar(lua_State *L)
 }
 
 // cvar_register("greet_prefix", "[Server]", { archive = true }) -> object.
-// Calling it again for an existing name just returns the object, so a plugin
-// can register the same cvar on every load without stacking duplicates.
+// Calling it again for an existing name just returns the object.
 static int l_cvar_register(lua_State *L)
 {
 	const char *name = luaL_checkstring(L, 1);
 	const char *value = luaL_optstring(L, 2, "");
 
 	if (find_owned(name) || CVAR_GET_POINTER(name)) {
-		// Already exists (ours or someone else's): don't register twice.
 		push_cvar_object(L, name);
 		return 1;
 	}
@@ -148,8 +139,6 @@ static int l_cvar_register(lua_State *L)
 	OwnedCvar *owned = new OwnedCvar();
 	owned->name = name;
 	owned->default_string = value;
-	// cvar_t.string is a char*, and the engine may write to it; give it its own
-	// buffer that lives as long as the cvar does.
 	owned->var.name = owned->name.c_str();
 	owned->var.string = const_cast<char *>(owned->default_string.c_str());
 	owned->var.flags = flags;
@@ -165,7 +154,6 @@ static int l_cvar_register(lua_State *L)
 
 void cslua_register_cvar(lua_State *L)
 {
-	// One metatable for every cvar object: __index holds the methods.
 	lua_newtable(L);
 	lua_newtable(L);
 	for (const luaL_Reg *r = s_cvar_methods; r->name; r++) {
@@ -177,8 +165,6 @@ void cslua_register_cvar(lua_State *L)
 	lua_setfield(L, -2, "__metatable");
 	s_cvar_mt_ref = luaL_ref(L, LUA_REGISTRYINDEX);
 
-	// Cvars belong to the server, so they hang off `sv` next to sv.map and
-	// sv.cmd rather than claiming two more globals of their own.
 	static const luaL_Reg s_api[] =
 	{
 		{ "cvar",          l_cvar },
@@ -191,9 +177,7 @@ void cslua_register_cvar(lua_State *L)
 
 void cslua_cvar_shutdown()
 {
-	// The metatable ref dies with the state; forget it so the next init makes
-	// a fresh one. s_owned is deliberately kept: the engine still points at
-	// those cvar_t's, freeing them would dangle. They live until the process
-	// exits, which for a game server is fine.
+	// s_owned is kept: the engine still points at those cvar_t's, so freeing
+	// them would dangle. They live until the process exits.
 	s_cvar_mt_ref = LUA_NOREF;
 }

@@ -10,18 +10,11 @@
 #include <string>
 #include <vector>
 
-// How many active corpses currently want ClCorpse hidden. Not per-player:
-// MessageBegin's own arguments (msg_dest, pOrigin, the destination edict)
-// don't say which player's death a ClCorpse belongs to - the original AMXX
-// plugin this was ported from only knew because it read a positional
-// argument out of the message body (get_msg_arg_int(12)), a wire format this
-// project has no header for (ClCorpse is a ReGameDLL/CS gamedll message,
-// registered at runtime, not declared anywhere in the vendored SDK). Rather
-// than guess byte offsets against a closed-source format, this is
-// all-or-nothing: while any corpse anywhere wants hiding, every ClCorpse for
-// every player is swallowed. Fine for this plugin's actual policy (every
-// tracked death hides its corpse, uniformly); a mixed policy would need the
-// wire format figured out for real.
+// How many active corpses want ClCorpse hidden. Not per-player: MessageBegin's
+// arguments don't say which player's death a ClCorpse belongs to, and ClCorpse
+// is a runtime-registered CS message with no wire format in the vendored SDK.
+// So it is all-or-nothing: while any corpse wants hiding, every ClCorpse for
+// every player is swallowed.
 static int s_hide_refs = 0;
 
 void cslua_corpse_hide_ref(bool hide)
@@ -32,23 +25,13 @@ void cslua_corpse_hide_ref(bool hide)
 }
 
 // True from a suppressed MessageBegin(ClCorpse) through its MessageEnd. Every
-// Write* in between belongs to that one message and has to be dropped too:
-// MessageBegin never actually opened the engine's message buffer (we
-// superceded it), so letting a Write* through would write into a buffer that
-// was never started - the same corruption fakemeta's register_message avoids
-// by swallowing the whole call sequence, not just the first call.
+// Write* between must be dropped too: MessageBegin never opened the engine's
+// buffer, so letting a Write* through would corrupt it.
 static bool s_suppressing = false;
 
-// hook.add("msg:Name", ...) - backs a plugin's Lua handler by buffering the
-// one message currently between MessageBegin and MessageEnd, the same
-// single-open-message assumption s_suppressing already relies on: the engine
-// never opens a second message before closing the first.
-//
-// `active` is decided once, in MessageBegin, from whether anyone is actually
-// listening for this message's name - the Write* hooks below only pay the
-// cost of recording a value when it is true, which keeps the overwhelming
-// majority of messages (no Lua listener at all) exactly as cheap as before
-// this feature existed.
+// hook.add("msg:Name", ...) backing: buffers the one message currently between
+// MessageBegin and MessageEnd. `active` is decided once in MessageBegin, from
+// whether anyone listens, so messages with no listener stay cheap.
 struct MsgField
 {
 	FieldKind kind;
@@ -66,10 +49,8 @@ struct OpenMsgHook
 };
 static OpenMsgHook s_open_hook;
 
-// Resolved on first use rather than at load: the game DLL registers its
-// custom messages during its own startup, some time after Meta_Attach runs,
-// so asking too early would cache a 0. Every message id lookup elsewhere in
-// this codebase (lua_message.cpp's SayText/TextMsg/MOTD) does the same thing.
+// Resolved on first use: the game DLL registers custom messages after
+// Meta_Attach.
 static int clcorpse_msg_id()
 {
 	static int id = 0;
@@ -85,9 +66,7 @@ static void Hook_MessageBegin(int msg_dest, int msg_type, const float *pOrigin, 
 		s_open_hook.active = false;
 		RETURN_META(MRES_SUPERCEDE);
 	}
-	// A suppressed message never reaches the wire, so it never gets counted -
-	// netwatch is explaining a client's real reliable-buffer usage, and a
-	// dropped ClCorpse never added anything to it.
+	// A suppressed message never reaches the wire, so netwatch never counts it.
 	cslua_netwatch_message_begin(ed, msg_type);
 
 	char namebuf[32];
@@ -141,8 +120,6 @@ static void Hook_MessageEnd(void)
 		s_open_hook.active = false;
 	}
 
-	// A handler cancelled: the message never reaches the wire, same
-	// RETURN_META(MRES_SUPERCEDE) the ClCorpse-hide path above already uses.
 	if (cancelled)
 		RETURN_META(MRES_SUPERCEDE);
 
@@ -150,11 +127,7 @@ static void Hook_MessageEnd(void)
 	RETURN_META(MRES_IGNORED);
 }
 
-// Rough per-field wire sizes (unsigned varint/fixed encodings used by the
-// GoldSrc network protocol). Good enough for "who is flooding whom" - this
-// is a diagnostic estimate, not a byte-exact accounting of SZ_Write*.
-// Records one field for the message currently being watched for a Lua
-// handler. Only called when s_open_hook.active - see Hook_MessageBegin.
+// Records one field for the watched message. Only called when s_open_hook.active.
 static void record_field(FieldKind kind, double num, const char *str = NULL)
 {
 	MsgField f;
@@ -229,11 +202,9 @@ static void Hook_WriteEntity(int iValue)
 	RETURN_META(MRES_IGNORED);
 }
 
-// Every field NULL except the ten message calls above: metamod fills a NULL
-// slot from the next plugin (or the real engine) itself, so this only ever
-// intercepts message building, nothing else. Field order/count copied from
-// metamod-r's own enginefuncs_t layout (third_party/metamod-r) - it has to
-// match exactly, this struct is memcpy'd by pointer, not read by name.
+// Every field NULL except the ten message calls above; metamod fills NULL slots
+// from the next plugin. Field order/count must match metamod-r's enginefuncs_t
+// layout exactly - this struct is memcpy'd by pointer, not read by name.
 enginefuncs_t g_CsluaCorpseEngineFuncs =
 {
 	NULL,					// pfnPrecacheModel()
@@ -403,9 +374,6 @@ enginefuncs_t g_CsluaCorpseEngineFuncs =
 	// Added 2005-11-22 (no SDK update)
 	NULL,					// pfnQueryClientCvarValue2()
 
-	// Added 2009-06-19 (no SDK update). Present unless CSSDK_COMPAT_OLD_METAMOD
-	// is defined - this project never defines it, so eiface.h compiles this
-	// field in and the table has to carry it too, or every field after it
-	// would land one slot off.
+	// Added 2009-06-19 (no SDK update). Compiled in unless CSSDK_COMPAT_OLD_METAMOD.
 	NULL,					// pfnEngCheckParm()
 };

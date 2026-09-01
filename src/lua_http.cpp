@@ -16,17 +16,12 @@
 	#include <windows.h>
 	#include <winhttp.h>
 #else
-	// libcurl is looked up by hand, so the loader's own header is the only one
-	// needed - no curl development package anywhere in the build.
 	#include <dlfcn.h>
 #endif
 
 // ---------------------------------------------------------------------------
-// What crosses between the threads
-//
-// Plain bytes only. A worker never sees lua_State, and the game thread never
-// sees a socket - which is the whole reason this is safe to do at all while a
-// map is running.
+// What crosses between the threads: plain bytes only. A worker never sees
+// lua_State; the game thread never sees a socket.
 
 namespace {
 
@@ -40,8 +35,8 @@ struct Request
 {
 	int id;
 	int plugin;				// index into LuaEngine::plugins(), for cleanup
-	int callback;			// registry ref, only ever touched on the game thread
-	int generation;			// which Lua state asked; see s_generation
+	int callback;			// registry ref, only touched on the game thread
+	int generation;			// which Lua state asked
 
 	std::string method;
 	std::string url;
@@ -64,9 +59,6 @@ struct Response
 	std::vector<Header> headers;
 };
 
-// Two queues and one lock each. A request goes in at the top, comes out on a
-// worker, and its answer goes back through the second queue to be drained on
-// the next frame.
 std::deque<Request> s_pending;
 std::deque<Response> s_done;
 
@@ -78,35 +70,24 @@ std::vector<std::thread> s_workers;
 bool s_stopping = false;
 int s_next_id = 1;
 
-// Bumped every time the Lua state is rebuilt. A worker cannot be interrupted
-// mid-request, so a reload cannot wait for it - instead the reply comes back
-// stamped with the generation that asked for it, and the drain throws away
-// anything from a state that no longer exists. That is what keeps lua_reload
-// instant while a request is on the wire.
+// Bumped every time the Lua state is rebuilt. A reply comes back stamped with
+// the generation that asked; the drain throws away anything stale.
 int s_generation = 1;
 
-// In flight or waiting. Kept separately because a request leaves s_pending the
-// moment a worker picks it up and only reappears in s_done when it finishes.
+// In flight or waiting. Kept separately from the queues.
 int s_inflight = 0;
 std::mutex s_inflight_lock;
 
-// Two workers: enough that one slow endpoint does not stall another plugin,
-// few enough that a plugin looping over a player list cannot spawn a thread
-// storm. Anything past that queues, which is the correct backpressure.
 const size_t WORKER_COUNT = 2;
 
-// A body this large is a bug on a game server, not a feature. Refusing beats
-// letting one reply eat the heap on a 32-bit process.
+// A body this large is a bug on a game server, not a feature.
 const size_t MAX_BODY = 4 * 1024 * 1024;
 
 } // namespace
 
 // ---------------------------------------------------------------------------
-// Transport
-//
-// One function per platform, both blocking. The queue above is what makes them
-// safe to call; making the transport itself async would buy nothing and cost a
-// state machine.
+// Transport - one function per platform, both blocking. The queue makes them
+// safe to call.
 
 #ifdef _WIN32
 
@@ -132,8 +113,7 @@ static std::string narrow(const wchar_t *s, int len)
 	return out;
 }
 
-// Every handle here has to be closed on every path, including the error ones,
-// so each stage checks and jumps to one exit.
+// Every handle is closed on every path via one exit.
 static void perform(const Request &req, Response &res)
 {
 	res.ok = false;
@@ -245,10 +225,8 @@ done:
 
 #else
 
-// libcurl is opened at first use rather than linked: that keeps HTTP out of
-// the build entirely - no 32-bit -dev package on the build machine, no CI
-// step, no shipped .so - and turns "libcurl is missing" into a message a
-// server owner can act on instead of a module that refuses to load.
+// libcurl is opened at first use rather than linked: no -dev package, no CI
+// step, and "libcurl is missing" becomes an actionable message.
 namespace {
 
 typedef void CURL;
@@ -279,7 +257,7 @@ struct Curl
 Curl s_curl = { 0 };
 std::mutex s_curl_lock;
 
-// The option and info numbers we use, spelled out so no curl header is needed.
+// The option/info numbers we use, spelled out so no curl header is needed.
 const int OPT_URL = 10002;
 const int OPT_WRITEFUNCTION = 20011;
 const int OPT_WRITEDATA = 10001;
@@ -294,10 +272,6 @@ const int OPT_USERAGENT = 10018;
 const int OPT_NOSIGNAL = 99;
 const int INFO_RESPONSE_CODE = 0x200002;
 
-// Takes the type from the slot being filled instead of from a name spelled
-// out at the call site. The macro this replaces pasted the typedef together
-// by hand, got it wrong, and only said so on Linux - MSVC never compiles
-// this branch at all.
 template <typename Fn>
 void load_symbol(Fn &slot, const char *name)
 {
@@ -313,7 +287,6 @@ bool curl_ready()
 
 	s_curl.tried = true;
 
-	// Whatever the distribution called it.
 	static const char *const names[] = {
 		"libcurl.so.4", "libcurl.so.3", "libcurl.so", NULL
 	};
@@ -386,8 +359,7 @@ static void perform(const Request &req, Response &res)
 	s_curl.easy_setopt(curl, OPT_FOLLOWLOCATION, 1L);
 	s_curl.easy_setopt(curl, OPT_MAXREDIRS, 5L);
 	s_curl.easy_setopt(curl, OPT_USERAGENT, "cs-lua");
-	// Without this libcurl installs signal handlers for its resolver timeouts,
-	// which on a game server means fighting the engine over SIGALRM.
+	// Without this libcurl installs SIGALRM handlers for its resolver timeouts.
 	s_curl.easy_setopt(curl, OPT_NOSIGNAL, 1L);
 
 	if (req.method != "GET")
@@ -422,8 +394,7 @@ static void perform(const Request &req, Response &res)
 #endif
 
 // ---------------------------------------------------------------------------
-// Synchronous entry point, for engine code with no worker thread and no Lua
-// state to come back to yet.
+// Synchronous entry point, for engine code with no Lua state to come back to.
 
 bool cslua_http_get_sync(const std::string &url,
 	const std::vector<std::pair<std::string, std::string> > &headers,
@@ -524,7 +495,6 @@ static void read_headers(lua_State *L, int index, std::vector<Header> &out)
 	lua_pop(L, 1);
 }
 
-// The one place a request is born, whatever the shorthand that led here.
 static int queue_request(lua_State *L, const std::string &method,
 	const std::string &url, const std::string &body, int opts_index, int callback_index)
 {
@@ -621,9 +591,7 @@ static int l_request(lua_State *L)
 	return queue_request(L, method, url, body, 1, 2);
 }
 
-// http.cancel(id) - forget the callback. The request itself may already be on
-// the wire and is left to finish; what this guarantees is that nothing of the
-// plugin's runs when it does.
+// http.cancel(id) - forget the callback. The request itself is left to finish.
 static int l_cancel(lua_State *L)
 {
 	int id = (int)luaL_checkinteger(L, 1);
@@ -647,7 +615,7 @@ static int l_cancel(lua_State *L)
 		std::lock_guard<std::mutex> guard(s_inflight_lock);
 		s_inflight--;
 	} else {
-		// Already running: mark the reply as unwanted so the drain drops it.
+		// Already running: mark the reply as unwanted.
 		std::lock_guard<std::mutex> guard(s_done_lock);
 		for (size_t i = 0; i < s_done.size(); i++) {
 			if (s_done[i].id == id) {
@@ -706,8 +674,7 @@ void cslua_http_run()
 		if (res.callback == LUA_NOREF)
 			continue;
 
-		// Queued by a Lua state that has since been torn down: the ref points
-		// into a registry that no longer exists.
+		// Queued by a Lua state that has since been torn down.
 		if (res.generation != s_generation)
 			continue;
 
@@ -716,7 +683,6 @@ void cslua_http_run()
 
 		lua_rawgeti(L, LUA_REGISTRYINDEX, res.callback);
 
-		// One table, the same shape every handler in this API gets.
 		lua_newtable(L);
 
 		lua_pushboolean(L, res.ok && res.status >= 200 && res.status < 400);
@@ -732,9 +698,8 @@ void cslua_http_run()
 			lua_pushstring(L, res.error.c_str());
 			lua_setfield(L, -2, "error");
 		} else if (res.ok && (res.status < 200 || res.status >= 400)) {
-			// A 404 is not a transport failure, but it is not success either -
-			// give res.error something to print so `if not res.ok` can just
-			// report it without special-casing.
+			// A 404 is not a transport failure but not success either; give
+			// res.error something so `if not res.ok` can report it.
 			lua_pushfstring(L, "HTTP %d", res.status);
 			lua_setfield(L, -2, "error");
 		}
@@ -766,8 +731,7 @@ void cslua_http_remove_plugin(int plugin_index)
 		}
 	}
 
-	// Already on the wire: the worker still owns it, so only the reply is
-	// disarmed.
+	// Already on the wire: only the reply is disarmed.
 	std::lock_guard<std::mutex> guard(s_done_lock);
 	for (size_t i = 0; i < s_done.size(); i++) {
 		if (s_done[i].plugin == plugin_index) {
@@ -803,8 +767,7 @@ void cslua_http_reset()
 		s_inflight = 0;
 	}
 
-	// The registry refs are not unref'd: the state they belong to is being
-	// closed, which frees the whole registry at once.
+	// The registry refs are not unref'd: the whole registry is freed at once.
 }
 
 void cslua_http_shutdown()
@@ -818,8 +781,7 @@ void cslua_http_shutdown()
 	s_wake.notify_all();
 
 	// Joined rather than detached: a worker writing into s_done after this
-	// translation unit's statics are gone is a crash. The wait is bounded by
-	// the request timeout, and the process is exiting anyway.
+	// TU's statics are gone is a crash. The wait is bounded by the timeout.
 	for (size_t i = 0; i < s_workers.size(); i++) {
 		if (s_workers[i].joinable())
 			s_workers[i].join();

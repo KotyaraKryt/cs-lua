@@ -16,22 +16,14 @@
 
 #include "platform.h"
 
-// Statically linked (third_party/mariadb-connector-c, LGPL - compatible with
-// this project's own GPLv3, unlike Oracle's dual GPL/commercial
-// libmysqlclient). Built with WITH_SSL=OFF and every auth plugin forced
-// STATIC (see CMakeLists.txt): no OpenSSL, no dlopen of a plugin .so at
-// connect time, nothing for a shared host with no root and no apt to be
-// missing at runtime - the whole reason this used to be dlopen'd instead.
+// Statically linked mariadb-connector-c (LGPL), built with WITH_SSL=OFF and
+// every auth plugin forced STATIC: no OpenSSL, no dlopen at connect time.
 #include <mysql.h>
 
 namespace {
 
-// Text-protocol MySQL sends every value as a string; only the field's
-// declared type says whether "42" is the number 42 or the text "42". These
-// are the numeric enum_field_types values (mariadb_com.h) - the ones that
-// should come back as a Lua number instead of a string, the same convention
-// `db` uses for SQLite's INTEGER/REAL. Dates/timestamps stay strings: they
-// need parsing, not arithmetic, and that parsing wants the original text.
+// enum_field_types values that should come back as a Lua number rather than a
+// string. Dates/timestamps stay strings.
 bool is_numeric_field_type(int type)
 {
 	switch (type) {
@@ -54,8 +46,7 @@ bool is_numeric_field_type(int type)
 } // namespace
 
 // ---------------------------------------------------------------------------
-// What crosses between the threads. Plain data only - see lua_http.cpp for
-// why that matters.
+// What crosses between the threads. Plain data only.
 
 namespace {
 
@@ -74,7 +65,7 @@ struct Cell
 {
 	std::string name;
 	std::string value;
-	bool numeric;		// push as a Lua number instead of a string
+	bool numeric;
 };
 
 typedef std::vector<Cell> Row;	// NULL columns absent entirely
@@ -90,8 +81,8 @@ struct Request
 	std::string sql;
 	std::vector<Param> params;
 
-	// When non-empty, worker runs a migration batch instead of a single query.
-	// Each entry is already-resolved SQL (files were read on the game thread).
+	// When non-empty, worker runs a migration batch. Each entry is
+	// already-resolved SQL (files were read on the game thread).
 	struct MigrationStep {
 		std::string id;
 		std::string sql;
@@ -117,7 +108,7 @@ struct Response
 	unsigned long long affected_rows;
 	unsigned long long insert_id;
 
-	// Filled only for migrate jobs: ids that were applied in this run.
+	// Filled only for migrate jobs: ids applied in this run.
 	std::vector<std::string> applied;
 };
 
@@ -136,21 +127,16 @@ int s_generation = 1;
 int s_inflight = 0;
 std::mutex s_inflight_lock;
 
-// Two workers, same reasoning as http.cpp: enough that one slow site does not
-// stall another plugin, few enough that a loop over players cannot spawn a
-// thread storm. Two queries against the *same* connection still serialize
-// (see Conn::use_lock) - a plugin that wants real parallelism opens more than
-// one connection.
+// Two workers: enough that one slow site does not stall another plugin, few
+// enough that a loop over players cannot spawn a thread storm. Queries against
+// the same connection still serialize (Conn::use_lock).
 const size_t WORKER_COUNT = 2;
 
 // ---------------------------------------------------------------------------
 // Connections
 //
-// A handle Lua can hold (id + metatable, same shape as db.open()), but the
-// real socket lives here and is only ever touched by a worker holding
-// use_lock - never by the game thread, and never by two workers at once.
-// Slots are never reused, so an id identifies one connection for the state's
-// whole life.
+// A handle Lua can hold (id + metatable), but the real socket lives here and is
+// only touched by a worker holding use_lock. Slots are never reused.
 
 struct ConnConfig
 {
@@ -176,9 +162,7 @@ struct Conn
 	Conn() : id(0), plugin(-1), generation(0), handle(NULL), closed(false) {}
 };
 
-// Index 0 unused, so an id of 0 (a handle table with no "id" field) is never
-// valid. Pointers, not values: the vector may grow, but a Conn once created
-// never moves or is destroyed until process exit.
+// Index 0 unused. Pointers, not values: a Conn once created never moves.
 std::vector<Conn *> s_conns;
 std::mutex s_conns_lock;
 
@@ -198,16 +182,13 @@ Conn *lookup_conn(int id)
 // Placeholder scanning and query building
 //
 // No prepared-statement binding: MYSQL_STMT/MYSQL_BIND layouts are not the
-// stable, decade-old ABI that the plain functions above are, and getting one
-// wrong is memory corruption, not a compile error. Client-side escaping with
-// mysql_real_escape_string (itself a plain, stable signature) is the safer
-// choice for a library opened without its headers.
+// stable ABI the plain functions are. Client-side escaping with
+// mysql_real_escape_string is the safer choice here.
 
 namespace {
 
-// Calls `fn` for every unquoted '?' in `sql`. Quoting is tracked well enough
-// for ordinary SQL: '...' and "..." strings, with a backslash escaping the
-// next character inside either.
+// Calls `fn` for every unquoted '?'. Tracks '...' and "..." strings with
+// backslash escaping inside either.
 template <typename Fn>
 void scan_placeholders(const std::string &sql, Fn fn)
 {
@@ -267,7 +248,7 @@ bool append_param(MYSQL *handle, const Param &p, std::string &out)
 	return true;
 }
 
-// Substitutes every '?' in req.sql, in order, with its escaped SQL literal.
+// Substitutes every '?' in order with its escaped SQL literal.
 std::string build_sql(MYSQL *handle, const Request &req)
 {
 	std::string out;
@@ -310,11 +291,8 @@ void perform(const Request &req, Response &res)
 	if (!conn->handle) {
 		conn->handle = mysql_init(NULL);
 
-		// Without these, a host that is down or firewalled leaves
-		// mysql_real_connect()/mysql_real_query() blocked indefinitely on
-		// this worker - and, since l_close() takes the same use_lock,
-		// conn:close() called while that is happening blocks the game
-		// thread right along with it.
+		// Without timeouts, a down/firewalled host blocks this worker (and
+		// conn:close(), which takes the same use_lock) indefinitely.
 		unsigned int connect_timeout_sec = 5;
 		unsigned int io_timeout_sec = 10;
 		mysql_options(conn->handle, MYSQL_OPT_CONNECT_TIMEOUT, &connect_timeout_sec);
@@ -339,11 +317,8 @@ void perform(const Request &req, Response &res)
 
 	std::string sql = build_sql(conn->handle, req);
 
-	// Any failure past this point closes the handle so the *next* request on
-	// this connection reconnects from scratch - the simple, reliable answer to
-	// "the site's MySQL restarted underneath us", at the cost of one wasted
-	// reconnect on a plain SQL mistake too. Cheap enough for how rarely a query
-	// actually fails.
+	// Any failure past this point closes the handle so the next request
+	// reconnects - the reliable answer to "the site's MySQL restarted".
 	if (mysql_real_query(conn->handle, sql.c_str(), (unsigned long)sql.size()) != 0) {
 		res.error = mysql_error(conn->handle);
 		mysql_close(conn->handle);
@@ -380,7 +355,7 @@ void perform(const Request &req, Response &res)
 		mysql_free_result(result);
 	} else if (mysql_field_count(conn->handle) != 0) {
 		// store_result() failing on a statement that DOES produce a result set
-		// is a real error; on INSERT/UPDATE/DELETE it is simply "no rows".
+		// is a real error; on INSERT/UPDATE/DELETE it is "no rows".
 		res.error = mysql_error(conn->handle);
 		mysql_close(conn->handle);
 		conn->handle = NULL;
@@ -623,8 +598,7 @@ Param to_param(lua_State *L, int index)
 	return p;
 }
 
-// conn:query(sql[, params...], fn) / conn:exec(...) - identical, both names
-// exist because "query" reads naturally for a SELECT and "exec" for a write.
+// conn:query(sql[, params...], fn) / conn:exec(...) - identical.
 int l_query(lua_State *L)
 {
 	Conn *conn = self_conn(L, 1);
@@ -1221,9 +1195,7 @@ int l_migrate(lua_State *L)
 }
 
 // conn:close() - marks the connection unusable and closes the socket. Taking
-// use_lock first guarantees no worker is touching `handle` right now (connect
-// and query timeouts above bound how long that wait can take), so it is safe
-// to close it here instead of leaving it idle until process exit.
+// use_lock first guarantees no worker is touching `handle`.
 int l_close(lua_State *L)
 {
 	Conn *conn = self_conn(L, 1);
@@ -1245,7 +1217,7 @@ const char *opt_field_str(lua_State *L, int index, const char *key, const char *
 {
 	lua_getfield(L, index, key);
 	const char *v = lua_isstring(L, -1) ? lua_tostring(L, -1) : def;
-	static std::string hold;		// lua_tostring's pointer only needs to outlive this call
+	static std::string hold;		// only needs to outlive this call
 	hold = v ? v : "";
 	lua_pop(L, 1);
 	return hold.c_str();
@@ -1260,9 +1232,7 @@ double opt_field_num(lua_State *L, int index, const char *key, double def)
 }
 
 // mysql.connect{ host=, port=, user=, password=, database=, charset= }
-//
-// Never blocks: the handle comes back immediately and the real TCP connect
-// happens lazily, on a worker, the first time something is queried on it.
+// Never blocks: the real TCP connect happens lazily on a worker.
 int l_connect(lua_State *L)
 {
 	luaL_checktype(L, 1, LUA_TTABLE);
@@ -1452,13 +1422,10 @@ void cslua_mysql_remove_plugin(int plugin_index)
 		}
 	}
 
-	// Connections this plugin opened and never closed would otherwise sit
-	// idle - open socket, live slot on the remote server - until process
-	// exit; a plugin that reconnects on every lua_reload leaks one each time.
-	// try_lock rather than lock: a worker mid-query on one of these must not
-	// stall a reload/unload that is happening on the game thread. Losing that
-	// race just leaves this one connection to the existing shutdown-time
-	// cleanup, same as before this function did anything at all.
+	// Connections this plugin opened and never closed would otherwise sit idle
+	// until process exit. try_lock rather than lock: a worker mid-query must not
+	// stall a reload on the game thread. Losing that race leaves the connection
+	// to the shutdown-time cleanup.
 	std::lock_guard<std::mutex> guard(s_conns_lock);
 	for (size_t i = 1; i < s_conns.size(); i++) {
 		Conn *conn = s_conns[i];
@@ -1502,10 +1469,9 @@ void cslua_mysql_reset()
 
 	s_mysql_mt_ref = LUA_NOREF;
 
-	// Registry refs on still-open connections are not unref'd here - the state
-	// they belong to is being closed, which frees the whole registry at once.
-	// The connections themselves (and their sockets) are left alone; see
-	// cslua_mysql_shutdown().
+	// Registry refs on still-open connections are not unref'd: the whole
+	// registry is freed at once. The connections themselves are left alone;
+	// see cslua_mysql_shutdown().
 }
 
 void cslua_mysql_shutdown()

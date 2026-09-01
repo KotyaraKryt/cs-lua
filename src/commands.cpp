@@ -13,14 +13,10 @@
 
 #include <algorithm>
 
-// Server commands run between frames, never from inside a hook, so tearing
-// the Lua state down here is safe.
-//
-//   lua_reload            everything: the whole Lua state comes back fresh
+// Server commands run between frames, so tearing the Lua state down here is
+// safe.
+//   lua_reload            the whole Lua state comes back fresh
 //   lua_reload <plugin>   just that one, leaving the others running
-//
-// The single-plugin form is the edit-test loop. The full one is still what you
-// want after touching core/ or include/, which every plugin shares.
 static void cmd_lua_reload()
 {
 	const char *who = CMD_ARGC() > 1 ? CMD_ARGV(1) : NULL;
@@ -44,9 +40,7 @@ static void cmd_lua_reload()
 	cslua_print("reloaded '%s'", who);
 }
 
-// lua_check <plugin> - runs plugins/<plugin>/manifest.lua on its own, without
-// touching init.lua or the running plugin list, so a bad plugin{} call or a
-// missing require shows up before `lua_reload` actually starts the thing.
+// lua_check <plugin> - runs the plugin's manifest.lua on its own.
 static void cmd_lua_check()
 {
 	if (CMD_ARGC() < 2) {
@@ -64,12 +58,7 @@ static void cmd_lua_check()
 	cslua_print("%s", result.c_str());
 }
 
-// lua_load <plugin> - starts a plugin that is not currently running: a
-// folder that appeared under plugins/ after the server came up (never
-// discovered at startup, so `lua_reload <plugin>` has nothing to find), or
-// one a previous `lua_unload` stopped. Everything else already running
-// keeps running untouched - unlike a bare `lua_reload`, which tears down
-// and restarts the whole state.
+// lua_load <plugin> - starts a plugin not currently running.
 static void cmd_lua_load()
 {
 	if (CMD_ARGC() < 2) {
@@ -82,10 +71,7 @@ static void cmd_lua_load()
 	cslua_print("%s", result.c_str());
 }
 
-// lua_unload <plugin> - stops one plugin (its own on_unload handlers run,
-// then every handler/timer/command/db it registered goes away) without
-// touching any other plugin or restarting the Lua state. `lua_load` brings
-// it back later.
+// lua_unload <plugin> - stops one plugin without touching the others.
 static void cmd_lua_unload()
 {
 	if (CMD_ARGC() < 2) {
@@ -117,8 +103,6 @@ static void cmd_lua_list()
 	for (size_t i = 0; i < plugins.size(); i++) {
 		const LuaPlugin &p = plugins[i];
 
-		// Per plugin, not just server-wide: the totals below say something is
-		// leaking handlers, this column says which plugin.
 		cslua_print("  [%d] %-16s %-22s v%-6s h:%-3d t:%-2d db:%-2d %s%s",
 			(int)i + 1,
 			p.id.c_str(),
@@ -165,11 +149,7 @@ static void cmd_lua_list()
 		g_events.count(CSLUA_EVENT_BOMB_EXPLODED));
 }
 
-// Which handler is eating the frame. The question every server owner asks when
-// it starts stuttering, and the one AMXX cannot answer at all.
-//
-// Off by default (cslua_profile 0): the clock read per handler is cheap but not
-// free. Turn it on, play a round, read this, turn it back off.
+// Which handler is eating the frame. Off by default (cslua_profile 0).
 static void cmd_lua_profile()
 {
 	if (!g_lua.ready()) {
@@ -196,7 +176,6 @@ static void cmd_lua_profile()
 		return;
 	}
 
-	// Heaviest first: the answer is almost always the top line.
 	std::sort(rows.begin(), rows.end(),
 		[](const LuaEvents::ProfileRow &a, const LuaEvents::ProfileRow &b) {
 			return a.seconds > b.seconds;
@@ -211,8 +190,6 @@ static void cmd_lua_profile()
 	for (size_t i = 0; i < rows.size() && i < 20; i++) {
 		const LuaEvents::ProfileRow &r = rows[i];
 
-		// Per call is what tells a heavy handler apart from a busy one: a
-		// weapon_fire hook runs thousands of times and should still be cheap.
 		cslua_print("  %8.2f ms  %6d calls  %7.3f ms/call  %s:%s (%s)",
 			r.seconds * 1000.0, r.calls,
 			r.calls ? (r.seconds * 1000.0 / r.calls) : 0.0,
@@ -223,7 +200,6 @@ static void cmd_lua_profile()
 		cslua_print("  ... and %d more", (int)rows.size() - 20);
 }
 
-// Joins the command's arguments back into one string.
 static std::string command_text()
 {
 	std::string text;
@@ -235,8 +211,7 @@ static std::string command_text()
 	return text;
 }
 
-// The three below exist to test output without writing a plugin: everyone
-// currently on the server gets the message right now.
+// The three below test output without writing a plugin.
 static void cmd_lua_chat()
 {
 	std::string text = command_text();
@@ -248,8 +223,6 @@ static void cmd_lua_chat()
 }
 
 // lua_chat_as <id> <text> - send a chat line as if player <id> said it.
-// Handy to see what {team} does: the colour follows the quoted speaker, so a
-// message "from" a T shows red even to a CT reading it.
 static void cmd_lua_chat_as()
 {
 	if (CMD_ARGC() < 3) {
@@ -273,9 +246,8 @@ static void cmd_lua_chat_as()
 	cslua_send_chat(0, text.c_str(), from);
 }
 
-// Sends the word "Привет" twice with known bytes: once as UTF-8 (what a .lua
-// file normally contains) and once as CP1251 (what the client speaks). Whatever
-// shows up on screen tells us which path is broken.
+// Sends "Привет" twice with known bytes (UTF-8 and CP1251) to tell which path
+// is broken.
 static void cmd_lua_test_ru()
 {
 	static const char utf8[]   = "UTF8: \xD0\x9F\xD1\x80\xD0\xB8\xD0\xB2\xD0\xB5\xD1\x82";
@@ -312,8 +284,7 @@ static void cmd_lua_dhud()
 	cslua_send_dhud(0, text.c_str(), params);
 }
 
-// Answers the only question that matters when output does not show up: is the
-// message being sent at all, and does the client render it?
+// Is the message being sent at all, and does the client render it?
 static void cmd_lua_debug()
 {
 	cslua_print("SayText id=%d, TextMsg id=%d, maxClients=%d",
@@ -336,8 +307,7 @@ static void cmd_lua_debug()
 	cslua_chat_probe(0);
 }
 
-// The number AMXX never shows you: how close the server is to the 512 precache
-// wall, and how much of it came from Lua plugins.
+// How close the server is to the 512 precache wall.
 static void cmd_lua_precache()
 {
 	int limit = cslua_precache_limit();
@@ -354,7 +324,6 @@ static void cmd_lua_precache()
 	cslua_print("precache models: %d/%d used, %d free (%d registered by plugins)",
 		models + 1, limit, limit - (models + 1), cslua_precache_registered(true));
 
-	// Be straight about how good these numbers are.
 	if (cslua_rehlds_ready()) {
 		cslua_print("counts are exact: every precache on the server is tracked (ReHLDS API %s)",
 			cslua_rehlds_version());

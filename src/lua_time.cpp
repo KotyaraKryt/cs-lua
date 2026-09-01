@@ -11,9 +11,8 @@ struct TimeUnit
 	long long seconds;
 };
 
-// Order matters for l_format (largest to smallest). 'y' here is a fixed
-// 365-day approximation, duration-only - add_calendar has its own calendar-
-// aware year/month handling below.
+// Largest to smallest (l_format depends on the order). 'y' is a fixed 365-day
+// approximation; add_calendar has its own calendar-aware handling.
 static const TimeUnit s_units[] =
 {
 	{ 'y', 31536000 },
@@ -32,12 +31,7 @@ static long long unit_seconds(char suffix)
 	return -1;
 }
 
-// time.parse("60s60m24h32d") -> 2854860
-//
-// Digits accumulate until a unit letter is hit, then get multiplied and
-// added to the total - so "1d" and "24h" both parse, and so does mixing
-// them in one string. A malformed string is a config typo, not a runtime
-// condition, so it throws like regex's invalid-pattern case does.
+// time.parse("60s60m24h32d") -> 2854860. A malformed string throws.
 static int l_parse(lua_State *L)
 {
 	size_t len = 0;
@@ -110,9 +104,8 @@ static int l_format(lua_State *L)
 	return 1;
 }
 
-// time.add_calendar(unixtime, "1y5mo1d") -> unixtime shifted by real
-// calendar months/years (leap-aware), not a fixed-seconds approximation.
-// "mo" is a month; a lone "m" stays a minute, same as in time.parse.
+// time.add_calendar(unixtime, "1y5mo1d") -> unixtime shifted by real calendar
+// months/years. "mo" is a month; a lone "m" is a minute.
 static int l_add_calendar(lua_State *L)
 {
 	lua_Integer base = luaL_checkinteger(L, 1);

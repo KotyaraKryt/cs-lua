@@ -5,11 +5,9 @@
 #include <string>
 #include <vector>
 
-// One loaded plugin: a folder under plugins/ with two required files.
-// manifest.lua runs first and does nothing but declare the plugin - name,
-// api_version, requires, permissions, config; init.lua runs after and is the
-// plugin's actual code. There is no single-file shortcut: the split is
-// enforced by load_plugin(), not just a convention.
+// One loaded plugin: a folder under plugins/ with manifest.lua (declares the
+// plugin - name, api_version, requires) and init.lua (the code). The split is
+// enforced by load_plugin().
 struct LuaPlugin
 {
 	std::string id;			// folder name
@@ -20,32 +18,28 @@ struct LuaPlugin
 	std::string name;		// from plugin{}, defaults to id
 	std::string version;
 	std::string author;
-	// Module names declared in plugin{ requires = {...} }. Not called `requires`
-	// because that is a keyword from C++20 on.
+	// From plugin{ requires = {...} }. Not `requires` - a keyword from C++20 on.
 	std::vector<std::string> required_modules;
 	bool declared = false;				// manifest.lua called plugin{}
 
 	int env_ref = LUA_NOREF;		// the plugin's globals table
 	int modules_ref = LUA_NOREF;	// require() cache for this plugin
 
-	// plugin.on_unload(fn) handlers, in registration order. Kept here rather
-	// than in the event table because they are per plugin by definition: a
+	// plugin.on_unload(fn) handlers, in registration order. Per plugin: a
 	// single-plugin reload runs only its own.
 	std::vector<int> unload_refs;
 
-	// Kept in the list even when it blows up during load, so lua_list can
-	// show it as broken instead of silently hiding it.
+	// Kept in the list even when it blows up during load, so lua_list can show
+	// it as broken.
 	bool failed = false;
 
-	// False after `lua_unload <plugin>`: torn down on purpose, slot kept
-	// (not erased - every other index in m_plugins would shift) so
-	// `lua_load` can find it again and start it back up in place.
+	// False after `lua_unload <plugin>`: torn down, slot kept (erasing would
+	// shift every other index) so `lua_load` can start it back up in place.
 	bool loaded = true;
 };
 
 // Owns the single lua_State shared by all plugins. Every plugin gets its own
-// environment table, and every file inside one plugin folder shares that same
-// table - one folder is one namespace.
+// environment table; every file in one plugin folder shares that table.
 class LuaEngine
 {
 public:
@@ -53,49 +47,30 @@ public:
 	void shutdown();
 	void reload();
 
-	// Tears one plugin down and runs its entry file again, leaving every other
-	// plugin untouched. Returns false when nothing is named `id`. Behind
-	// `lua_reload <plugin>`, which is the whole edit-test loop for one plugin.
+	// Tears one plugin down and runs its entry file again, leaving the others
+	// untouched. Returns false when nothing is named `id`. Behind
+	// `lua_reload <plugin>`.
 	bool reload_plugin(const char *id);
 
-	// Runs only manifest.lua for plugins/<id>, in a disposable slot appended
-	// past every real plugin so no existing index shifts, then throws the
-	// slot away. Does not run init.lua and never joins the running plugin
-	// list - the point is to catch a bad plugin{} call, a missing require or
-	// a manifest.lua syntax error before `lua_reload` actually starts it.
-	// Behind `lua_check <plugin>`. Returns false on any failure and leaves
-	// the reason in `out`.
+	// Runs only manifest.lua for plugins/<id> in a disposable slot, to catch a
+	// bad plugin{} call or a missing require before `lua_reload` starts it.
+	// Behind `lua_check <plugin>`. Reason goes in `out`.
 	bool check_plugin(const char *id, std::string &out);
 
-	// Starts a plugin that is not currently running - either brand new
-	// (its folder appeared under plugins/ after startup, never in
-	// m_plugins at all) or previously `lua_unload`ed (slot already
-	// exists, just inert). Appends a fresh slot for the first case, reuses
-	// the existing one for the second - either way nothing about any other
-	// already-running plugin's index moves. `out` explains what happened
-	// (already running, missing files, load error - see console) whether
-	// this returns true or false. Behind `lua_load <plugin>`.
+	// Starts a plugin not currently running - brand new, or previously
+	// lua_unload'ed. Every other plugin's index stays put. `out` explains what
+	// happened either way. Behind `lua_load <plugin>`.
 	bool load_plugin_by_name(const char *id, std::string &out);
 
-	// The other half: tears one plugin down like a reload would, but does
-	// not start it back up - the slot stays in m_plugins (see
-	// LuaPlugin::loaded) so indices elsewhere never shift, it just stops
-	// doing anything until `lua_load` picks it back up. Behind
-	// `lua_unload <plugin>`.
+	// The other half: tears one plugin down like a reload would, but does not
+	// start it back up. Behind `lua_unload <plugin>`.
 	bool unload_plugin_by_name(const char *id, std::string &out);
 
-	// The web panel (or any other plugin) wants a reload, but its request
-	// arrives from inside a route handler - itself a lua_pcall running on the
-	// same m_L that reload()/reload_plugin() would tear down out from under
-	// it. So it does not call either directly: it records what it wants here,
-	// and process_pending_reload() carries it out from the top of the next
-	// frame, once that call has fully returned and no Lua frame is on the C
-	// stack. Same mechanism the console command already gets for free by
-	// running outside any pcall to begin with.
-	//
-	// request_plugin_reload validates the name up front so a bad id is
-	// reported to the caller immediately rather than silently doing nothing
-	// a frame later.
+	// A reload requested from inside a route handler cannot call reload()
+	// directly - that would tear down the m_L the handler is running on. The
+	// request is recorded here and carried out by process_pending_reload() from
+	// the top of the next frame. request_plugin_reload validates the name up
+	// front.
 	void request_full_reload() { m_pending_full_reload = true; m_pending_plugin_reload.clear(); }
 	bool request_plugin_reload(const char *id);
 	void process_pending_reload();
@@ -108,27 +83,24 @@ public:
 
 	const std::vector<LuaPlugin> &plugins() const { return m_plugins; }
 
-	// How many of them got their position from load_order.txt; the rest are
-	// alphabetical.
+	// How many got their position from load_order.txt; the rest are alphabetical.
 	int ordered_count() const { return m_ordered; }
 
-	// Index of the plugin currently being loaded, or -1. plugin{} uses it to
-	// know which plugin it is describing.
+	// Index of the plugin currently being loaded, or -1.
 	int loading_index() const { return m_loading; }
 	LuaPlugin *loading_plugin() { return m_loading >= 0 ? &m_plugins[m_loading] : nullptr; }
 
-	// Index of the plugin whose code is running right now - during load, but
-	// also inside an event handler or a timer callback. Handlers and timers
-	// are tagged with it so they can be dropped per plugin.
+	// Index of the plugin whose code is running right now - during load, and
+	// inside an event handler or timer callback. Handlers/timers are tagged
+	// with it so they can be dropped per plugin.
 	int current_index() const { return m_current; }
 	void set_current(int index) { m_current = index; }
 
-	// Marks a plugin dead after it was shut down at runtime (for example for
-	// blowing the precache budget), so lua_list shows it as failed.
+	// Marks a plugin dead after it was shut down at runtime (e.g. for blowing
+	// the precache budget).
 	void mark_failed(int index);
 
-	// Pushes the traceback message handler and returns its stack index.
-	// Pass that index as pcall's errfunc.
+	// Pushes the traceback message handler; pass its index as pcall's errfunc.
 	int push_errfunc();
 
 	// Pops the error message left on the stack by a failed load/pcall and
@@ -139,14 +111,11 @@ public:
 	// then in the shared include/ directory.
 	static int l_require(lua_State *L);
 
-	// Finds the file a module name resolves to for the given plugin, searching
-	// the plugin folder first, then the shared include/ directory. Returns the
-	// path, or empty if nothing matches. Shared by require() and the requires
-	// manifest check.
+	// The file a module name resolves to for the given plugin (plugin folder
+	// first, then include/), or empty if nothing matches.
 	std::string resolve_module(int plugin_index, const char *modname) const;
 
-	// The same paths, formatted for an error message, so a failed require can
-	// show exactly where it looked.
+	// The same paths formatted for an error message.
 	std::string module_candidates(int plugin_index, const char *modname) const;
 
 private:
@@ -154,15 +123,14 @@ private:
 	void discover_plugins();
 	void load_plugin(int index);
 
-	// Puts m_plugins in the order load_order.txt asks for, with everything it
-	// does not mention after that, by name.
+	// Puts m_plugins in load_order.txt order, everything unmentioned after that
+	// by name.
 	void apply_load_order();
 	bool run_file(const std::string &path, int env_ref, const char *where);
 	int module_paths(int plugin_index, const char *modname, std::string out[4]) const;
 
 	// Runs the plugin's own on_unload handlers, then drops everything it
-	// registered: handlers, timers, commands, databases, resources. Shared by
-	// a single-plugin reload and by the failed-load path.
+	// registered. Shared by a single-plugin reload and the failed-load path.
 	void unload_plugin(int index, bool run_handlers);
 
 	lua_State *m_L = nullptr;
@@ -170,12 +138,10 @@ private:
 	int m_loading = -1;
 	int m_current = -1;
 
-	// How many plugins load_order.txt placed by hand, for lua_list.
 	int m_ordered = 0;
 
-	// True from the moment plugin_unload starts firing until the state is
-	// gone, so a handler that triggers another shutdown cannot make it fire
-	// twice.
+	// True from the moment plugin_unload starts firing until the state is gone,
+	// so a handler that triggers another shutdown cannot make it fire twice.
 	bool m_unloading = false;
 
 	bool m_pending_full_reload = false;
@@ -185,7 +151,7 @@ private:
 extern LuaEngine g_lua;
 
 // Forgets which errors have already been printed. Called when the state is
-// rebuilt: after lua_reload the repeat counters describe code that is gone.
+// rebuilt.
 void cslua_errors_clear();
 
 // Marks whose code is running while a handler or timer callback executes.

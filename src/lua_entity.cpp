@@ -12,14 +12,12 @@
 #include <string.h>
 #include <vector>
 
-// The shared metatable for every entity object; kept as a registry ref so a
-// pushed entity costs one table plus a lookup, not a rebuilt method set.
+// The shared metatable for every entity object, kept as a registry ref.
 static int s_entity_mt_ref = LUA_NOREF;
 
 // Plugins load during Meta_Attach, before any map exists. The engine's entity
-// calls do not check for that - they walk an edict table that has not been
-// allocated and take the whole server down without a word. A clear Lua error
-// beats a silent crash, and it points at the fix: do this from an event.
+// calls walk an edict table that is not there and take the server down; a clear
+// Lua error beats that.
 static void require_world(lua_State *L, const char *what)
 {
 	if (!cslua_world_ready())
@@ -27,10 +25,8 @@ static void require_world(lua_State *L, const char *what)
 			"(player_spawn, round_start), not while the plugin loads", what);
 }
 
-// Entities die and their slots come back as something else. An object holds
-// the edict index AND the serial number the engine stamped on it, so an object
-// left over from a removed entity - or from before a map change - is caught
-// rather than quietly writing into whatever moved in.
+// An object holds the edict index AND the serial number, so an object left over
+// from a removed entity (or from before a map change) is caught.
 static edict_t *self_edict(lua_State *L, bool required = true)
 {
 	luaL_checktype(L, 1, LUA_TTABLE);
@@ -45,8 +41,6 @@ static edict_t *self_edict(lua_State *L, bool required = true)
 	int serial = (int)lua_tointeger(L, -1);
 	lua_pop(L, 1);
 
-	// An object that outlived its map: the edicts are gone, and asking the
-	// engine about them would be the same crash as touching one too early.
 	if (!cslua_world_ready()) {
 		if (required)
 			luaL_error(L, "e: entity #%d is gone (the map it belonged to has ended)", index);
@@ -63,8 +57,8 @@ static edict_t *self_edict(lua_State *L, bool required = true)
 	return e;
 }
 
-// Wraps an edict in a fresh object. Anything not worth talking about - a free
-// slot, the null edict - comes back as nil, so scripts test it plainly.
+// Wraps an edict in a fresh object. Anything not worth talking about comes back
+// as nil.
 static void push_entity(lua_State *L, edict_t *e)
 {
 	if (!e || e->free || s_entity_mt_ref == LUA_NOREF) {
@@ -84,8 +78,7 @@ static void push_entity(lua_State *L, edict_t *e)
 	lua_setmetatable(L, -2);
 }
 
-// For callers outside this file that only have an index - a hookchain arg,
-// say - and want the same object a script gets from ents.find or e:spawn().
+// For callers outside this file that only have an index (a hookchain arg, say).
 void cslua_push_entity_index(lua_State *L, int index)
 {
 	if (!cslua_world_ready() || index <= 0) {
@@ -112,8 +105,8 @@ static int vector_field(lua_State *L, Vector &field)
 	return 0;
 }
 
-// Writing origin goes through the engine so the entity is relinked into the
-// world; assigning pev->origin leaves it colliding where it used to be.
+// Writing origin goes through the engine so the entity is relinked; assigning
+// pev->origin leaves it colliding where it used to be.
 static int l_origin(lua_State *L)
 {
 	edict_t *e = self_edict(L);
@@ -139,17 +132,13 @@ static int l_angles(lua_State *L)
 	return vector_field(L, self_edict(L)->v.angles);
 }
 
-// e:velocity([vx, vy, vz]) - a plain physics field, unlike origin: nothing to
-// relink, the movement code just reads it next frame. What turns a
-// MOVETYPE_BOUNCE entity into an actual thrown arc instead of a dead drop.
+// e:velocity([vx, vy, vz]) - a plain physics field, unlike origin.
 static int l_velocity(lua_State *L)
 {
 	return vector_field(L, self_edict(L)->v.velocity);
 }
 
-// e:model("models/w_ak47.mdl") - the model has to be precached already, so put
-// res.model() at the top of the plugin. Setting one that is not costs the
-// server a "no precache" error and the entity draws as nothing.
+// e:model("models/w_ak47.mdl") - must be precached already (res.model).
 static int l_model(lua_State *L)
 {
 	edict_t *e = self_edict(L);
@@ -169,18 +158,15 @@ static int l_classname(lua_State *L)
 	return 1;
 }
 
-// e:valid() - the one method that answers instead of raising. Anything holding
-// on to an entity across a round or a map change wants this first.
+// e:valid() - the one method that answers instead of raising.
 static int l_valid(lua_State *L)
 {
 	lua_pushboolean(L, self_edict(L, false) != NULL);
 	return 1;
 }
 
-// e:spawn() - run the entity's own Spawn, which is what turns a bare edict into
-// something the game treats as real: collision box, think function, the lot.
-// Split from ents.create() on purpose - keyvalues and the model have to be in
-// place before Spawn reads them.
+// e:spawn() - run the entity's own Spawn. Split from ents.create() on purpose:
+// keyvalues and the model have to be in place first.
 static int l_spawn(lua_State *L)
 {
 	MDLL_Spawn(self_edict(L));
@@ -198,16 +184,9 @@ static int l_remove(lua_State *L)
 // ---------------------------------------------------------------------------
 // Touch-triggered think
 //
-// AmxModX's SetTouch/SetThink work by writing into a private member of the
-// game DLL's own CBaseEntity through a pointer-cast, matched to one exact
-// binary layout - that is what makes it fragile, not the idea of a touch
-// callback itself. This module's DLL_FUNCTIONS table already has a proper,
-// metamod-native hook point for the same event: pfnTouch, called for every
-// entity-to-entity touch in the game. Routing through that instead means no
-// layout hacking, at the cost of no direct "run this Lua function on touch" -
-// what we can do cleanly is force an entity's own think to run right away,
-// which for a grenade means "call whatever ExplodeHeGrenade/ExplodeSmokeGrenade
-// would have called anyway, just now instead of after the fuse."
+// No layout hacking: pfnTouch is a proper metamod hook point. We can't run an
+// arbitrary Lua function on touch, but we can force an entity's own think to
+// run right away - which for a grenade means "detonate now instead of on fuse".
 namespace {
 struct TouchWatch { int index; int serial; };
 std::vector<TouchWatch> s_touch_watch;
@@ -238,9 +217,8 @@ void cslua_touch_detonate_clear()
 	s_touch_watch.clear();
 }
 
-// e:detonate_on_touch() - the next time this entity touches anything (wall,
-// floor, player), its nextthink is forced to fire on the following server
-// frame. One-shot: call again after each throw if the behaviour should repeat.
+// e:detonate_on_touch() - one-shot: the next touch forces nextthink to fire on
+// the following frame.
 static int l_detonate_on_touch(lua_State *L)
 {
 	edict_t *e = self_edict(L);
@@ -263,12 +241,8 @@ static int l_readonly(lua_State *L)
 	return luaL_error(L, "e: entity objects are read-only, keep your own state in a table");
 }
 
-// ents.create("info_target") -> a bare entity at the world origin, or nil if
-// the game DLL does not know that classname.
-//
-// It is not in the world yet in any useful sense: set the model and the origin,
-// then call e:spawn(). Doing it in that order is the difference between a prop
-// that works and one the game ignores.
+// ents.create("info_target") -> a bare entity at the world origin, or nil for
+// an unknown classname. Set the model and origin, then call e:spawn().
 static int l_create_entity(lua_State *L)
 {
 	const char *classname = luaL_checkstring(L, 1);
@@ -310,9 +284,7 @@ static int l_entities(lua_State *L)
 	return 1;
 }
 
-// ents.in_sphere(x, y, z, radius) -> everything within radius of a point, in no
-// particular order. This is what a zone is built out of: a trigger volume with
-// no entity of its own.
+// ents.in_sphere(x, y, z, radius) -> everything within radius of a point.
 static int l_find_in_sphere(lua_State *L)
 {
 	Vector center(
@@ -341,9 +313,7 @@ static int l_find_in_sphere(lua_State *L)
 	return 1;
 }
 
-// Reads a {x, y, z} table, the same positional shape e:render's `color`
-// already uses - two of these back to back read better than six loose
-// numbers for ents.trace_line(a, b).
+// Reads a {x, y, z} table.
 static Vector read_point(lua_State *L, int idx)
 {
 	luaL_checktype(L, idx, LUA_TTABLE);
@@ -355,9 +325,7 @@ static Vector read_point(lua_State *L, int idx)
 	return v;
 }
 
-// Shared by ents.trace_line/ents.trace_hull: `opts.skip` (entity or player to
-// ignore) and `opts.ignore_monsters` (the engine's fNoMonsters), read out of
-// an optional table at stack index `idx`.
+// Shared by ents.trace_line/ents.trace_hull: opts.skip and opts.ignore_monsters.
 static void read_trace_opts(lua_State *L, int idx, edict_t **skip, int *no_monsters)
 {
 	*skip = NULL;
@@ -377,11 +345,7 @@ static void read_trace_opts(lua_State *L, int idx, edict_t **skip, int *no_monst
 	lua_pop(L, 1);
 }
 
-// ents.trace_line(a, b[, opts]) - a ray between two arbitrary points, not
-// tied to any player's eyes. p:trace()/p:trace_to() answer "what is this
-// player looking at"; this is the general-purpose version for effects,
-// custom projectiles, line-of-sight checks between two entities, and
-// anything else that needs a trace with nobody's eyes involved.
+// ents.trace_line(a, b[, opts]) - a ray between two arbitrary points.
 static int l_trace_line(lua_State *L)
 {
 	require_world(L, "ents.trace_line");
@@ -400,10 +364,8 @@ static int l_trace_line(lua_State *L)
 	return 1;
 }
 
-// ents.trace_hull(a, b[, opts]) - like trace_line, but sweeps a hitbox-sized
-// box instead of an infinitesimal ray. `opts.hull` picks which one: 0 point
-// (same as trace_line), 1 human-sized (the default), 2 large, 3 head - the
-// same point_hull/human_hull/large_hull/head_hull values the engine uses.
+// ents.trace_hull(a, b[, opts]) - sweeps a box. opts.hull picks which
+// (point/human/large/head_hull).
 static int l_trace_hull(lua_State *L)
 {
 	require_world(L, "ents.trace_hull");
@@ -433,17 +395,14 @@ static int l_trace_hull(lua_State *L)
 	return 1;
 }
 
-// e:keyvalue("targetname", "door1") - the same channel the map file uses, so
-// anything a level designer can set on an entity is reachable here. Has to
-// happen before e:spawn(): Spawn is what reads the values.
+// e:keyvalue("targetname", "door1") - the same channel the map file uses. Must
+// happen before e:spawn().
 static int l_keyvalue(lua_State *L)
 {
 	edict_t *e = self_edict(L);
 	const char *key = luaL_checkstring(L, 2);
 	const char *value = luaL_checkstring(L, 3);
 
-	// DispatchKeyValue keeps the pointers only for the length of the call, but
-	// the game copies what it needs out of them, so locals are fine.
 	KeyValueData kvd;
 	kvd.szClassName = (char *)STRING(e->v.classname);
 	kvd.szKeyName = (char *)key;
@@ -456,8 +415,7 @@ static int l_keyvalue(lua_State *L)
 	return 1;
 }
 
-// e:solid() - how the world collides with this entity.
-//   0 not solid   1 trigger   2 bounding box   3 slide box   4 brush model
+// e:solid() - 0 not solid, 1 trigger, 2 bbox, 3 slidebox, 4 brush model.
 static int l_solid(lua_State *L)
 {
 	edict_t *e = self_edict(L);
@@ -471,10 +429,8 @@ static int l_solid(lua_State *L)
 	return 0;
 }
 
-// e:movetype() - how the engine moves it.
-//   0 none   4 step   5 fly   6 toss   7 push   8 noclip   10 bounce   12 follow
-// (cssdk/common/const.h's MOVETYPE_* - the values the docs used to list here
-// were off by a slot or two; MOVETYPE_FOLLOW is 12, not 10.)
+// e:movetype() - 0 none, 4 step, 5 fly, 6 toss, 7 push, 8 noclip, 10 bounce,
+// 12 follow (const.h MOVETYPE_*).
 static int l_movetype(lua_State *L)
 {
 	edict_t *e = self_edict(L);
@@ -488,13 +444,8 @@ static int l_movetype(lua_State *L)
 	return 0;
 }
 
-// e:attach(player, x, y, z) - rides along on player, engine-native: sets
-// MOVETYPE_FOLLOW and aiment, same as every classic fakemeta "hat" plugin.
-// The offset goes into pev->v_angle - unused by non-player entities, and the
-// exact field SV_Physics_Follow adds to the parent's origin every server
-// frame (see ReHLDS engine/sv_phys.cpp). Angles are not settable separately:
-// the engine copies the parent's angles (all of pitch/yaw/roll) onto this
-// entity wholesale, every frame, for as long as the attachment holds.
+// e:attach(player, x, y, z) - rides along on player. The offset goes into
+// pev->v_angle, which SV_Physics_Follow adds to the parent's origin every frame.
 static int l_attach(lua_State *L)
 {
 	edict_t *e = self_edict(L);
@@ -525,7 +476,7 @@ static int l_attach(lua_State *L)
 	return 0;
 }
 
-// e:detach() - stops following; the entity stays wherever it last was.
+// e:detach() - stops following; the entity stays where it last was.
 static int l_detach(lua_State *L)
 {
 	edict_t *e = self_edict(L);
@@ -535,9 +486,8 @@ static int l_detach(lua_State *L)
 	return 0;
 }
 
-// e:size(minx, miny, minz, maxx, maxy, maxz) - the bounding box, which is what
-// a trigger volume actually is. Goes through the engine so the entity is
-// relinked; writing pev->mins directly leaves it colliding at its old size.
+// e:size(minx..maxz) - the bounding box. Goes through the engine so the entity
+// is relinked.
 static int l_size(lua_State *L)
 {
 	edict_t *e = self_edict(L);
@@ -558,11 +508,7 @@ static int l_size(lua_State *L)
 	return 0;
 }
 
-// e:sequence([n]) - which studio animation the model plays. Numeric only:
-// the engine has no by-name lookup exposed here (LookupSequence is a
-// CBaseAnimating method that parses the compiled .mdl's sequence table
-// directly, not an engfunc), so finding "death1" means trying indices
-// against a model and watching what plays.
+// e:sequence([n]) - which studio animation the model plays. Numeric only.
 static int l_sequence(lua_State *L)
 {
 	edict_t *e = self_edict(L);
@@ -576,11 +522,8 @@ static int l_sequence(lua_State *L)
 	return 0;
 }
 
-// e:frame([n]) - position within the current sequence, 0-255 regardless of
-// how many frames the sequence actually has (GoldSrc transmits it as a
-// normalized byte, not a real frame index). 255 with framerate 0 freezes on
-// the last pose instead of looping - the "corpse" trick: play nothing, just
-// show where the animation would have ended up.
+// e:frame([n]) - position within the current sequence, 0-255 (normalized byte).
+// 255 with framerate 0 freezes on the last pose - the "corpse" trick.
 static int l_frame(lua_State *L)
 {
 	edict_t *e = self_edict(L);
@@ -594,8 +537,7 @@ static int l_frame(lua_State *L)
 	return 0;
 }
 
-// e:framerate([n]) - playback speed, 1.0 normal. 0 stops the animation
-// exactly where e:frame() put it instead of advancing from there.
+// e:framerate([n]) - playback speed, 1.0 normal, 0 stops.
 static int l_framerate(lua_State *L)
 {
 	edict_t *e = self_edict(L);
@@ -609,10 +551,8 @@ static int l_framerate(lua_State *L)
 	return 0;
 }
 
-// e:body([n]) / e:skin([n]) - which sub-model and which texture group a
-// multi-body studio model shows. Player models use body to swap gun holsters
-// etc. and skin for the team/camo variant - both purely cosmetic, no physics
-// weight.
+// e:body([n]) / e:skin([n]) - which sub-model and texture group a multi-body
+// studio model shows. Cosmetic.
 static int l_body(lua_State *L)
 {
 	edict_t *e = self_edict(L);
@@ -640,8 +580,6 @@ static int l_skin(lua_State *L)
 }
 
 // e:render{ mode =, amount =, color =, fx = } - transparency and glow.
-// An options table rather than five positional numbers: nobody remembers which
-// of them was renderfx.
 static int l_render(lua_State *L)
 {
 	edict_t *e = self_edict(L);
@@ -693,10 +631,8 @@ static int l_render(lua_State *L)
 	return 0;
 }
 
-// Accepts a player object ({id=...}) or a bare id, same two shapes
-// cslua_arg_to_edict unwraps for a pev field - but here the target has to be
-// an actual connected client (a recipient of network data), not any entity,
-// so this checks that directly rather than resolving through an edict.
+// Accepts a player object ({id=...}) or a bare id; the target must be a
+// connected client.
 static int arg_to_player_slot(lua_State *L, int idx)
 {
 	int id = 0;
@@ -723,11 +659,8 @@ static int arg_to_player_slot(lua_State *L, int idx)
 	return id;
 }
 
-// e:render_for(player[, opts]) - like e:render(), but only for one client:
-// everyone else keeps seeing the entity's ordinary, entvars-driven look.
-// Only possible at all because this goes through pfnAddToFullPack, the
-// engine's per-recipient snapshot build (see cslua_visibility.h) - there is
-// no such thing as a per-client entvars write.
+// e:render_for(player[, opts]) - like e:render(), but only for one client.
+// Goes through pfnAddToFullPack, the engine's per-recipient snapshot build.
 static int l_render_for(lua_State *L)
 {
 	edict_t *e = self_edict(L);
@@ -757,10 +690,8 @@ static int l_render_for(lua_State *L)
 
 	luaL_checktype(L, 3, LUA_TTABLE);
 
-	// A field opts leaves out keeps this override's own current value - or,
-	// the first time a rule is set for this recipient, the entity's own
-	// ordinary render. Same "starts from what it already looked like" idea
-	// e:render() itself uses for a partial update.
+	// A field opts leaves out keeps this override's current value, or (the
+	// first time) the entity's own render.
 	CsluaRenderOverride values = has_cur ? cur : CsluaRenderOverride{
 		e->v.rendermode, e->v.renderamt,
 		e->v.rendercolor.x, e->v.rendercolor.y, e->v.rendercolor.z,
@@ -801,8 +732,7 @@ static int l_render_for(lua_State *L)
 	return 0;
 }
 
-// e:clear_render_for(player) - removes an override set by e:render_for() or
-// e:visible_to(); player goes back to seeing e's ordinary render.
+// e:clear_render_for(player) - removes an override.
 static int l_clear_render_for(lua_State *L)
 {
 	edict_t *e = self_edict(L);
@@ -811,10 +741,8 @@ static int l_clear_render_for(lua_State *L)
 	return 0;
 }
 
-// e:visible_to(player, visible) - the common case of e:render_for(): make an
-// entity invisible to one specific client (kRenderTransAlpha, amount 0)
-// without touching what anyone else sees. visible = true clears the
-// override outright, same as e:clear_render_for().
+// e:visible_to(player, visible) - the common case: make an entity invisible to
+// one client (kRenderTransAlpha, amount 0). visible = true clears the override.
 static int l_visible_to(lua_State *L)
 {
 	edict_t *e = self_edict(L);
@@ -831,10 +759,7 @@ static int l_visible_to(lua_State *L)
 	return 0;
 }
 
-// e:pev(name[, v...]) - generic read/write for any entvars_t field by its
-// real name (see lua_pev.cpp for the field table and p:pev for the player
-// object's copy of this same method). Covers everything the typed methods
-// above don't: `e:pev("origin")` and `e:origin()` read the same bytes.
+// e:pev(name[, v...]) - generic read/write for any entvars_t field by name.
 static int l_pev(lua_State *L)
 {
 	edict_t *e = self_edict(L);
@@ -871,13 +796,9 @@ static const luaL_Reg s_methods[] =
 	{ NULL, NULL }
 };
 
-// ents.hide_corpses(true) - swallow every player's native death ragdoll
-// (ClCorpse) before it reaches any client; ents.hide_corpses(false) lets it
-// through again. No per-player targeting - see cslua_corpse.cpp for why -
-// so a script that wants some deaths to keep their ragdoll and others not
-// cannot use this for the second half; it can only turn the tap on and off
-// globally. Reference-counted: call it once per corpse tracked, matching
-// pairs, and it stays on for as long as any caller still wants it on.
+// ents.hide_corpses(true) - swallow every player's native death ragdoll before
+// it reaches any client. No per-player targeting (see cslua_corpse.cpp).
+// Reference-counted: call in matching pairs.
 static int l_hide_corpses(lua_State *L)
 {
 	luaL_checktype(L, 1, LUA_TBOOLEAN);
@@ -911,7 +832,7 @@ void cslua_register_entity(lua_State *L)
 	lua_setfield(L, -2, "__tostring");
 
 	// Same reasoning as the player object: an entity handed to another plugin
-	// through an export must not carry one plugin's scratch fields.
+	// must not carry one plugin's scratch fields.
 	lua_pushcfunction(L, l_readonly);
 	lua_setfield(L, -2, "__newindex");
 
@@ -925,6 +846,5 @@ void cslua_register_entity(lua_State *L)
 
 void cslua_entity_shutdown()
 {
-	// The ref dies with the state; just forget it.
 	s_entity_mt_ref = LUA_NOREF;
 }

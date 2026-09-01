@@ -17,9 +17,8 @@ struct Command
 
 static std::vector<Command> s_commands;
 
-// Names already handed to the engine. AddServerCommand keeps the pointer we
-// pass and never copies it, so the string must outlive the server - a plain
-// strdup that we never free is exactly right, since commands are permanent.
+// Names already handed to the engine. AddServerCommand keeps the pointer and
+// never copies it, so the string must outlive the server.
 static std::vector<char *> s_engine_registered;
 
 static Command *find_command(const char *name)
@@ -38,8 +37,8 @@ static char *engine_name(const char *name)
 	return nullptr;
 }
 
-// The single entry point the engine calls for every Lua command. It figures
-// out which command ran from argv[0] and dispatches to the matching handler.
+// The single entry point the engine calls for every Lua command; dispatches
+// by argv[0].
 static void command_trampoline()
 {
 	const char *name = CMD_ARGV(0);
@@ -48,7 +47,7 @@ static void command_trampoline()
 
 	Command *cmd = find_command(name);
 	if (!cmd || !cmd->live)
-		return;			// plugin gone after a reload: silently ignore
+		return;			// plugin gone after a reload
 
 	lua_State *L = g_lua.state();
 	if (!L)
@@ -59,7 +58,6 @@ static void command_trampoline()
 
 	lua_rawgeti(L, LUA_REGISTRYINDEX, cmd->ref);
 
-	// Hand the handler an array of the arguments after the command name.
 	lua_newtable(L);
 	int argc = CMD_ARGC();
 	for (int i = 1; i < argc; i++) {
@@ -87,8 +85,7 @@ static int l_command(lua_State *L)
 
 	Command *existing = find_command(name);
 	if (existing) {
-		// Same command re-registered (typically after a reload): swap the
-		// handler, drop the old ref, keep the engine registration.
+		// Re-registered (typically after a reload): swap the handler.
 		luaL_unref(L, LUA_REGISTRYINDEX, existing->ref);
 		existing->ref = ref;
 		existing->plugin = g_lua.current_index();
@@ -113,10 +110,8 @@ static int l_command(lua_State *L)
 
 void cslua_register_command_api(lua_State *L)
 {
-	// Low-level primitive: registers a raw server console command whose handler
-	// gets the argument array. The friendly, unified cmd.add() that also covers
-	// chat and builds a ctx lives in core/commands.lua on top of this, and
-	// clears this entry once it has it - a plugin only ever sees cmd.add.
+	// Low-level primitive; core/commands.lua builds the friendly cmd.add() on
+	// top of this and clears this entry.
 	static const luaL_Reg s_internal[] =
 	{
 		{ "_register", l_command },
@@ -145,9 +140,8 @@ void cslua_command_shutdown()
 {
 	lua_State *L = g_lua.state();
 
-	// Refs die with the state; mark every command dormant so a stray engine
-	// call before the next load does nothing. Names re-registered on the next
-	// load flip back to live.
+	// Refs die with the state; mark every command dormant. Names re-registered
+	// on the next load flip back to live.
 	for (size_t i = 0; i < s_commands.size(); i++) {
 		if (L)
 			luaL_unref(L, LUA_REGISTRYINDEX, s_commands[i].ref);

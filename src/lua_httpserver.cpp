@@ -1,6 +1,5 @@
-// winsock2.h has to be seen before windows.h (pulled in by cslua.h through
-// extdll.h) or windows.h drags in the old winsock.h first and the two
-// headers' definitions of the same structures collide.
+// winsock2.h must be seen before windows.h (pulled in by cslua.h) or the two
+// headers' definitions collide.
 #ifdef _WIN32
 	#include <winsock2.h>
 	#include <ws2tcpip.h>
@@ -40,12 +39,8 @@
 #endif
 
 // ---------------------------------------------------------------------------
-// What crosses between the threads
-//
-// A request is parsed entirely on its worker - method, path, headers, body -
-// before it is ever shown to the game thread. What comes back the other way
-// is the finished response. The socket itself never leaves the worker: the
-// game thread produces bytes, not I/O.
+// What crosses between the threads: a request is parsed entirely on its worker
+// before the game thread sees it. The socket never leaves the worker.
 
 namespace {
 
@@ -79,16 +74,13 @@ struct Response
 	std::string body;
 	std::vector<Header> headers;
 
-	// Set only for a match against a stream route whose guard returned
-	// true: instead of writing this response, the worker hands the socket
-	// to run_sse_session. status/body/headers are meaningless when this is
-	// set - see cslua_httpserver_run.
+	// Set when a stream route's guard returned true: the worker hands the
+	// socket to run_sse_session and status/body/headers are meaningless.
 	bool upgrade_to_stream = false;
 };
 
-// One accepted connection, handed to the game thread and waited on by its
-// worker. The worker owns the socket for the connection's whole life; the
-// game thread only ever touches `req` and fills in `res`.
+// One accepted connection. The worker owns the socket; the game thread only
+// touches `req` and fills `res`.
 struct PendingConn
 {
 	ParsedRequest req;
@@ -96,7 +88,7 @@ struct PendingConn
 	std::mutex mtx;
 	std::condition_variable cv;
 	bool done = false;
-	bool abandoned = false;		// the worker gave up waiting; drop the reply
+	bool abandoned = false;		// the worker gave up waiting
 	Response res;
 };
 
@@ -108,13 +100,8 @@ struct Route
 	int callback;							// registry ref
 };
 
-// A live (Server-Sent Events) subscriber: a GET matching a route registered
-// with http_server.stream() runs its callback exactly like a normal route -
-// same game-thread dispatch, same session check a plugin would do for any
-// other path - but a `true` return upgrades the connection instead of
-// answering it. http_server.push() then drops a message in every client's
-// outbox and wakes it; the connection's own thread is what actually writes to
-// the socket, never the caller of push().
+// A live (SSE) subscriber. http_server.push() drops a message in every
+// client's outbox and wakes it; the connection's own thread writes the socket.
 struct SseClient
 {
 	std::mutex mtx;
@@ -127,26 +114,20 @@ std::deque<std::shared_ptr<PendingConn>> s_pending;
 std::mutex s_pending_lock;
 
 std::vector<Route> s_routes;
-// Streams are matched and dispatched exactly like s_routes (see
-// cslua_httpserver_run) - kept in a separate list only so a plain GET route
-// and a stream can't collide on the same path by accident.
+// Kept separate from s_routes only so a plain GET and a stream can't collide.
 std::vector<Route> s_streams;
 std::mutex s_routes_lock;
 
 std::vector<std::shared_ptr<SseClient>> s_sse_clients;
 std::mutex s_sse_lock;
 
-// A client sitting on an idle stream with nothing to send still gets a
-// comment line this often - it is what turns a dead peer (browser closed,
-// laptop asleep) into a failed send instead of a thread parked forever.
+// An idle stream gets a comment line this often - turns a dead peer into a
+// failed send instead of a thread parked forever.
 const int SSE_PING_MS = 15000;
 
-// A slow or wedged subscriber must not grow without bound just because
-// nobody is reading its socket; the oldest update is the one it can most
-// afford to have missed.
+// A slow subscriber must not grow without bound; drop the oldest update.
 const size_t SSE_OUTBOX_MAX = 200;
 
-// Accepted sockets waiting for a free worker.
 std::deque<cslua_socket_t> s_conn_queue;
 std::mutex s_conn_lock;
 std::condition_variable s_conn_wake;
@@ -161,28 +142,21 @@ int s_port = 0;
 bool s_wsa_started = false;
 #endif
 
-// Higher than lua_http.cpp's outbound pool: a couple of these are not
-// short-lived request/response round trips but SSE subscribers that hold
-// their worker for as long as an admin's browser tab stays open. Bounding the
-// pool still bounds how many can be connected at once, which is a feature on
-// something this size, not an oversight.
+// Higher than lua_http.cpp's pool: a couple of these are SSE subscribers that
+// hold their worker for as long as a browser tab stays open. Bounding the pool
+// bounds how many can be connected at once, which is a feature here.
 const size_t WORKER_COUNT = 8;
 const size_t MAX_BODY = 1 * 1024 * 1024;
 const size_t MAX_HEADER = 16 * 1024;
 const int RECV_TIMEOUT_MS = 5000;
 const int RESPONSE_WAIT_MS = 5000;
 
-// A connection flood that never sends a byte must not be able to grow
-// s_conn_queue - and with it the process's open file descriptors - without
-// bound. 8x the worker count is generous slack for a burst, not an invitation
-// to queue forever.
+// A connection flood that never sends a byte must not grow s_conn_queue.
 const size_t MAX_CONN_QUEUE = 64;
 
 // ---------------------------------------------------------------------------
 // Wire parsing - deliberately minimal. No keep-alive, no chunked bodies, no
-// pipelining: every connection is one request, one response, then closed.
-// That is what a small in-process admin API needs, and it is what keeps this
-// file a few hundred lines instead of a second libcurl.
+// pipelining: one request, one response, then closed.
 
 bool recv_line(cslua_socket_t fd, std::string &buf, std::string &line)
 {
@@ -214,9 +188,8 @@ std::string trim(const std::string &s)
 	return s.substr(a, b - a + 1);
 }
 
-// Reads the request line, headers and (if any) body off a freshly accepted
-// socket. False on anything malformed or too large - the caller answers 400
-// and closes rather than trying to recover mid-stream.
+// Reads request line, headers and body. False on anything malformed or too
+// large - the caller answers 400 and closes.
 bool read_request(cslua_socket_t fd, ParsedRequest &out)
 {
 	std::string buf;
@@ -268,8 +241,7 @@ bool read_request(cslua_socket_t fd, ParsedRequest &out)
 	if (content_length > MAX_BODY)
 		return false;
 
-	// Whatever is already sitting in buf (arrived in the same packet as the
-	// headers) counts toward the body first.
+	// Whatever arrived in the same packet as the headers counts first.
 	out.body = buf;
 	while (out.body.size() < content_length) {
 		char chunk[4096];
@@ -316,9 +288,8 @@ void write_response(cslua_socket_t fd, const Response &res)
 		const std::string &name = res.headers[i].name;
 		const std::string &value = res.headers[i].value;
 
-		// A route handler that reflects request data into a response header
-		// unescaped must not be able to split the response - drop the header
-		// outright rather than trying to sanitize it into something valid.
+		// A handler reflecting request data into a header must not split the
+		// response - drop the header rather than sanitize it.
 		if (name.find_first_of("\r\n") != std::string::npos ||
 			value.find_first_of("\r\n") != std::string::npos)
 			continue;
@@ -349,10 +320,8 @@ void write_response(cslua_socket_t fd, const Response &res)
 	}
 }
 
-// Both directions: a client that stops reading its response parks send()
-// forever with only SO_RCVTIMEO set, wedging a worker (and, at shutdown,
-// stop_listening() joining it) just as surely as one that stops sending its
-// request.
+// A client that stops reading its response parks send() forever with only
+// SO_RCVTIMEO set, so set both.
 void set_socket_timeouts(cslua_socket_t fd, int ms)
 {
 #ifdef _WIN32
@@ -368,10 +337,9 @@ void set_socket_timeouts(cslua_socket_t fd, int ms)
 #endif
 }
 
-// Runs a Server-Sent Events connection to completion: headers, then messages
-// as they arrive on this client's outbox, until the socket fails or the
-// server is stopping. Whichever worker accepted the connection stays here for
-// its whole life - see the WORKER_COUNT comment above for why that is fine.
+// Runs an SSE connection to completion: headers, then messages as they arrive,
+// until the socket fails or the server is stopping. The accepting worker stays
+// here for the connection's whole life.
 void run_sse_session(cslua_socket_t fd)
 {
 	static const char *HEADERS =
@@ -420,10 +388,7 @@ void run_sse_session(cslua_socket_t fd)
 			std::string frame = "data: " + message + "\n\n";
 			ok = send(fd, frame.data(), (int)frame.size(), 0) == (int)frame.size();
 		} else {
-			// Nothing queued: this was the idle timeout, so send a comment
-			// line. A comment starts with ':' and every SSE client ignores
-			// it - it exists purely to notice a dead socket without waiting
-			// for the next real update, which might be minutes away.
+			// Idle timeout: send a comment line to notice a dead socket.
 			static const char PING[] = ": ping\n\n";
 			ok = send(fd, PING, sizeof(PING) - 1, 0) == sizeof(PING) - 1;
 		}
@@ -446,12 +411,8 @@ void run_sse_session(cslua_socket_t fd)
 }
 
 // ---------------------------------------------------------------------------
-// Workers: drawn from a fixed pool, each pulling one accepted socket at a
-// time off s_conn_queue. A worker blocks twice - once reading the request off
-// the wire, once waiting for the game thread to answer it - which is exactly
-// why there is a pool and not one thread doing everything: a slow client
-// cannot stall the whole panel. A subscriber to a stream path skips that
-// altogether and just parks here - see run_sse_session.
+// Workers: a fixed pool, each pulling one accepted socket at a time. A worker
+// blocks twice - reading the request, waiting for the game thread's answer.
 
 void handle_connection(cslua_socket_t fd)
 {
@@ -491,10 +452,7 @@ void handle_connection(cslua_socket_t fd)
 		return;
 	}
 
-	// A stream route's guard said yes: the socket stops being a one-shot
-	// request/response and becomes an SSE subscriber for as long as it stays
-	// open. write_response is never called for it - run_sse_session sends
-	// its own headers.
+	// A stream route's guard said yes: the socket becomes an SSE subscriber.
 	if (conn->res.upgrade_to_stream) {
 		run_sse_session(fd);
 		return;
@@ -524,9 +482,8 @@ void worker_loop()
 	}
 }
 
-// One thread, purely to call accept(). It never touches Lua and never blocks
-// for longer than the select() timeout, so cslua_httpserver_shutdown() can
-// stop it without relying on closing the socket out from under it.
+// One thread, purely to call accept(). Never blocks longer than the select()
+// timeout, so shutdown can stop it without closing the socket out from under it.
 void accept_loop()
 {
 	for (;;) {
@@ -583,9 +540,7 @@ bool split_path(const std::string &path, std::vector<std::string> &out)
 	return true;
 }
 
-// Matches `segments` against a stored route, filling `params` with whatever
-// ":name" segments captured. Both sides already have their leading '/'
-// stripped and are split the same way, so this is a plain positional compare.
+// Matches `segments` against a route, filling `params` with ":name" captures.
 bool match_route(const Route &route, const std::vector<std::string> &segments,
 	std::vector<Header> &params)
 {
@@ -661,8 +616,8 @@ void push_pairs_table(lua_State *L, const std::vector<Header> &pairs)
 	}
 }
 
-// Builds the one table shape every route handler gets: req.method, req.path,
-// req.query, req.params, req.headers, req.body.
+// Builds the table every route handler gets: method, path, query, params,
+// headers, body.
 void push_request_table(lua_State *L, const ParsedRequest &req, const std::vector<Header> &params)
 {
 	lua_newtable(L);
@@ -689,9 +644,8 @@ void push_request_table(lua_State *L, const ParsedRequest &req, const std::vecto
 }
 
 // Reads a handler's return value(s) into a Response.
-//
 //   return { status = 200, body = "...", headers = {...} }
-//   return "plain body"                          -- 200 implied
+//   return "plain body"
 //   return 404, "not found"
 void read_response(lua_State *L, int nresults, Response &out)
 {
@@ -783,16 +737,9 @@ static int l_route(lua_State *L)
 	return 0;
 }
 
-// http_server.stream(path, guard) - marks `path` as a live-update endpoint. A
-// GET on it runs `guard(req)` exactly like a route handler, on the game
-// thread, with the same request table - which is what lets it check the same
-// session cookie an ordinary route would. Returning true upgrades the
-// connection to Server-Sent Events; anything else is treated as a normal
-// route response (a table for a custom status/body, or nothing for a plain
-// 401) and the connection is closed the usual way.
-//
-// What arrives on the stream afterward is whatever http_server.push() sends,
-// verbatim - guard only decides who gets to subscribe, not what they see.
+// http_server.stream(path, guard) - a live-update endpoint. A GET runs
+// guard(req) on the game thread; returning true upgrades to SSE, anything else
+// is treated as a normal route response.
 static int l_stream(lua_State *L)
 {
 	const char *path = luaL_checkstring(L, 1);
@@ -814,9 +761,8 @@ static int l_stream(lua_State *L)
 	return 0;
 }
 
-// http_server.push(data) - sends `data` as one SSE message to every connected
-// stream subscriber, whichever path they came in on: there is one broadcast
-// channel, not one per path. Returns how many clients got it.
+// http_server.push(data) - one SSE message to every subscriber. Returns how
+// many clients got it.
 static int l_push(lua_State *L)
 {
 	size_t len = 0;
@@ -900,11 +846,8 @@ static void stop_listening()
 	}
 	s_conn_wake.notify_all();
 
-	// A worker parked in run_sse_session is asleep on its own client's cv,
-	// not on s_conn_wake - it would otherwise only notice s_stopping at its
-	// next idle ping, up to SSE_PING_MS away. This is what makes the join
-	// below finish in milliseconds instead of however long the slowest
-	// subscriber's timer had left.
+	// A worker parked in run_sse_session is asleep on its own cv, not
+	// s_conn_wake - wake it so the join below finishes in milliseconds.
 	{
 		std::lock_guard<std::mutex> guard(s_sse_lock);
 		for (size_t i = 0; i < s_sse_clients.size(); i++) {
@@ -926,8 +869,6 @@ static void stop_listening()
 	s_listen_fd = CSLUA_BAD_SOCKET;
 	s_port = 0;
 
-	// Sockets left in the accept queue from the instant before shutdown, if
-	// any: nobody is left to answer them.
 	std::lock_guard<std::mutex> guard(s_conn_lock);
 	while (!s_conn_queue.empty()) {
 		CSLUA_CLOSESOCKET(s_conn_queue.front());
@@ -1026,10 +967,8 @@ void cslua_httpserver_run()
 		{
 			std::lock_guard<std::mutex> guard(s_routes_lock);
 
-			// Streams first: a stream and a route are not meant to share a
-			// path, but if they somehow do, a subscribe request should win
-			// on its own endpoint rather than quietly falling through to a
-			// same-path route's 405.
+			// Streams first: a subscribe request should win on its own endpoint
+			// rather than fall through to a same-path route's 405.
 			for (size_t r = 0; r < s_streams.size() && !found; r++) {
 				std::vector<Header> try_params;
 				if (!match_route(s_streams[r], segments, try_params))
@@ -1090,8 +1029,6 @@ void cslua_httpserver_run()
 				read_response(L, nresults, res);
 			}
 
-			// Whatever the call left behind - results, or nothing but an
-			// error message on the failure path - goes away in one shot.
 			lua_settop(L, errfunc - 1);
 		}
 
@@ -1134,9 +1071,7 @@ void cslua_httpserver_remove_plugin(int plugin_index)
 
 void cslua_httpserver_reset()
 {
-	// Anything already parsed and waiting gets a straight answer now, instead
-	// of sitting until its worker's timeout: the routes that would have
-	// served it are about to disappear along with the Lua state.
+	// Anything already parsed and waiting gets a straight answer now.
 	std::deque<std::shared_ptr<PendingConn>> batch;
 	{
 		std::lock_guard<std::mutex> guard(s_pending_lock);
@@ -1157,13 +1092,10 @@ void cslua_httpserver_reset()
 
 	{
 		std::lock_guard<std::mutex> guard(s_routes_lock);
-		// The registry refs are not unref'd: the state they belong to is
-		// being closed, which frees the whole registry at once.
+		// The registry refs are not unref'd: the whole registry is freed at once.
 		s_routes.clear();
-		// Not the connected clients themselves - a reload's new generation of
-		// the plugin re-registers the path and picks up where push() left
-		// off; there is nothing plugin-specific on the connection itself to
-		// tear down.
+		// Not the connected clients: the reloaded plugin re-registers the path
+		// and picks up where push() left off.
 		s_streams.clear();
 	}
 }

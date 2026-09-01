@@ -12,19 +12,12 @@
 #include <cstring>
 #include <ctime>
 
-// A single read/write/append is capped here so a plugin cannot block the
-// game thread on a huge file or exhaust memory on a bad `content` string -
-// same reasoning as the read/write happening synchronously at all: this is
-// meant for small config/export/log-sized data, not bulk transfer.
+// One read/write/append is capped so a plugin cannot block the game thread on
+// a huge file - this is for small config/export/log-sized data.
 static const long kMaxFileSize = 4 * 1024 * 1024;
 
-// A file name is a name, not a path - same rule as valid_db_name() in
-// lua_db.cpp and the same reason: anything with a separator in it could put
-// a file outside the plugin's own directory, which is exactly what
-// plugin_data_dir() exists to prevent. Unlike db.open() (which appends ".db"
-// itself and so forbids dots outright), this lets the plugin pick its own
-// extension - so the rule is stem[.ext], exactly one dot, both halves
-// restricted to a safe character set.
+// A file name is a name, not a path: stem[.ext], exactly one dot, both halves
+// restricted. Same reason as valid_db_name() in lua_db.cpp.
 static bool valid_file_name(const char *name)
 {
 	if (!name || !*name || strlen(name) > 64)
@@ -37,7 +30,7 @@ static bool valid_file_name(const char *name)
 	if (dot) {
 		if (dot == name)			// leading dot: empty stem
 			return false;
-		if (strchr(name, '.') != dot)		// more than one dot anywhere
+		if (strchr(name, '.') != dot)		// more than one dot
 			return false;
 		if (!*(dot + 1))			// trailing dot: empty extension
 			return false;
@@ -52,21 +45,18 @@ static bool valid_file_name(const char *name)
 
 		if (dot && p > dot) {
 			if (!alnum)
-				return false;		// extension half: letters/digits only
+				return false;		// extension: letters/digits only
 		} else {
 			if (!alnum && *p != '_' && *p != '-')
-				return false;		// stem half: letters/digits/_/-
+				return false;		// stem: letters/digits/_/-
 		}
 	}
 
 	return true;
 }
 
-// Resolves name to a full path inside the calling plugin's data directory.
-// On failure pushes (nil, reason) and returns false - the caller's native
-// function should `return 2` immediately. This is a situation (bad name, no
-// plugin context), not a programmer mistake, so nil+reason rather than
-// luaL_error - same convention l_sqlite() uses in lua_db.cpp.
+// Resolves name to a path inside the calling plugin's data directory. On
+// failure pushes (nil, reason) and returns false.
 static bool file_path(lua_State *L, const char *name, std::string &out)
 {
 	if (!valid_file_name(name)) {
@@ -160,10 +150,6 @@ static int l_file_append(lua_State *L)
 	size_t len;
 	const char *content = luaL_checklstring(L, 2, &len);
 
-	// Caps the single write, not the file's total size - the same limit
-	// db/store implicitly rely on the OS for, applied here because a plugin
-	// handing this a multi-megabyte string in one call is far more likely
-	// to be a mistake than a deliberate huge log line.
 	if (len > (size_t)kMaxFileSize) {
 		lua_pushnil(L);
 		lua_pushfstring(L, "content is larger than the %d MiB limit", (int)(kMaxFileSize / (1024 * 1024)));
@@ -188,10 +174,7 @@ static int l_file_append(lua_State *L)
 	return 1;
 }
 
-// file.exists(name) -> boolean
-//
-// A bad name or missing plugin context is "not there" here, not an error -
-// existence checks do not fail, they answer no.
+// file.exists(name) -> boolean. A bad name or missing plugin context is "no".
 static int l_file_exists(lua_State *L)
 {
 	const char *name = luaL_checkstring(L, 1);
@@ -230,10 +213,7 @@ static int l_file_remove(lua_State *L)
 	return 1;
 }
 
-// file.size(name) -> number | nil
-//
-// Missing file is a plain nil, no second value - same "absence is not an
-// error" stance as file.exists().
+// file.size(name) -> number | nil. Missing file is a plain nil.
 static int l_file_size(lua_State *L)
 {
 	const char *name = luaL_checkstring(L, 1);
@@ -268,13 +248,8 @@ static int l_file_size(lua_State *L)
 	return 1;
 }
 
-// file.list() -> { name, ... }
-//
-// Top-level regular files only - the "logs" subdirectory log.write() creates
-// is filtered out so a plugin's own file list never mixes in the logging
-// implementation's storage. An unreadable/missing directory is an empty
-// list, not an error, matching cslua_list_dir()'s own "absent looks like
-// empty" stance.
+// file.list() -> { name, ... }. Top-level regular files only; the "logs"
+// subdirectory is filtered out.
 static int l_file_list(lua_State *L)
 {
 	std::string dir = cslua_plugin_data_dir(g_lua.current_index());
@@ -314,16 +289,8 @@ void cslua_register_file(lua_State *L)
 	cslua_register_namespace(L, "file", s_file);
 }
 
-// Where log.write() writes, and under what file name. Plugin-owned (the
-// default) is the calling plugin's own logs/, invisible to everyone else -
-// the usual case. `global = true` is addons/lua/logs/, the same directory
-// the module's own internal logging (cslua_netwatch.cpp's log_line())
-// already writes into, for a plugin that specifically wants its record
-// sitting alongside the module's own rather than buried in its private data
-// dir - a shared moderation log several plugins contribute to, say. Filed
-// under the plugin's own id there too, so ten plugins logging global do not
-// interleave into one unreadable file, and none of them can collide with
-// the module's own unprefixed netwatch.log.
+// Where log.write() writes. Plugin-owned (default) is the calling plugin's own
+// logs/; `global = true` is addons/lua/logs/, filed under the plugin's id.
 static bool log_target_dir(bool global, std::string &out, std::string &prefix)
 {
 	if (!global) {
@@ -367,20 +334,8 @@ static const char *log_level_tag(LogLevel level)
 	}
 }
 
-// log.write(msg[, opts]) -> boolean
-//
-// opts.global (boolean, default false) picks the destination directory - see
-// log_target_dir() above. opts.level (string, default "info"; one of
-// "info"/"warning"/"error"/"debug"/"success") is stamped on the line so a
-// human (or grep) can filter without parsing the message text.
-//
-// Best-effort by design: meant to be sprinkled anywhere without every call
-// site checking two return values, the way file.write() has to be. false is
-// the rare path (no plugin context, disk full, directory not creatable) -
-// most callers will never look at the result. Deliberately does not also go
-// to the console: print()/cslua_print already own "the operator should see
-// this now"; this is the other case; a durable record without spamming the
-// live console. Mirroring it to both would take away the choice.
+// log.write(msg[, opts]) -> boolean. Best-effort; does not also go to the
+// console. opts.global picks the directory, opts.level is stamped on the line.
 static int l_log_write(lua_State *L)
 {
 	const char *msg = luaL_checkstring(L, 1);

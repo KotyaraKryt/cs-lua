@@ -11,13 +11,10 @@
 #include <stdarg.h>
 #include <time.h>
 
-// How far back a drop's explanation looks. Long enough to catch a burst that
-// built up over a few frames, short enough that the log stays about the kick
-// and not about the last five minutes of normal chatter.
+// How far back a drop's explanation looks.
 static const double WINDOW_SECONDS = 8.0;
 
-// Per-slot ring buffer. 512 messages is generous for eight seconds of normal
-// traffic (a few dozen messages/sec at most) and cheap to keep 33 of.
+// Per-slot ring buffer. 512 messages is ~8s of normal traffic.
 static const int RING_SIZE = 512;
 
 struct Record
@@ -56,17 +53,14 @@ struct Slot
 
 static Slot s_slots[CSLUA_MAXPLAYERS];
 
-// Which slot is currently between MessageBegin/MessageEnd, or 0 if none -
-// cslua_corpse.cpp's Hook_MessageBegin gives us the destination edict but the
-// Write* hooks that follow it only give us bytes, so we have to remember it.
+// Which slot is currently between MessageBegin/MessageEnd, or 0 - the Write*
+// hooks only give bytes, not the destination.
 static int s_active_id = 0;
 
 static bool valid(int id) { return id >= 1 && id < CSLUA_MAXPLAYERS; }
 
-// The builtin (non-user) message opcodes, in engine order - see
-// third_party/metamod-r/metamod/src/mutil.cpp's own copy of the same table.
-// msg_type values at or above this table's length are custom usermessages
-// registered at runtime (pfnRegUserMsg), which this module has no name for.
+// Builtin (non-user) message opcodes, in engine order (see metamod-r's
+// mutil.cpp). Values at or above this table's length are custom usermessages.
 static const char *s_builtin_names[] =
 {
 	"svc_bad", "svc_nop", "svc_disconnect", "svc_event", "svc_version",
@@ -88,10 +82,8 @@ static const char *s_builtin_names[] =
 };
 static const int BUILTIN_COUNT = sizeof(s_builtin_names) / sizeof(s_builtin_names[0]);
 
-// Custom usermessages are assigned an id at runtime (pfnRegUserMsg), not
-// known ahead of time - filled in by the post-hook below as the game DLL and
-// other plugins register theirs. GoldSrc wires msg_type through the network
-// as a byte, so 256 slots covers every id that can exist.
+// Custom usermessage names, filled in by the post-hook below. msg_type is a
+// byte on the wire, so 256 slots covers every id.
 static std::string s_custom_names[256];
 
 const char *cslua_netwatch_msg_name(int msg_type, char *buf, size_t buflen)
@@ -112,12 +104,8 @@ static int Hook_RegUserMsg_Post(const char *pszName, int iSize)
 	RETURN_META_VALUE(MRES_IGNORED, id);
 }
 
-// Every field NULL except pfnRegUserMsg: metamod fills a NULL slot from the
-// next plugin (or the real engine) itself, same convention as
-// g_CsluaCorpseEngineFuncs in cslua_corpse.cpp - see that file for why the
-// field order/count has to match metamod-r's enginefuncs_t layout exactly.
-// This is the POST variant (meta_api.cpp's GetEngineFunctions_Post): a
-// pre-hook fires before the real call, before an id even exists to record.
+// Every field NULL except pfnRegUserMsg; metamod fills NULL slots itself. Field
+// order/count must match metamod-r's enginefuncs_t layout exactly. POST variant.
 enginefuncs_t g_CsluaNetwatchPostEngineFuncs =
 {
 	NULL,					// pfnPrecacheModel()
@@ -287,16 +275,11 @@ enginefuncs_t g_CsluaNetwatchPostEngineFuncs =
 	// Added 2005-11-22 (no SDK update)
 	NULL,					// pfnQueryClientCvarValue2()
 
-	// Added 2009-06-19 (no SDK update). Present unless CSSDK_COMPAT_OLD_METAMOD
-	// is defined - this project never defines it, so eiface.h compiles this
-	// field in and the table has to carry it too, or every field after it
-	// would land one slot off.
+	// Added 2009-06-19 (no SDK update). Compiled in unless CSSDK_COMPAT_OLD_METAMOD.
 	NULL,					// pfnEngCheckParm()
 };
 
-// A drop is a rare event (this is a diagnostic for something going wrong,
-// not a per-frame path), so opening and closing the file each call is fine -
-// no handle to leak or flush-on-crash to worry about.
+// A drop is rare, so opening/closing the file each call is fine.
 static void log_line(const char *fmt, ...)
 {
 	std::string dir = cslua_base_dir() + "/logs";
@@ -323,8 +306,7 @@ static void log_line(const char *fmt, ...)
 void cslua_netwatch_message_begin(edict_t *dest, int msg_type)
 {
 	s_active_id = 0;
-	// Broadcasts (dest is NULL/world for MSG_ALL etc.) aren't any one
-	// client's reliable buffer problem; only per-player sends are tracked.
+	// Broadcasts (dest NULL/world) aren't any one client's buffer problem.
 	if (!dest)
 		return;
 	int id = g_engfuncs.pfnIndexOfEdict(dest);
@@ -368,7 +350,6 @@ void cslua_netwatch_forget(int id)
 		s_active_id = 0;
 }
 
-// One breakdown bucket while summarizing a slot's window.
 struct Bucket
 {
 	int msg_type;
@@ -402,7 +383,7 @@ static void dump_slot(int id, edict_t *ed, const char *reason)
 				break;
 		if (b == nbuckets) {
 			if (nbuckets >= (int)(sizeof(buckets) / sizeof(buckets[0])))
-				continue; // too many distinct types to bucket; still counted in totals
+				continue; // still counted in totals
 			buckets[b].msg_type = r.msg_type;
 			buckets[b].messages = 0;
 			buckets[b].bytes = 0;
@@ -415,8 +396,7 @@ static void dump_slot(int id, edict_t *ed, const char *reason)
 	if (total_messages == 0)
 		return;
 
-	// Simple selection sort, descending by bytes - nbuckets is at most a few
-	// dozen, this runs once per drop, not worth pulling in <algorithm> for.
+	// Selection sort, descending by bytes.
 	for (int i = 0; i < nbuckets; i++) {
 		int best = i;
 		for (int j = i + 1; j < nbuckets; j++)
@@ -446,12 +426,8 @@ static void dump_slot(int id, edict_t *ed, const char *reason)
 	}
 }
 
-// Every disconnect - a clean quit, a normal "kick", a timeout - goes through
-// SV_DropClient, not just reliable-buffer overflow. Logging all of them would
-// bury the one case this module exists for, so only reasons that actually
-// mention overflow get a dump. ASCII case-insensitive: engine builds have
-// spelled this "Overflow", "overflowed", "buffer overflow" depending on
-// version, always with that word somewhere in it.
+// Every disconnect goes through SV_DropClient; only overflow reasons get a dump.
+// ASCII case-insensitive: engine builds spell it "Overflow"/"overflowed" etc.
 static bool mentions_overflow(const char *reason)
 {
 	if (!reason)
@@ -479,10 +455,8 @@ static void hook_drop_client(IRehldsHook_SV_DropClient *chain, IGameClient *clie
 		if (ed) {
 			int id = g_engfuncs.pfnIndexOfEdict(ed);
 			if (valid(id)) {
-				// Stashed for dllapi.cpp's ClientDisconnect, which fires
-				// downstream of this same drop but never receives the reason
-				// itself - see Players::set_drop_reason for why it has to
-				// travel through the player cache instead of a parameter.
+				// Stashed for dllapi.cpp's ClientDisconnect, which never gets
+				// the reason itself - see Players::set_drop_reason.
 				g_players.set_drop_reason(id, reason);
 				if (mentions_overflow(reason))
 					dump_slot(id, ed, reason);

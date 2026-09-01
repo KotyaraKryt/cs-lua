@@ -12,9 +12,7 @@
 #include <cctype>
 
 // Creates the global table if it is not there yet, then registers into it.
-// Reusing an existing table is the point: `players` is filled from here, from
-// lua_player.cpp and from core/commands.lua, and none of them has to know
-// whether it got there first.
+// `players` is filled from here, from lua_player.cpp and from core/commands.lua.
 void cslua_register_namespace(lua_State *L, const char *name, const luaL_Reg *list)
 {
 	lua_getglobal(L, name);
@@ -60,9 +58,7 @@ static int l_print(lua_State *L)
 	return 0;
 }
 
-// "X.Y.Z" -> three ints. Missing or non-numeric parts read as 0, so a
-// fat-fingered version string fails safe (compares as the oldest possible
-// build) instead of crashing min_version/max_version below.
+// "X.Y.Z" -> three ints. Missing/non-numeric parts read as 0.
 static void cslua_parse_version(const char *v, int out[3])
 {
 	out[0] = out[1] = out[2] = 0;
@@ -84,18 +80,8 @@ static bool cslua_version_less(const char *a, const char *b)
 }
 
 // ---------------------------------------------------------------------------
-// plugin
-//
-// `plugin` is both the manifest call and a namespace:
-//
-//   plugin { name = "Shop", api_version = 1 }
-//   plugin.data_dir()
-//
-// The call is manifest.lua's only job - the engine runs that file before
-// init.lua and requires it to have made this call - and reads best as a
-// call, so the table carries __call rather than growing a plugin.declare().
+// plugin - both the manifest call (plugin { ... }) and a namespace.
 
-// The manifest itself. Called through __call, so the spec table is argument 2.
 static int l_plugin_call(lua_State *L)
 {
 	luaL_checktype(L, 2, LUA_TTABLE);
@@ -116,8 +102,7 @@ static int l_plugin_call(lua_State *L)
 		lua_pop(L, 1);
 	}
 
-	// api_version = N: the plugin was written against API version N. A newer
-	// one than this build offers would only fail later on a missing function.
+	// api_version = N: written against API version N.
 	lua_getfield(L, 2, "api_version");
 	if (lua_isnumber(L, -1)) {
 		int want = (int)lua_tointeger(L, -1);
@@ -130,12 +115,8 @@ static int l_plugin_call(lua_State *L)
 		lua_pop(L, 1);
 	}
 
-	// min_engine_version / max_engine_version = "1.1.0": pins to a specific
-	// build, not just an API generation. api_version only moves on a breaking
-	// rename - a plugin using a native that shipped later under the same
-	// api_version (http_server, say) has no other way to say "at least this
-	// build". Named "engine", not "version", so it can't be mistaken for
-	// api_version sitting right above it.
+	// min/max_engine_version = "1.1.0": pins to a specific build, for a plugin
+	// using a native that shipped later under the same api_version.
 	lua_getfield(L, 2, "min_engine_version");
 	if (lua_isstring(L, -1)) {
 		std::string want = lua_tostring(L, -1);
@@ -158,9 +139,7 @@ static int l_plugin_call(lua_State *L)
 		lua_pop(L, 1);
 	}
 
-	// requires = { "json", "menu" }: every listed module must resolve now, so
-	// a missing dependency fails loudly on the plugin's first line instead of
-	// erroring deep inside its code later.
+	// requires = { "json", "menu" }: every listed module must resolve now.
 	plugin->required_modules.clear();
 	lua_getfield(L, 2, "requires");
 	if (lua_istable(L, -1)) {
@@ -184,10 +163,7 @@ static int l_plugin_call(lua_State *L)
 	return 0;
 }
 
-// plugin.dir() -> absolute path of the running plugin's folder, or nil when
-// no plugin is running (the core layer). Lets a plugin load its own data
-// files without guessing the server's working directory (which is not the
-// game directory).
+// plugin.dir() -> absolute path of the running plugin's folder, or nil.
 static int l_plugin_dir(lua_State *L)
 {
 	const std::vector<LuaPlugin> &plugins = g_lua.plugins();
@@ -202,8 +178,7 @@ static int l_plugin_dir(lua_State *L)
 	return 1;
 }
 
-// plugin.id() -> the folder name of the plugin whose code is running, or nil
-// for the core layer. What the export layer keys its registry on.
+// plugin.id() -> the folder name of the running plugin, or nil for the core layer.
 static int l_plugin_id(lua_State *L)
 {
 	const std::vector<LuaPlugin> &plugins = g_lua.plugins();
@@ -218,10 +193,8 @@ static int l_plugin_id(lua_State *L)
 	return 1;
 }
 
-// plugin.data_dir() -> absolute path of a folder the plugin owns, under
-// addons/lua/data/, created on the first call. plugin.dir() points at the
-// plugin's code, which the installer overwrites on every update; this is the
-// place whose contents are meant to outlive one.
+// plugin.data_dir() -> a folder the plugin owns under addons/lua/data/, meant
+// to outlive an update (unlike plugin.dir()). Created on first call.
 std::string cslua_plugin_data_dir(int plugin_index)
 {
 	const std::vector<LuaPlugin> &plugins = g_lua.plugins();
@@ -229,7 +202,6 @@ std::string cslua_plugin_data_dir(int plugin_index)
 	if (plugin_index < 0 || plugin_index >= (int)plugins.size())
 		return std::string();
 
-	// One level at a time: data/ itself may not exist yet on a fresh install.
 	std::string root = cslua_base_dir() + "/data";
 	std::string dir = root + "/" + plugins[plugin_index].id;
 
@@ -258,9 +230,7 @@ static int l_plugin_data_dir(lua_State *L)
 	return 1;
 }
 
-// plugin.on_unload(fn) - run fn when this plugin goes away, whether that is a
-// full lua_reload or `lua_reload <this plugin>`. The plugin_unload event fires
-// for everybody; this fires for you, which is what cleanup actually wants.
+// plugin.on_unload(fn) - run fn when this plugin goes away.
 static int l_plugin_on_unload(lua_State *L)
 {
 	luaL_checktype(L, 1, LUA_TFUNCTION);
@@ -275,10 +245,8 @@ static int l_plugin_on_unload(lua_State *L)
 	return 0;
 }
 
-// plugin.list() -> one entry per loaded plugin: id, name, version, author,
-// dir (the plugin's folder), failed. Read-only
-// introspection of what `lua_list` already prints to the console - built for
-// the web panel's resource manager, but not specific to it.
+// plugin.list() -> one entry per loaded plugin: id, name, version, author, dir,
+// failed.
 static int l_plugin_list(lua_State *L)
 {
 	const std::vector<LuaPlugin> &plugins = g_lua.plugins();
@@ -308,11 +276,8 @@ static int l_plugin_list(lua_State *L)
 	return 1;
 }
 
-// plugin.reload(id) -> true if `id` names a loaded plugin. Does not reload it
-// on the spot: the request is only recorded, and carried out from the top of
-// the next frame, well after this call - and the route handler it runs
-// in - have returned. See LuaEngine::request_plugin_reload for why: doing it
-// synchronously would tear down the very Lua state this call is running on.
+// plugin.reload(id) -> true if `id` names a loaded plugin. The reload runs from
+// the top of the next frame, not on the spot.
 static int l_plugin_reload(lua_State *L)
 {
 	const char *id = luaL_checkstring(L, 1);
@@ -320,8 +285,7 @@ static int l_plugin_reload(lua_State *L)
 	return 1;
 }
 
-// plugin.reload_all() - same deferral, for every plugin at once (what the
-// bare `lua_reload` console command does).
+// plugin.reload_all() - same deferral, for every plugin at once.
 static int l_plugin_reload_all(lua_State *L)
 {
 	g_lua.request_full_reload();
@@ -331,13 +295,8 @@ static int l_plugin_reload_all(lua_State *L)
 // ---------------------------------------------------------------------------
 // sv - the server itself
 
-// sv.cmd("changelevel %s", map) - queue a command on the server console.
-// The module goes there itself for kick and ban; without this a plugin cannot,
-// and everything from sv_restart to another mod's commands is out of reach.
-//
-// Formatting happens here rather than at the call site so the common case reads
-// like print(). With a single argument the string is passed through untouched,
-// so a lone % in a player's nick cannot turn into a format directive.
+// sv.cmd("changelevel %s", map) - queue a command on the server console. With a
+// single argument the string is passed through untouched.
 static int l_sv_cmd(lua_State *L)
 {
 	const char *cmd;
@@ -353,8 +312,7 @@ static int l_sv_cmd(lua_State *L)
 		cmd = luaL_checkstring(L, 1);
 	}
 
-	// The engine's command buffer takes this whole; a truncated command would
-	// run as something else entirely, so refuse instead of cutting.
+	// A truncated command would run as something else; refuse instead of cutting.
 	if (strlen(cmd) > 250)
 		return luaL_error(L, "sv.cmd: command is too long (%d chars, 250 max)", (int)strlen(cmd));
 
@@ -365,26 +323,22 @@ static int l_sv_cmd(lua_State *L)
 	return 0;
 }
 
-// sv.time() -> the server clock in seconds, with fractions. This is the same
-// clock timers run on. Note os.clock() is CPU time, not wall time, and drifts
-// badly on a server that sleeps between frames - use this instead.
+// sv.time() -> the server clock in seconds. Same clock timers run on.
 static int l_sv_time(lua_State *L)
 {
 	lua_pushnumber(L, gpGlobals ? gpGlobals->time : 0.0f);
 	return 1;
 }
 
-// sv.map() -> the map running right now, "de_dust2". Map-scoped access rights
-// need it, and it saves every plugin a cvar lookup.
+// sv.map() -> the current map, "de_dust2".
 static int l_sv_map(lua_State *L)
 {
 	lua_pushstring(L, gpGlobals && gpGlobals->mapname ? STRING(gpGlobals->mapname) : "");
 	return 1;
 }
 
-// sv.set_game_desc(name) -> overrides the "game" column a server browser
-// shows next to the hostname. Call with "" (or nil) to drop back to the
-// engine's own description.
+// sv.set_game_desc(name) -> overrides the "game" column a server browser shows.
+// "" (or nil) drops back to the engine's own description.
 static int l_sv_set_game_desc(lua_State *L)
 {
 	const char *text = lua_isnoneornil(L, 1) ? "" : luaL_checkstring(L, 1);
@@ -408,8 +362,7 @@ static int l_players_get(lua_State *L)
 	return 1;
 }
 
-// Case-insensitive substring: empty needle matches anything. ASCII only —
-// same practical contract as nick matching elsewhere in the API.
+// Case-insensitive substring, ASCII only. Empty needle matches anything.
 static bool name_contains_ci(const char *hay, const char *needle)
 {
 	if (!needle || !*needle)
@@ -431,10 +384,9 @@ static bool name_contains_ci(const char *hay, const char *needle)
 	return false;
 }
 
-// players.list() -> array of everyone connected.
-// players.list{ alive = true, team = "CT", bot = false, hltv = false,
-//               name = "kotya" } -> only those matching.
-// alive/team need ReGameDLL; bot/hltv/name read engine state and do not.
+// players.list() -> everyone connected.
+// players.list{ alive =, team =, bot =, hltv =, name = } -> only those matching.
+// alive/team need ReGameDLL.
 static int l_players_list(lua_State *L)
 {
 	int filter_alive = -1;			// -1 = don't care, 0 = dead, 1 = alive
@@ -540,8 +492,7 @@ static const luaL_Reg s_players[] =
 
 void cslua_register_natives(lua_State *L)
 {
-	// print stays a bare global: it overrides the stdlib one rather than
-	// adding to the cs-lua API.
+	// print overrides the stdlib one.
 	lua_pushcfunction(L, l_print);
 	lua_setglobal(L, "print");
 
@@ -565,8 +516,6 @@ void cslua_register_natives(lua_State *L)
 	lua_pushinteger(L, CSLUA_API_VERSION);
 	lua_setfield(L, -2, "api");
 
-	// addons/lua. Scripts that keep data files (the access layer, stats) need
-	// an absolute path: the server's working directory is not the game dir.
 	lua_pushstring(L, cslua_base_dir().c_str());
 	lua_setfield(L, -2, "dir");
 

@@ -11,7 +11,6 @@
 LuaEvents g_events;
 
 // Order must match the CsLuaEvent enum exactly.
-// subject:verb - colon, not dot, since a dot already means "plugin's own event".
 static const char *const s_event_names[CSLUA_EVENT_COUNT] =
 {
 	"client:connect",
@@ -100,7 +99,7 @@ static int find_event(const char *name)
 
 // The events whose outcome a handler can change. Everything else is a
 // notification: e:cancel() on one of those says so instead of quietly doing
-// nothing, which is the kind of bug that takes an evening to find.
+// nothing.
 static bool is_cancellable(int ev)
 {
 	return ev == CSLUA_EVENT_CLIENT_CONNECT
@@ -108,9 +107,6 @@ static bool is_cancellable(int ev)
 		|| ev == CSLUA_EVENT_PLAYER_HURT
 		|| ev == CSLUA_EVENT_GRENADE_EXPLODE
 		|| ev == CSLUA_EVENT_WEAPON_THROW
-		// Bug fix: these three were added (commit cae02d9) without adding
-		// them here, so e:cancel() on any of them raised "event cannot be
-		// cancelled" despite the docs promising it blocks the purchase.
 		|| ev == CSLUA_EVENT_WEAPON_BUY
 		|| ev == CSLUA_EVENT_AMMO_BUY
 		|| ev == CSLUA_EVENT_ITEM_BUY
@@ -144,8 +140,8 @@ static std::string known_events()
 	return list;
 }
 
-// Holds the dispatch depth for the length of one walk, and sweeps on the way
-// out of the outermost one.
+// Holds the dispatch depth for one walk and sweeps on the way out of the
+// outermost one.
 namespace {
 struct DispatchScope
 {
@@ -168,8 +164,7 @@ static int l_event_cancel(lua_State *L)
 	return 0;
 }
 
-// Same method on a notify event. Raising beats returning quietly: a script
-// that calls cancel() believes it changed something.
+// Same method on a notify event: raising beats returning quietly.
 static int l_event_cancel_refused(lua_State *L)
 {
 	luaL_checktype(L, 1, LUA_TTABLE);
@@ -208,8 +203,8 @@ void LuaEvents::push_event(lua_State *L, const char *name, bool cancellable,
 	lua_pushstring(L, name);
 	lua_setfield(L, -2, "name");
 
-	// Present from the start rather than left nil, so `if e.cancelled` reads
-	// the same before and after a handler touches it.
+	// Present from the start so `if e.cancelled` reads the same before and
+	// after a handler touches it.
 	lua_pushboolean(L, 0);
 	lua_setfield(L, -2, "cancelled");
 
@@ -235,9 +230,7 @@ int LuaEvents::l_add(lua_State *L)
 	if (ev >= 0) {
 		list = &g_events.m_handlers[ev];
 	} else if (!strchr(name, '.') && strncmp(name, "msg:", 4) != 0) {
-		// No dot, and not a msg:Name receive hook either: this is a
-		// misspelled engine event, not somebody's own. Registering it would
-		// hand back a handler that never fires and never complains.
+		// No dot, not a msg:Name hook: a misspelled engine event.
 		return luaL_error(L, "hook.add: unknown event '%s'. Engine events: %s. "
 			"A plugin's own event needs a dot in the name, like 'shop.bought'. "
 			"To receive a network message, use 'msg:Name', like 'msg:TextMsg'",
@@ -248,9 +241,7 @@ int LuaEvents::l_add(lua_State *L)
 
 	int plugin = g_lua.current_index();
 
-	// Same plugin, same id: replace. That is what makes running a plugin's
-	// load code twice leave one handler instead of two. The id only has to be
-	// unique within the plugin - two plugins may both call theirs "init".
+	// Same plugin, same id: replace.
 	for (size_t i = 0; i < list->size(); i++) {
 		Handler &h = (*list)[i];
 		if (h.dead || h.plugin != plugin || h.id != id)
@@ -296,8 +287,7 @@ int LuaEvents::l_remove(lua_State *L)
 	if (list) {
 		for (size_t i = 0; i < list->size(); i++) {
 			Handler &h = (*list)[i];
-			// Only your own: one plugin silently unhooking another's handler
-			// is a debugging session nobody wins.
+			// Only your own.
 			if (h.dead || h.plugin != plugin || h.id != id)
 				continue;
 
@@ -332,8 +322,8 @@ int LuaEvents::l_run(lua_State *L)
 		luaL_checktype(L, 2, LUA_TTABLE);
 	lua_settop(L, 2);
 
-	// The caller's table becomes the event object: same fields, plus the two
-	// the shape guarantees. Handing it back lets hook.run read results out.
+	// The caller's table becomes the event object; handing it back lets
+	// hook.run read results out.
 	lua_pushstring(L, name);
 	lua_setfield(L, 2, "name");
 	lua_pushboolean(L, 0);
@@ -353,8 +343,7 @@ int LuaEvents::l_run(lua_State *L)
 	return 1;
 }
 
-// hook.list() -> { { event = , id = , plugin = }, ... }, sorted by nothing in
-// particular; core/hook.lua does the formatting for `lua_hooks`.
+// hook.list() -> { { event =, id =, plugin = }, ... }
 int LuaEvents::l_list(lua_State *L)
 {
 	const char *want = lua_isnoneornil(L, 1) ? NULL : luaL_checkstring(L, 1);
@@ -421,7 +410,7 @@ void cslua_register_hooks(lua_State *L)
 
 void LuaEvents::clear()
 {
-	// Called right before lua_close(), so the refs die with the state.
+	// Called right before lua_close(); the refs die with the state.
 	for (int i = 0; i < CSLUA_EVENT_COUNT; i++)
 		m_handlers[i].clear();
 	m_custom.clear();
@@ -511,8 +500,8 @@ void LuaEvents::profile_reset()
 		}
 }
 
-// Marks a plugin's handlers dead and drops their refs. Safe to call from
-// inside a handler: nothing is erased until the walk unwinds.
+// Marks a plugin's handlers dead and drops their refs. Safe from inside a
+// handler: nothing is erased until the walk unwinds.
 void LuaEvents::remove_plugin(int plugin_index)
 {
 	lua_State *L = g_lua.state();
@@ -557,8 +546,7 @@ void LuaEvents::sweep()
 				list.erase(list.begin() + j);
 	}
 
-	// Plugin events go away entirely once nobody listens, so hook.list() shows
-	// what is live rather than everything that ever existed.
+	// Plugin events go away entirely once nobody listens.
 	std::map<std::string, HandlerList>::iterator it = m_custom.begin();
 	while (it != m_custom.end()) {
 		HandlerList &list = it->second;
@@ -575,7 +563,7 @@ void LuaEvents::sweep()
 
 const char *LuaEvents::plugin_id(int plugin_index) const
 {
-	// -1 is the core layer, which registers handlers outside any plugin.
+	// -1 is the core layer.
 	if (plugin_index == -1)
 		return "core";
 
@@ -602,8 +590,6 @@ void LuaEvents::dispatch_list(lua_State *L, HandlerList &list, int event_index)
 		lua_rawgeti(L, LUA_REGISTRYINDEX, list[i].ref);
 		lua_pushvalue(L, event_index);
 
-		// Reading the clock costs more than a trivial handler does, so it only
-		// happens when somebody asked to measure.
 		double started = profiling ? cslua_now_seconds() : 0.0;
 
 		int rc = lua_pcall(L, 1, 0, errfunc);
@@ -614,8 +600,6 @@ void LuaEvents::dispatch_list(lua_State *L, HandlerList &list, int event_index)
 		}
 
 		if (rc != 0) {
-			// Naming the handler, not just the plugin: with ids there is
-			// finally something more precise to point at.
 			std::string where = plugin_id(list[i].plugin);
 			where += ":";
 			where += list[i].id;
@@ -639,8 +623,7 @@ bool LuaEvents::run(CsLuaEvent ev, const FillFields &fill, const ReadFields &rea
 	if (!L)
 		return false;
 
-	// Nothing listening: skip building the table. weapon_fire arrives on every
-	// shot fired on the server, and an unused event should cost nothing.
+	// Nothing listening: skip building the table.
 	if (m_handlers[ev].empty())
 		return false;
 
@@ -709,14 +692,11 @@ bool LuaEvents::run_custom(const std::string &name, const FillFields &fill)
 }
 
 // ---------------------------------------------------------------------------
-// The events themselves
-//
-// Every one of these is the same three lines: name the fields, hand them to
-// the dispatcher, read back whatever the game needs. Nothing inspects a
-// return value - a handler changes the outcome by writing to the event.
+// The events themselves. Nothing inspects a return value - a handler changes
+// the outcome by writing to the event.
 
-// killer/attacker 0 means "no player" (world, fall damage): the field is nil,
-// not a bogus object, so scripts test it plainly.
+// killer/attacker 0 means "no player" (world, fall damage): nil, not a bogus
+// object.
 static void set_player_or_nil(lua_State *L, int id, const char *field)
 {
 	if (id > 0)
@@ -732,8 +712,6 @@ static void set_player(lua_State *L, int id, const char *field)
 	lua_setfield(L, -2, field);
 }
 
-// entity 0 - the throw failed, or whatever made the entity is gone - is nil,
-// same convention as set_player_or_nil.
 static void set_entity_or_nil(lua_State *L, int index, const char *field)
 {
 	cslua_push_entity_index(L, index);
@@ -752,8 +730,7 @@ static void set_number(lua_State *L, double v, const char *field)
 	lua_setfield(L, -2, field);
 }
 
-// Damage that never went through TraceAttack - a fall, the world, gas - has no
-// body region. nil rather than 0, because 0 is a real hitgroup (the body).
+// nil rather than 0, because 0 is a real hitgroup (the body).
 static void set_hitgroup(lua_State *L, int hitgroup)
 {
 	if (hitgroup < 0)
@@ -787,7 +764,6 @@ bool LuaEvents::fire_client_connect(int id, const char *name, const char *ip, Re
 void LuaEvents::fire_client_disconnect(int id, const char *name, const char *reason, bool forced)
 {
 	std::string nm = name ? name : "";
-	// Empty on a stock (non-ReHLDS) HLDS - see Players::drop_reason.
 	std::string why = reason ? reason : "";
 	notify(CSLUA_EVENT_CLIENT_DISCONNECT, [=](lua_State *L) {
 		set_player(L, id, "player");
@@ -860,8 +836,6 @@ float LuaEvents::fire_player_hurt(int victim, int attacker, float damage, int bi
 		},
 		[&result](lua_State *L) {
 			// Whatever the chain left in e.damage is what the game applies.
-			// A handler that scaled it sees the previous one's value, because
-			// every handler got the same table.
 			lua_getfield(L, -1, "damage");
 			if (lua_isnumber(L, -1))
 				result = (float)lua_tonumber(L, -1);

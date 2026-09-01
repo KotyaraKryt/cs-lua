@@ -8,8 +8,8 @@
 
 // Prefixed because windows.h claims plain EVENT_* names.
 //
-// Two families: client_* is the connection layer (an edict, maybe no full
-// CBasePlayer yet), player_* is a player already in the game.
+// client_* is the connection layer (an edict, maybe no full CBasePlayer yet);
+// player_* is a player already in the game.
 enum CsLuaEvent
 {
 	// Connection layer - work on a vanilla mp.dll too.
@@ -24,73 +24,73 @@ enum CsLuaEvent
 	CSLUA_EVENT_MAP_CHANGE,			// this map is ending
 	CSLUA_EVENT_PLUGIN_UNLOAD,		// the Lua state is going away
 
-	// Gameplay - ReGameDLL only, fire nothing on a vanilla mp.dll.
+	// Gameplay - ReGameDLL only.
 	CSLUA_EVENT_PLAYER_SPAWN,
 	CSLUA_EVENT_PLAYER_HURT,			// pre: change or block the damage
 	CSLUA_EVENT_PLAYER_HURT_POST,		// post: damage already applied
 	CSLUA_EVENT_PLAYER_DEATH,		// was player_killed
 	CSLUA_EVENT_PLAYER_TEAM_CHANGE,
 	CSLUA_EVENT_WEAPON_FIRE,
-	CSLUA_EVENT_WEAPON_DEPLOY,		// view/world model can be swapped before the game applies them
-	CSLUA_EVENT_WEAPON_RELOAD,		// a real reload just started: ammo was available, clip wasn't full
+	CSLUA_EVENT_WEAPON_DEPLOY,		// view/world model can be swapped
+	CSLUA_EVENT_WEAPON_RELOAD,		// a real reload just started
 	CSLUA_EVENT_ROUND_START,
 	CSLUA_EVENT_ROUND_END,
-	CSLUA_EVENT_ROUND_FREEZE_END,	// freeze time over, players can move
+	CSLUA_EVENT_ROUND_FREEZE_END,
 	CSLUA_EVENT_BOMB_PLANTED,
 	CSLUA_EVENT_BOMB_DEFUSED,
 	CSLUA_EVENT_BOMB_EXPLODED,
-	CSLUA_EVENT_GRENADE_THROW,		// about to leave the hand; fuse time can be changed
+	CSLUA_EVENT_GRENADE_THROW,		// about to leave the hand; fuse can change
 	CSLUA_EVENT_GRENADE_THROWN,		// just left the hand; entity for reskinning
 	CSLUA_EVENT_GRENADE_EXPLODE,		// about to explode; cancel to take over
-	CSLUA_EVENT_WEAPON_THROW,		// any grenade-slot throw, before HE/flash/smoke is picked; cancel to take over
-	CSLUA_EVENT_WEAPON_SECONDARY_ATTACK,	// right-click pressed, synthesized from a button edge-detect
-	CSLUA_EVENT_WEAPON_BUY,			// buy menu bought a weapon; cancel to block it
-	CSLUA_EVENT_AMMO_BUY,			// buy menu bought ammo for the held weapon; cancel to block it
-	CSLUA_EVENT_ITEM_BUY,			// buy menu bought armor/nvg/defuser/shield/a grenade; cancel to block it
-	CSLUA_EVENT_MONEY_CHANGE,		// AddAccount is about to add/subtract money; cancel to block it
-	CSLUA_EVENT_AMMO_PICKUP,			// GiveAmmo is about to top up a reserve; cancel to block it
-	CSLUA_EVENT_WEAPON_DROP,			// about to drop a weapon to the ground; cancel to block it
+	CSLUA_EVENT_WEAPON_THROW,		// any grenade-slot throw; cancel to take over
+	CSLUA_EVENT_WEAPON_SECONDARY_ATTACK,	// right-click, from a button edge-detect
+	CSLUA_EVENT_WEAPON_BUY,			// cancel to block the purchase
+	CSLUA_EVENT_AMMO_BUY,
+	CSLUA_EVENT_ITEM_BUY,
+	CSLUA_EVENT_MONEY_CHANGE,		// AddAccount; cancel to block it
+	CSLUA_EVENT_AMMO_PICKUP,			// GiveAmmo; cancel to block it
+	CSLUA_EVENT_WEAPON_DROP,			// cancel to block it
 	CSLUA_EVENT_PLAYER_JUMP,
 	CSLUA_EVENT_PLAYER_DUCK,
-	CSLUA_EVENT_PLAYER_SPECTATE,		// entered observer mode
-	CSLUA_EVENT_PLAYER_RADIO,		// a radio command was used; cancel to block the sound/message
-	CSLUA_EVENT_PLAYER_CAN_RESPAWN,	// pre: cancel to block a respawn the game would otherwise allow
-	CSLUA_EVENT_BOMB_DEFUSE_START,	// defusing just started (not yet finished - see bomb_defused)
-	CSLUA_EVENT_PLAYER_TRACE_ATTACK,	// pre: TraceAttack, one raw hit before TakeDamage sums it up
+	CSLUA_EVENT_PLAYER_SPECTATE,
+	CSLUA_EVENT_PLAYER_RADIO,		// cancel to block the sound/message
+	CSLUA_EVENT_PLAYER_CAN_RESPAWN,	// pre: cancel to force "no"
+	CSLUA_EVENT_BOMB_DEFUSE_START,
+	CSLUA_EVENT_PLAYER_TRACE_ATTACK,	// pre: one raw hit before TakeDamage sums it
 	CSLUA_EVENT_PLAYER_HEAL,			// pre: change or block healing
-	CSLUA_EVENT_ROUND_BALANCE_TEAMS,	// auto-balance just moved players around
-	CSLUA_EVENT_ROUND_INTERMISSION,	// map is over, about to show the scoreboard
+	CSLUA_EVENT_ROUND_BALANCE_TEAMS,
+	CSLUA_EVENT_ROUND_INTERMISSION,
 	CSLUA_EVENT_ITEM_GIVE,			// pre: GiveNamedItem; cancel to block it
-	CSLUA_EVENT_PLAYER_STRIP,		// RemoveAllItems just ran
-	CSLUA_EVENT_PLAYER_CAN_HAVE_ITEM,	// pre: cancel to force "no" regardless of the game's own rules
-	CSLUA_EVENT_WEAPON_PICKUP,		// PlayerGotWeapon: picked a weapon up off the ground
-	CSLUA_EVENT_PLAYER_DISAPPEAR,		// Disappear: the player entity is being pulled from the world
-	CSLUA_EVENT_PLAYER_CAN_SWITCH_TEAM,	// pre: cancel to force "no" regardless of the game's own rules
-	CSLUA_EVENT_PLAYER_SHIELD_GIVE,	// GiveShield just ran
-	CSLUA_EVENT_PLAYER_SHIELD_DROP,	// DropShield just ran
+	CSLUA_EVENT_PLAYER_STRIP,
+	CSLUA_EVENT_PLAYER_CAN_HAVE_ITEM,	// pre: cancel to force "no"
+	CSLUA_EVENT_WEAPON_PICKUP,		// picked a weapon up off the ground
+	CSLUA_EVENT_PLAYER_DISAPPEAR,
+	CSLUA_EVENT_PLAYER_CAN_SWITCH_TEAM,	// pre: cancel to force "no"
+	CSLUA_EVENT_PLAYER_SHIELD_GIVE,
+	CSLUA_EVENT_PLAYER_SHIELD_DROP,
 	CSLUA_EVENT_BOMB_CARRIER,		// GiveC4 just picked who carries the bomb
-	CSLUA_EVENT_ROUND_REMOVE_GUNS,	// RemoveGuns just ran
-	CSLUA_EVENT_ROUND_DEAD_WEAPONS,	// DeadPlayerWeapons: which drop mode to use, read/write
-	CSLUA_EVENT_PLAYER_OBSERVER_NEXT,	// Observer_FindNextPlayer just ran
-	CSLUA_EVENT_PLAYER_OBSERVER_MODE,	// Observer_SetMode just ran
-	CSLUA_EVENT_PLAYER_SCORE_ADD,		// pre: AddPoints; change or block the player's score
-	CSLUA_EVENT_TEAM_SCORE_ADD,		// pre: AddPointsToTeam; change or block the team's score
-	CSLUA_EVENT_ROUND_CLEANUP,		// CleanUpMap just ran
-	CSLUA_EVENT_PLAYER_USERINFO_CHANGE,	// ClientUserInfoChanged just ran
-	CSLUA_EVENT_PLAYER_CAN_HEAR,		// pre: CanPlayerHearPlayer; cancel to force "no"
-	CSLUA_EVENT_PLAYER_CHOOSE_MODEL,	// HandleMenu_ChooseAppearance just ran
-	CSLUA_EVENT_PLAYER_CHOOSE_TEAM,	// pre: HandleMenu_ChooseTeam; cancel to block the switch
-	CSLUA_EVENT_PLAYER_USE,		// post: DispatchUse just ran (+use on a usable entity)
-	CSLUA_EVENT_PLAYER_SUICIDE,		// pre: the "kill" console command; cancel to block it
-	CSLUA_EVENT_ENTS_SHOULD_COLLIDE,	// pfnShouldCollide; e.collide, default true, read back
-	CSLUA_EVENT_ENTS_FREE,			// pfnOnFreeEntPrivateData: entity about to be destroyed
-	CSLUA_EVENT_PLAYER_CVAR_VALUE,		// pfnCvarValue: a client answered a cvar query
-	CSLUA_EVENT_PLAYER_CVAR_VALUE2,	// pfnCvarValue2: same, with a request id and cvar name
-	CSLUA_EVENT_SERVER_CVAR_CHANGE,	// pre: ReHLDS Cvar_DirectSet; cancel to block it
-	CSLUA_EVENT_SERVER_PRECACHE_GENERIC,	// ReHLDS PF_precache_generic_I just ran
-	CSLUA_EVENT_CLIENT_BOT_CREATED,	// ReHLDS CreateFakeClient just ran
-	CSLUA_EVENT_PLAYER_ROUND_RESPAWN,	// pre: RoundRespawn; cancel to skip it entirely
-	CSLUA_EVENT_PLAYER_GIVE_DEFAULT_ITEMS,	// pre: GiveDefaultItems; cancel to skip it entirely
+	CSLUA_EVENT_ROUND_REMOVE_GUNS,
+	CSLUA_EVENT_ROUND_DEAD_WEAPONS,	// which drop mode to use, read/write
+	CSLUA_EVENT_PLAYER_OBSERVER_NEXT,
+	CSLUA_EVENT_PLAYER_OBSERVER_MODE,
+	CSLUA_EVENT_PLAYER_SCORE_ADD,		// pre: AddPoints; change or block the score
+	CSLUA_EVENT_TEAM_SCORE_ADD,		// pre: AddPointsToTeam
+	CSLUA_EVENT_ROUND_CLEANUP,
+	CSLUA_EVENT_PLAYER_USERINFO_CHANGE,
+	CSLUA_EVENT_PLAYER_CAN_HEAR,		// pre: cancel to force "no"
+	CSLUA_EVENT_PLAYER_CHOOSE_MODEL,
+	CSLUA_EVENT_PLAYER_CHOOSE_TEAM,	// pre: cancel to block the switch
+	CSLUA_EVENT_PLAYER_USE,		// post: DispatchUse just ran
+	CSLUA_EVENT_PLAYER_SUICIDE,		// pre: the "kill" console command
+	CSLUA_EVENT_ENTS_SHOULD_COLLIDE,	// e.collide, default true, read back
+	CSLUA_EVENT_ENTS_FREE,			// entity about to be destroyed
+	CSLUA_EVENT_PLAYER_CVAR_VALUE,		// a client answered a cvar query
+	CSLUA_EVENT_PLAYER_CVAR_VALUE2,	// same, with a request id and cvar name
+	CSLUA_EVENT_SERVER_CVAR_CHANGE,	// pre: ReHLDS Cvar_DirectSet
+	CSLUA_EVENT_SERVER_PRECACHE_GENERIC,
+	CSLUA_EVENT_CLIENT_BOT_CREATED,
+	CSLUA_EVENT_PLAYER_ROUND_RESPAWN,	// pre: cancel to skip it entirely
+	CSLUA_EVENT_PLAYER_GIVE_DEFAULT_ITEMS,	// pre: cancel to skip it entirely
 
 	CSLUA_EVENT_COUNT
 };
@@ -100,30 +100,22 @@ struct RejectInfo
 	char reason[128];
 };
 
-// One hook system for everything.
-//
+// One hook system for everything:
 //   hook.add("player:hurt", "god.block", function(e) e:cancel() end)
 //   hook.add("shop.bought", "stats.count", function(e) ... end)
-//   hook.remove("player:hurt", "god.block")
 //   local e = hook.run("shop.bought", { player = p, item = it })
 //
-// Engine events (the enum above) and plugin events share one registry, one
-// registration call and one handler shape: every handler takes exactly one
-// argument, the event table, and its return value is never read. A handler
-// changes the outcome by writing a field (e.damage = 0) or calling e:cancel().
-//
-// A plugin event name must contain a dot - "shop.bought", not "bought". That
-// is what tells a plugin's own event apart from a typo in an engine one, which
-// would otherwise register a handler that silently never fires.
+// Engine events (the enum above) and plugin events share one registry. Every
+// handler takes one argument, the event table, and its return value is never
+// read - a handler changes the outcome by writing a field or calling e:cancel().
+// A plugin event name must contain a dot.
 class LuaEvents
 {
 public:
-	// Fills the event's own fields onto the table sitting on top of the
-	// stack. Public because run_custom() below takes one from callers
-	// outside this class (cslua_corpse.cpp's message hook).
+	// Fills the event's fields onto the table on top of the stack. Public so
+	// run_custom() can take one from callers outside this class.
 	typedef std::function<void(lua_State *)> FillFields;
 
-	// Lua entry points, registered as the `hook` namespace.
 	static int l_add(lua_State *L);
 	static int l_remove(lua_State *L);
 	static int l_run(lua_State *L);
@@ -135,13 +127,9 @@ public:
 	void clear();
 	void remove_plugin(int plugin_index);
 	int count(CsLuaEvent ev) const;
-
-	// How many handlers one plugin holds across every event, engine and its
-	// own. lua_list breaks its totals down by plugin with this.
 	int count_for_plugin(int plugin_index) const;
 
-	// Accumulated time per handler, for lua_profile. Filled only while the
-	// cslua_profile cvar is on.
+	// Accumulated time per handler, for lua_profile.
 	struct ProfileRow
 	{
 		std::string plugin;
@@ -154,413 +142,237 @@ public:
 	void profile_snapshot(std::vector<ProfileRow> &out) const;
 	void profile_reset();
 
-	// True when any script listens for the given event; lets the API skip
-	// installing a hookchain nobody uses.
+	// True when any script listens for the event; lets the API skip installing
+	// a hookchain nobody uses.
 	bool any(CsLuaEvent ev) const;
 
-	// Same idea for a custom-named event ("msg:TextMsg" and the like) fired
-	// from C++ rather than from another Lua script via hook.run. Checked on
-	// pfnMessageBegin - every network message to every client - so this has
-	// to stay a cheap map lookup with no event table built.
+	// Same, for a custom-named event ("msg:TextMsg" etc). Checked on every
+	// network message, so it stays a cheap map lookup with no table built.
 	bool any_custom(const std::string &name) const;
 
-	// Fires a custom-named event the same way run(CsLuaEvent) fires an engine
-	// one: builds the table, walks handlers, reports whether a handler
-	// cancelled. Unlike hook.run (Lua-initiated, requires a dot in the name
-	// to keep plugin events apart from typo'd engine ones), this is for
-	// events the engine itself sourced - hook.add("msg:Name", ...) - so the
-	// name is trusted as given, no dot required.
+	// Fires a custom-named event. Unlike hook.run, this is for events the
+	// engine sourced, so no dot is required in the name.
 	bool run_custom(const std::string &name, const FillFields &fill);
 
 	// Returns true if a handler rejected the connection; reason is filled in.
 	bool fire_client_connect(int id, const char *name, const char *ip, RejectInfo &reject);
 
-	// forced is true when this is the synthesized disconnect from a
-	// ClientConnect rejection (dllapi.cpp) rather than a real engine
-	// ClientDisconnect - see e.forced in docs/api/hook/connection.md.
+	// forced is true for the synthesized disconnect from a ClientConnect
+	// rejection rather than a real engine ClientDisconnect.
 	void fire_client_disconnect(int id, const char *name, const char *reason, bool forced);
 
-	// Fires once per client, the moment Steam stops answering
-	// STEAM_ID_PENDING. Anything keyed on the steamid (access rights, stats)
-	// belongs here rather than in client_connect.
+	// Fires the moment Steam stops answering STEAM_ID_PENDING. Anything keyed
+	// on the steamid belongs here rather than in client_connect.
 	void fire_player_authorized(int id, const char *authid);
 
 	void fire_player_ready(int id);
 
-	// Returns true if a handler swallowed the message, so it never reaches
-	// the chat - that is how "!command" style input stays invisible.
+	// Returns true if a handler swallowed the message (so "!command" input
+	// stays invisible).
 	bool fire_player_chat(int id, const char *text, bool team);
 
-	// A player pressed a key on a menu opened from Lua. Only the key is
-	// passed; which menu it belonged to is core/menu.lua's business.
 	void fire_menu_select(int id, int key);
-
-	// The map is ending, either for the next one or because the server is
-	// stopping. The last point where a plugin can undo what it did to the
-	// world or write its data out.
 	void fire_map_change(const char *map);
 
-	// Something is going away. e.plugin names which one for a single-plugin
-	// reload, and is nil when the whole state is being torn down (lua_reload,
-	// server shutdown) - same job as map_change, one level lower.
-	//
-	// Anything holding a reference into another plugin watches this: the core
-	// export registry drops that plugin's entries here, and a plugin with a
-	// soft dependency can fall back before the calls start failing.
+	// e.plugin names which one for a single-plugin reload, nil for a full
+	// teardown.
 	void fire_plugin_unload(const char *only_id = NULL);
 
-	// ReGameDLL gameplay events.
 	void fire_player_spawn(int id);
 
-	// weapon is the killer's weapon classname and distance the gap between the
-	// two, both NULL/negative when the world did the killing.
+	// weapon/distance are NULL/negative when the world did the killing.
 	void fire_player_death(int victim, int killer, int headshot,
 		const char *weapon, float distance);
 
 	// old/new are team names ("CT", "T", "SPEC", "NONE").
 	void fire_player_team_change(int id, const char *old_team, const char *new_team);
 
-	// A shot left the barrel. Firearms only - see the note in docs/events.md.
+	// Firearms only.
 	void fire_weapon_fire(int id, const char *weapon, int clip);
 
-	// A weapon is about to show its view/world model. view_model/world_model
-	// come in holding what the game would use; a handler that changes the
-	// field gets that path applied instead, in and out through the same refs.
+	// view_model/world_model come in holding what the game would use; a handler
+	// that changes the field gets that path applied instead.
 	void fire_weapon_deploy(int id, const char *weapon,
 		std::string &view_model, std::string &world_model);
 
-	// Fires from CBasePlayerWeapon::DefaultReload/DefaultShotgunReload, but
-	// only when they report back that a reload is actually starting - both
-	// get called on every reload attempt regardless of whether one is
-	// possible, and no-op internally when the clip is full or reserve ammo
-	// is empty. clip is read before the call, so this is what was left when
-	// the reload began, not what came out of it. delay is the animation
-	// length the engine is about to run, in seconds from now - same fDelay
-	// the game itself passed in, not recomputed. max_clip is the weapon's
-	// magazine capacity (GetItemInfo's iMaxClip), -1 if it could not be read.
+	// Fires only when DefaultReload/DefaultShotgunReload report a real reload
+	// starting. clip is read before the call; delay is the animation length;
+	// max_clip is GetItemInfo's iMaxClip, -1 if unreadable.
 	void fire_weapon_reload(int id, const char *weapon, int clip, float delay, int max_clip);
 
 	void fire_round_start();
 	void fire_round_end(int winner);
 	void fire_round_freeze_end();
 
-	// Bomb scenario. planter/defuser are player slots, 0 when unknown.
+	// planter/defuser are player slots, 0 when unknown.
 	void fire_bomb_planted(int planter);
 	void fire_bomb_defused(int defuser, bool success);
 	void fire_bomb_exploded(float x, float y, float z);
 
-	// weapon is "hegrenade" or "smokegrenade". Fires before the engine creates
-	// the projectile; fuse comes in holding the time the game intended to use
-	// and a handler that changes it gets that value used instead - the only
-	// way to make one explode on (near enough) contact instead of waiting out
-	// a multi-second fuse, since neither grenade type has a touch hook.
+	// fuse comes in holding the intended time; a handler that changes it gets
+	// that value used instead.
 	void fire_grenade_throw(int owner, const char *weapon, float &fuse);
 
-	// A thrown grenade, right after the engine creates it. entity_index is 0
-	// if the throw failed. Scripts get the object through e:model() and the
-	// rest of ents rather than a bespoke setter, so reskinning it is exactly
-	// like reskinning anything else made with ents.create.
+	// entity_index is 0 if the throw failed.
 	void fire_grenade_thrown(int owner, const char *weapon, int entity_index);
 
-	// A grenade is about to explode. owner is 0 when the thrower is gone or
-	// was never a player, entity_index is 0 if the entity is already gone.
-	// Returns true if a handler cancelled: the caller must then skip the
-	// game's own explosion (damage, decals, sound) and leave the whole effect
-	// - including removing the entity - to Lua.
+	// Returns true if a handler cancelled: the caller then skips the game's own
+	// explosion and leaves the whole effect (entity removal included) to Lua.
 	bool fire_grenade_explode(int owner, const char *weapon, int entity_index, float x, float y, float z);
 
-	// Fires before the engine decides which real grenade type (HE/flash/
-	// smoke) to create and throw - the one dispatcher every grenade-slot
-	// weapon's throw goes through, regardless of which weapon it actually
-	// is. weapon is the classname of the item being thrown; x,y,z/vx,vy,vz
-	// are the position and velocity, time the fuse/spawn delay, all as the
-	// engine intended to use them.
-	// Returns true if a handler cancelled: the caller must then skip the
-	// engine's own throw entirely (return no CGrenade) and leave the whole
-	// projectile - typically a hand-built ents.create() entity - up to Lua.
-	// ammo_type is the item's m_iPrimaryAmmoType - normally a real ammo
-	// index, but a script's p:give(..., { ammo_type = N }) can point it at
-	// a spare one instead, which is what lets a handler tell "this throw is
-	// my disguised item" apart from a real grenade of the same classname
-	// (grenade_thrown/grenade_explode only know the thrown entity's
-	// classname, which reads the same for both).
+	// Fires before the engine picks HE/flash/smoke. ammo_type is m_iPrimaryAmmoType,
+	// which a p:give(..., { ammo_type = N }) can point at a spare index to tell
+	// a disguised item apart from a real grenade of the same classname.
+	// Returns true if cancelled: skip the engine's throw entirely.
 	bool fire_weapon_throw(int player, const char *weapon, int ammo_type,
 		float x, float y, float z, float vx, float vy, float vz, float time);
 
-	// The player pressed secondary fire (right-click) while holding this
-	// weapon. Fires once per press, not once per frame held - there is no
-	// ReGameDLL hookchain for SecondaryAttack (unlike PrimaryAttack, which
-	// weapon_fire piggybacks on), so this is synthesized from a button
-	// edge-detect in PlayerPreThink (dllapi.cpp). ammo_type is the same
-	// m_iPrimaryAmmoType field weapon_throw carries, for telling apart two
-	// items that share a classname (see its own comment).
 	void fire_weapon_secondary_attack(int player, const char *weapon, int ammo_type);
 
-	// Buy menu bought a weapon by its WeaponIdType - weapon is the classname
-	// GetItemInfo() already had for that id, before the engine spends the
-	// money or spawns anything. Returns true if a handler cancelled: the
-	// caller must then skip BuyWeaponByWeaponID's own chain entirely, so
-	// nothing is charged and nothing is given.
+	// weapon is the classname GetItemInfo() had for the id. Returns true if
+	// cancelled: skip the chain, nothing charged, nothing given.
 	bool fire_weapon_buy(int player, const char *weapon);
-
-	// Buy menu topped up ammo for the weapon currently in hand. weapon is
-	// that weapon's classname. Same cancel contract as fire_weapon_buy.
 	bool fire_ammo_buy(int player, const char *weapon);
 
-	// Buy menu bought a non-weapon item - armor, defuse kit, NVGs, a shield,
-	// or (through the same menu slot) a grenade. item is one of "vest",
-	// "vesthelm", "flashbang", "hegrenade", "smokegrenade", "nvg",
-	// "defusekit", "shield" - see BuyItemMenuSlot in the SDK. Same cancel
-	// contract as fire_weapon_buy.
+	// item is one of "vest", "vesthelm", "flashbang", "hegrenade",
+	// "smokegrenade", "nvg", "defusekit", "shield".
 	bool fire_item_buy(int player, const char *item);
 
-	// AddAccount is about to change a player's money - round bonus, a kill
-	// reward, a hostage action, buying something (see reason). amount can be
-	// negative (spending). Cancel to block the change entirely; the caller
-	// must then skip AddAccount's own chain.
+	// amount can be negative. Cancel to block; the caller then skips AddAccount.
 	bool fire_money_change(int player, int amount, const char *reason);
 
-	// GiveAmmo is about to top up weapon's reserve by count, capped at max.
-	// Cancel to block it - the caller returns -1 (GiveAmmo's own "failed"
-	// value) instead of calling the chain.
+	// Cancel -> the caller returns -1 (GiveAmmo's own "failed" value).
 	bool fire_ammo_pickup(int player, const char *weapon, int count, int max);
 
-	// DropPlayerItem is about to put weapon on the ground. Cancel to block
-	// the drop entirely.
 	bool fire_weapon_drop(int player, const char *weapon);
 
-	// Player.Jump()/Duck() ran. Notify only - blocking either mid-flight
-	// would leave player movement in a state the engine did not expect.
+	// Notify only - blocking mid-flight would leave movement in a bad state.
 	void fire_player_jump(int player);
 	void fire_player_duck(int player);
 
-	// StartObserver just ran - the player is now spectating.
 	void fire_player_spectate(int player);
 
-	// Radio() is about to play sentence/sample to whoever can hear it.
-	// Cancel to block the sound and the "<player> Radio: ..." console line.
+	// Cancel to block the sound and the console line.
 	bool fire_player_radio(int player, const char *sentence, const char *sample);
 
-	// FPlayerCanRespawn's pre-check: the game is about to decide whether
-	// this player may respawn. Cancel to force a "no" regardless of what the
-	// game's own rules would have said - the caller then returns FALSE
-	// without ever asking the chain.
+	// Cancel to force "no". Cannot grant a "yes" the game would not have given.
 	bool fire_player_can_respawn(int player);
 
-	// DefuseBombStart just ran - the player began defusing. defuser tells
-	// whether they are using a defuse kit (faster) or bare hands.
+	// defuser: using a defuse kit (faster) or bare hands.
 	void fire_bomb_defuse_start(int player, bool defuser);
 
-	// TakeDamage passes damage by reference, so a handler can change it or
-	// zero it out. Returns the final damage the game should apply: whatever
-	// e.damage holds after the chain, or 0 if a handler cancelled.
-	//
-	// hitgroup is the body region TraceAttack last recorded on the victim, or
-	// -1 when the damage did not come from a hit at all (fall, world, gas).
+	// damage is by reference in TakeDamage. Returns the final damage: e.damage
+	// after the chain, or 0 if a handler cancelled. hitgroup is -1 when the
+	// damage did not come from a hit (fall, world, gas).
 	float fire_player_hurt(int victim, int attacker, float damage, int bits, int hitgroup);
 
-	// Post variant: the damage the game actually applied, for observers.
+	// Post: the damage the game actually applied, for observers.
 	void fire_player_hurt_post(int victim, int attacker, float damage, int bits, int hitgroup);
 
-	// TraceAttack: the exact hit, before TakeDamage sums same-frame hits (a
-	// shotgun's pellets, say) into one damage value. damage is the raw
-	// per-hit amount, before armor and multipliers are applied - a handler
-	// that changes it changes what TakeDamage eventually sees. x,y,z is the
-	// world position the engine's own trace recorded for this hit. hitgroup
-	// is the body region, same meaning as in fire_player_hurt. Returns the
-	// (possibly changed) damage, 0 if a handler cancelled - the caller then
-	// skips the real call entirely, so this hit contributes nothing at all
-	// (no blood, no multidamage).
+	// The exact hit before TakeDamage sums same-frame hits. damage is the raw
+	// per-hit amount before armor/multipliers. x,y,z is the trace position.
+	// Returns the (possibly changed) damage, 0 if cancelled.
 	float fire_player_trace_attack(int victim, int attacker, float damage, int bits,
 		int hitgroup, float x, float y, float z);
 
-	// TakeHealth is about to restore amount health points - a first aid kit,
-	// an admin command; CS has no natural regen. Returns the (possibly
-	// changed) amount, 0 if a handler cancelled - the caller then skips the
-	// real call and reports no health given.
+	// TakeHealth. Returns the (possibly changed) amount, 0 if cancelled.
 	float fire_player_heal(int player, float amount, int bits);
 
-	// BalanceTeams just moved one or more players to a different team to even
-	// the sides out. Notify only - by the time this fires the move already
-	// happened.
 	void fire_round_balance_teams();
 
-	// GoToIntermission just ran: the round/map is over and the server is
-	// about to show the scoreboard before the next map loads. Notify only,
-	// and earlier than server:map_change - the world is still there.
+	// Earlier than server:map_change - the world is still there.
 	void fire_round_intermission();
 
-	// GiveNamedItem is about to create and hand over an item by classname.
-	// Not the same code path as p:give() (that goes through GiveNamedItemEx,
-	// which the SDK does not document as calling this) - this is whatever
-	// else in the engine hands a player an item by name: default round gear,
-	// an rcon give, another mod. Cancel to block it: the caller then returns
-	// NULL without ever asking the chain, so nothing is created at all.
+	// Cancel -> the caller returns NULL, nothing created.
 	bool fire_item_give(int player, const char *item);
 
-	// RemoveAllItems just ran - the player's whole inventory (and the suit,
-	// if remove_suit) is gone. Notify only: by the time this fires it already
-	// happened, same as fire_round_balance_teams.
 	void fire_player_strip(int player, bool remove_suit);
 
-	// CanHavePlayerItem's pre-check: "the player is touching an item, do I
-	// give it to him" - the SDK's own words for it. Broader than a ground
-	// pickup: whatever else in the engine asks this question before handing
-	// over an item goes through here too. Cancel to force "no" regardless of
-	// what the game's own rules would have said: this can only take away
-	// permission, never grant it.
+	// Cancel to force "no"; cannot grant a "yes".
 	bool fire_player_can_have_item(int player, const char *item);
 
-	// PlayerGotWeapon just ran - specifically a weapon picked up off the
-	// ground (the SDK's own comment: "each time a player picks up a weapon
-	// from the ground"), not a GiveNamedItem-style hand-over. Notify only.
 	void fire_weapon_pickup(int player, const char *weapon);
-
-	// Disappear just ran - the player entity is being pulled from the world.
-	// Notify only.
 	void fire_player_disappear(int player);
 
-	// CanSwitchTeam's pre-check: the player is asking to join team. Cancel to
-	// force "no" regardless of what the game's own rules would have said -
-	// this can only take away permission, never grant it.
+	// Cancel to force "no"; cannot grant a "yes".
 	bool fire_player_can_switch_team(int player, const char *team);
 
-	// GiveShield is about to hand the player a shield; deploy says whether
-	// it is drawn immediately. Notify only.
+	// deploy: drawn immediately.
 	void fire_player_shield_give(int player, bool deploy);
-
-	// DropShield just ran; deploy carries the same meaning as
-	// fire_player_shield_give's. Notify only.
 	void fire_player_shield_drop(int player, bool deploy);
 
-	// GiveC4 just picked who carries the bomb this round. player is 0 if the
-	// game did not choose anyone. Notify only - this does not change who
-	// gets the bomb, only reports it.
+	// player is 0 if the game did not choose anyone. Notify only.
 	void fire_bomb_carrier(int player);
 
-	// RemoveGuns is about to run - every player's guns are about to be
-	// stripped. Notify only, no fields.
 	void fire_round_remove_guns();
 
-	// DeadPlayerWeapons just decided what happens to a dead player's guns -
-	// mode is one of gamerules.h's GR_PLR_DROP_GUN_* values. Returns the
-	// (possibly changed) mode. Not cancellable - this picks between options
-	// rather than allowing or blocking anything.
+	// mode is one of gamerules.h's GR_PLR_DROP_GUN_*. Returns the (possibly
+	// changed) mode. Not cancellable.
 	int fire_round_dead_weapons(int player, int mode);
 
-	// Observer_FindNextPlayer is about to switch who this spectator is
-	// watching. reverse is the direction; target is a specific name to jump
-	// to, NULL/empty when none was given. Notify only.
+	// target is a specific name to jump to, NULL/empty when none.
 	void fire_player_observer_next(int player, bool reverse, const char *target);
 
-	// Observer_SetMode just ran - mode is one of pm_shared.h's OBS_*
-	// constants (OBS_CHASE_LOCKED=1, OBS_CHASE_FREE=2, OBS_ROAMING=3,
-	// OBS_IN_EYE=4, OBS_MAP_FREE=5, OBS_MAP_CHASE=6). Notify only.
+	// mode is one of pm_shared.h's OBS_*.
 	void fire_player_observer_mode(int player, int mode);
 
-	// AddPoints is about to change a player's personal score. score and
-	// allow_negative come in holding what the game intended and are written
-	// back with whatever a handler left in e.score/e.allow_negative. Returns
-	// true if a handler cancelled: the caller must then skip AddPoints'
-	// own call entirely, so the score is untouched.
+	// score/allow_negative come in holding what the game intended and are
+	// written back from e.score/e.allow_negative. Returns true if cancelled:
+	// the caller skips AddPoints entirely.
 	bool fire_player_score_add(int player, int &score, bool &allow_negative);
 
-	// Same contract as fire_player_score_add, for AddPointsToTeam. player is
-	// just who triggered the call, not who the points belong to - read
-	// e.player:team() for that.
+	// player is just who triggered the call; read e.player:team() for whose.
 	bool fire_team_score_add(int player, int &score, bool &allow_negative);
 
-	// CleanUpMap is about to run - end-of-round world reset. Notify only, no
-	// fields.
 	void fire_round_cleanup();
 
-	// ClientUserInfoChanged just ran - some userinfo key changed. The raw
-	// buffer never reaches Lua; read a specific key with p:info(key).
-	// Notify only.
+	// Read a specific key with p:info(key); the raw buffer never reaches Lua.
 	void fire_player_userinfo_change(int player);
 
-	// CanPlayerHearPlayer's pre-check: can listener hear speaker over voice.
-	// Cancel to force "no" regardless of what the game's own rules would
-	// have said - this can only take away permission, never grant it.
+	// Cancel to force "no"; cannot grant a "yes".
 	bool fire_player_can_hear(int listener, int speaker);
 
-	// HandleMenu_ChooseAppearance just ran - slot is the menu item picked,
-	// not a model name. Notify only.
+	// slot is the menu item picked, not a model name.
 	void fire_player_choose_model(int player, int slot);
 
-	// HandleMenu_ChooseTeam is about to run the player's team pick - slot is
-	// the menu item, not a TeamName. Cancel to block the switch: the actual
-	// team change happens inside this call, so a pre-cancel prevents it
-	// entirely, same contract as fire_player_can_respawn.
+	// slot is the menu item, not a TeamName. Cancel to block the switch.
 	bool fire_player_choose_team(int player, int slot);
 
-	// pfnUse just ran (DispatchUse: +use on something with a Use handler -
-	// a button, a lever, a multi_manager). entity is 0 if it is already gone
-	// by the time this fires. Notify only: the interaction already happened.
+	// entity is 0 if it is already gone by the time this fires. Notify only.
 	void fire_player_use(int player, int entity);
 
-	// The "kill" console command is about to run - a rate-limited self-kill,
-	// same path as a real suicide. Cancel to block it entirely: the caller
-	// then skips ClientKill's own chain, so nothing happens at all (not even
-	// the rate-limit timer updates).
+	// The "kill" console command. Cancel -> nothing happens, not even the
+	// rate-limit timer.
 	bool fire_player_suicide(int player);
 
-	// pfnShouldCollide's pre-check, and the only implementation of it at all
-	// - ReGameDLL leaves this field null, so whatever this returns is final,
-	// not a chain around some other answer. collide comes in true (normal
-	// physics) and goes back out however the last handler left e.collide;
-	// nothing here can make two entities that would collide anyway skip
-	// touching each other by omission - only an explicit false does that.
+	// pfnShouldCollide - the only implementation. collide comes in true and
+	// goes back out however e.collide was left; only an explicit false makes
+	// two colliding entities skip touching.
 	bool fire_ents_should_collide(int entity, int other, bool collide);
 
-	// pfnOnFreeEntPrivateData's pre-check - the entity is about to be
-	// destroyed, but is still readable right now. Fires before ReGameDLL's
-	// own cleanup runs, on purpose: this is the last point anything about
-	// the entity can be read at all. Notify only - blocking destruction
-	// here would leak the slot, not save the entity.
+	// Fires before ReGameDLL's cleanup - the last point the entity is readable.
+	// Notify only.
 	void fire_ents_free(int entity);
 
-	// pfnCvarValue: a client answered a QueryClientCvarValue request with
-	// this cvar's value - the old, context-free version of the query (no
-	// name, no request id; the caller is expected to already know which
-	// cvar it asked about). Notify only.
+	// The context-free QueryClientCvarValue answer (no name, no request id).
 	void fire_player_cvar_value(int player, const char *value);
 
-	// pfnCvarValue2: same idea, but the modern version - request_id ties the
-	// answer back to whichever QueryClientCvarValue2 call asked, and cvar
-	// names which one this is an answer for.
+	// The QueryClientCvarValue2 answer: request_id + cvar name.
 	void fire_player_cvar_value2(int player, int request_id, const char *cvar, const char *value);
 
-	// ReHLDS Cvar_DirectSet: a cvar (any of them - the engine's own, another
-	// plugin's, not just this module's) is about to change. Cancel to block
-	// it: the caller then skips the chain entirely, so the cvar keeps its
-	// old value. A handler that itself sets a cvar from inside this event
-	// will re-enter it - do not have it set the same cvar unconditionally,
-	// or that recursion never bottoms out.
+	// ReHLDS Cvar_DirectSet. Cancel to keep the old value. A handler that sets
+	// a cvar from inside this event re-enters it - do not set the same cvar
+	// unconditionally.
 	bool fire_server_cvar_change(const char *name, const char *value);
 
-	// ReHLDS PF_precache_generic_I just ran - a generic (non-model,
-	// non-sound) resource was precached, by anything: the engine, the game
-	// DLL, another plugin, or this module (though nothing here calls it -
-	// there is no res.generic() yet). Notify only.
 	void fire_server_precache_generic(const char *name, int index);
-
-	// ReHLDS CreateFakeClient just ran - a bot connected. Notify only;
-	// id is the slot it was given.
 	void fire_client_bot_created(int id);
 
-	// RoundRespawn is about to run - the actual per-player reset for a new
-	// round (position, health, weapons kept or not, team-kill punishment).
-	// Cancel to skip it entirely: the caller then skips the chain, and this
-	// player is left exactly as they were - no respawn-for-the-new-round at
-	// all this round.
+	// RoundRespawn. Cancel -> the player is left exactly as they were.
 	bool fire_player_round_respawn(int player);
 
-	// GiveDefaultItems is about to run - the standard round-start loadout
-	// (knife, default secondary, starting money already handled elsewhere).
-	// It starts by stripping whatever the player is currently holding, so
-	// cancelling here does not just skip the gift, it leaves their current
-	// inventory untouched instead of being cleared first.
+	// GiveDefaultItems starts by stripping the current inventory, so cancelling
+	// leaves it untouched rather than being cleared first.
 	bool fire_player_give_default_items(int player);
 
 private:
@@ -570,22 +382,18 @@ private:
 		int plugin;			// index into LuaEngine::plugins()
 		std::string id;		// unique within one plugin, for replace/remove
 
-		// Only touched while profiling is on, so an idle server pays nothing
-		// for them beyond the two words.
+		// Only touched while profiling is on.
 		double spent;
 		int calls;
 
-		// A plugin can be shut down from inside its own handler - blowing the
-		// precache budget does exactly that - and erasing from the list being
-		// walked would skip whatever moved into the freed slot. Handlers are
-		// marked instead and swept once the walk is over.
+		// A plugin can be shut down from inside its own handler; handlers are
+		// marked dead and swept once the walk is over.
 		bool dead;
 	};
 
 	typedef std::vector<Handler> HandlerList;
 
-	// Runs with the finished event table on top of the stack, for events whose
-	// fields the game reads back.
+	// Runs with the finished event table on top, for events the game reads back.
 	typedef std::function<void(lua_State *)> ReadFields;
 
 	const char *plugin_id(int plugin_index) const;
@@ -593,31 +401,25 @@ private:
 	// Drops the handlers marked dead. No-op while a dispatch is in progress.
 	void sweep();
 
-	// Pushes a fresh event table: name, cancelled = false, the caller's fields
-	// and the metatable carrying cancel().
 	void push_event(lua_State *L, const char *name, bool cancellable, const FillFields &fill);
 
 	// Walks one handler list against the event table at `event_index`. Stops
 	// early once a handler has cancelled.
 	void dispatch_list(lua_State *L, HandlerList &list, int event_index);
 
-	// Notify-style: build the event, run the chain, drop it.
 	void notify(CsLuaEvent ev, const FillFields &fill = FillFields());
 
-	// Cancellable: `read` runs with the event table on top, before it is
-	// dropped. Returns true when a handler cancelled.
+	// `read` runs with the event table on top, before it is dropped. Returns
+	// true when a handler cancelled.
 	bool run(CsLuaEvent ev, const FillFields &fill, const ReadFields &read = ReadFields());
 
-	// Engine events, indexed by the enum. Plugin events live in m_custom,
-	// keyed by name - there is no fixed set of them to index.
+	// Engine events indexed by the enum; plugin events keyed by name.
 	HandlerList m_handlers[CSLUA_EVENT_COUNT];
 	std::map<std::string, HandlerList> m_custom;
 
-	// Depth rather than a flag: one handler firing another event nests, and
-	// the sweep must wait for the outermost walk to finish.
+	// Depth rather than a flag: one handler firing another event nests.
 	int m_dispatching = 0;
 
-	// The two event metatables, built once in init().
 	int m_mt_cancellable = LUA_NOREF;
 	int m_mt_notify = LUA_NOREF;
 };
@@ -625,5 +427,5 @@ private:
 extern LuaEvents g_events;
 
 // Registers the `hook` namespace. Separate from init() because the metatables
-// have to exist before the first dispatch, not before the first script line.
+// have to exist before the first dispatch.
 void cslua_register_hooks(lua_State *L);

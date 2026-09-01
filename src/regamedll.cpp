@@ -37,12 +37,10 @@ bool cslua_regamedll_init()
 	if (s_api)
 		return true;
 
-	// metamod knows exactly which file it loaded as the game DLL, so ask it
-	// instead of guessing "mp.dll" or "cs.so".
+	// Ask metamod which file it loaded as the game DLL.
 	const char *path = GET_GAME_INFO(PLID, GINFO_REALDLL_FULLPATH);
 	void *gamedll = path ? cslua_module_open(path) : NULL;
 	if (!gamedll) {
-		// Naming the path makes this one debuggable instead of mysterious.
 		cslua_print("game DLL handle not found (%s), CS-specific features are off",
 			path ? path : "no path from metamod");
 		return false;
@@ -67,7 +65,7 @@ bool cslua_regamedll_init()
 	int major = api->GetMajorVersion();
 	int minor = api->GetMinorVersion();
 
-	// A major bump means the interface changed shape; refusing beats crashing.
+	// A major bump means the interface changed shape.
 	if (major != REGAMEDLL_API_VERSION_MAJOR) {
 		cslua_error("ReGameDLL API major version mismatch: server has %d, we expect %d",
 			major, REGAMEDLL_API_VERSION_MAJOR);
@@ -139,9 +137,8 @@ int cslua_player_active_weapon_ammo_type(int id)
 	return static_cast<CBasePlayerWeapon *>(p->m_pActiveItem)->m_iPrimaryAmmoType;
 }
 
-// The hookchains below are pre-hooks: they call the chain (so the game still
-// does its thing), then hand the event to Lua. We never supercede here; cs-lua
-// only observes for now.
+// The hookchains below are pre-hooks: they call the chain, then hand the event
+// to Lua. We never supercede here; cs-lua only observes for now.
 
 static void hook_spawn(IReGameHook_CBasePlayer_Spawn *chain, CBasePlayer *player)
 {
@@ -151,7 +148,7 @@ static void hook_spawn(IReGameHook_CBasePlayer_Spawn *chain, CBasePlayer *player
 		g_events.fire_player_spawn(player->entindex());
 }
 
-// Resolves an attacker's entvars to a player slot, or 0 for world / non-player.
+// An attacker's entvars -> a player slot, or 0 for world / non-player.
 static int attacker_slot(entvars_t *pevAttacker)
 {
 	if (!pevAttacker)
@@ -165,13 +162,9 @@ static int attacker_slot(entvars_t *pevAttacker)
 	return (idx >= 1 && idx < CSLUA_MAXPLAYERS) ? idx : 0;
 }
 
-// TraceAttack fires once per hit - once per shotgun pellet, say - and only
-// accumulates into the multi-damage buffer TakeDamage later reads; it never
-// applies anything itself. flDamage is the raw per-hit amount here, before
-// armor and any multiplier TakeDamage would apply. Neither this parameter nor
-// the SDK's own TraceAttack(entvars_t *, float, Vector, TraceResult *, int)
-// take it by reference, so a changed value has to be forwarded into callNext
-// explicitly rather than mutated in place, same idea as hook_takedamage below.
+// TraceAttack fires once per hit (per shotgun pellet) and only accumulates into
+// the multi-damage buffer. flDamage is the raw per-hit amount, before armor and
+// multipliers. Not by reference, so a changed value is forwarded into callNext.
 static void hook_trace_attack(IReGameHook_CBasePlayer_TraceAttack *chain, CBasePlayer *victim,
 	entvars_t *pevAttacker, float flDamage, Vector &vecDir, TraceResult *ptr, int bitsDamageType)
 {
@@ -189,7 +182,7 @@ static void hook_trace_attack(IReGameHook_CBasePlayer_TraceAttack *chain, CBaseP
 
 	flDamage = g_events.fire_player_trace_attack(vslot, aslot, flDamage, bitsDamageType, hitgroup, x, y, z);
 	if (flDamage <= 0.0f)
-		return;				// fully blocked: this hit contributes nothing - no blood, no multidamage
+		return;				// fully blocked: no blood, no multidamage
 
 	chain->callNext(victim, pevAttacker, flDamage, vecDir, ptr, bitsDamageType);
 }
@@ -203,24 +196,19 @@ static BOOL hook_takedamage(IReGameHook_CBasePlayer_TakeDamage *chain, CBasePlay
 	int vslot = victim->entindex();
 	int aslot = attacker_slot(pevAttacker);
 
-	// TraceAttack records the body region on the victim just before calling
-	// TakeDamage, so by now it describes this hit. Damage that never went
-	// through a trace - a fall, the world, an explosion - leaves whatever the
-	// last real hit put there, which would be a lie, so report nothing for it.
-	//
-	// The shotgun is DMG_BULLET too; the knife arrives as SLASH or CLUB
-	// depending on which attack it was.
+	// TraceAttack recorded the body region on the victim just before this; for
+	// damage that never went through a trace (fall, world, explosion) the last
+	// value would be a lie, so report nothing. Shotgun is DMG_BULLET too; the
+	// knife arrives as SLASH or CLUB.
 	int hitgroup = (bitsDamageType & (DMG_BULLET | DMG_SLASH | DMG_CLUB))
 		? victim->m_LastHitGroup : -1;
 
-	// Pre: let Lua change or cancel the damage before the game applies it.
 	flDamage = g_events.fire_player_hurt(vslot, aslot, flDamage, bitsDamageType, hitgroup);
 	if (flDamage <= 0.0f)
 		return FALSE;			// fully blocked: no pain sound, no armor loss
 
 	BOOL result = chain->callNext(victim, pevInflictor, pevAttacker, flDamage, bitsDamageType);
 
-	// Post: damage is applied, health/armor are current.
 	g_events.fire_player_hurt_post(vslot, aslot, flDamage, bitsDamageType, hitgroup);
 	return result;
 }
@@ -236,9 +224,7 @@ static void hook_killed(IReGameHook_CBasePlayer_Killed *chain, CBasePlayer *vict
 	// killer 0 = world / non-player; suicide shows up as attacker == victim.
 	int killer = attacker_slot(pevAttacker);
 
-	// Both of these have to be read before the chain runs: the death drops the
-	// victim's weapons and the impulse throws the body, so afterwards the
-	// weapon is gone and the distance is whatever the corpse flew.
+	// Read both before the chain: the death drops weapons and throws the body.
 	const char *weapon = NULL;
 	float distance = -1.0f;
 
@@ -251,8 +237,7 @@ static void hook_killed(IReGameHook_CBasePlayer_Killed *chain, CBasePlayer *vict
 		}
 	}
 
-	// Copied out: the string points into the game's entity, which the chain
-	// below is free to take apart.
+	// Copied out: the string points into the game's entity.
 	char weapon_name[64];
 	if (weapon) {
 		cslua_snprintf(weapon_name, sizeof weapon_name, "%s", weapon);
@@ -266,10 +251,8 @@ static void hook_killed(IReGameHook_CBasePlayer_Killed *chain, CBasePlayer *vict
 	g_events.fire_player_death(victim->entindex(), killer, headshot ? 1 : 0, weapon, distance);
 }
 
-// TakeHealth is what a first aid kit or an admin heal command goes through -
-// CS has no natural regen, so this is the only source. flHealth is by value
-// in both the SDK's own TakeHealth(float, int) and this chain, same reason as
-// flDamage in hook_trace_attack above: forward the changed value explicitly.
+// TakeHealth is what a first aid kit or an admin heal goes through. flHealth is
+// by value, same as flDamage in hook_trace_attack.
 static BOOL hook_take_health(IReGameHook_CBasePlayer_TakeHealth *chain, CBasePlayer *player,
 	float flHealth, int bitsDamageType)
 {
@@ -283,12 +266,8 @@ static BOOL hook_take_health(IReGameHook_CBasePlayer_TakeHealth *chain, CBasePla
 	return chain->callNext(player, flHealth, bitsDamageType);
 }
 
-// A shot left the barrel. There is no one hookchain for "fired": the game
-// spreads it across three bullet calls, and this covers all of them. `this` is
-// whoever pulled the trigger.
-//
-// Firearms only. The knife goes through TraceAttack and grenades through the
-// Throw* chains, neither of which is a bullet - see docs/events.md.
+// A shot left the barrel. The game spreads it across three bullet calls; this
+// covers all of them. `this` is whoever pulled the trigger. Firearms only.
 static int firing_slot(CBaseEntity *shooter)
 {
 	if (!shooter || !shooter->pev)
@@ -302,8 +281,7 @@ static int firing_slot(CBaseEntity *shooter)
 	return (idx >= 1 && idx < CSLUA_MAXPLAYERS) ? idx : 0;
 }
 
-// The clip is read after the shot, so a plugin counting rounds sees what is
-// left rather than what was there.
+// The clip is read after the shot, so a plugin counting rounds sees what's left.
 static void fire_weapon_event(CBaseEntity *shooter)
 {
 	int slot = firing_slot(shooter);
@@ -358,10 +336,7 @@ static void hook_fire_buckshots(IReGameHook_CBaseEntity_FireBuckshots *chain, CB
 }
 
 // szViewModel/szWeaponModel are string literals the caller passed in, not
-// buffers to write through - the standard HL SDK deploy call is always
-// DefaultDeploy("models/v_x.mdl", "models/p_x.mdl", ...). Lua overrides by
-// value, so the fix is to hand the chain a different pointer, not to mutate
-// this one.
+// buffers. Lua overrides by value, so hand the chain a different pointer.
 static BOOL hook_deploy(IReGameHook_CBasePlayerWeapon_DefaultDeploy *chain, CBasePlayerWeapon *weapon,
 	char *szViewModel, char *szWeaponModel, int iAnim, char *szAnimExt, int skiplocal)
 {
@@ -378,16 +353,10 @@ static BOOL hook_deploy(IReGameHook_CBasePlayerWeapon_DefaultDeploy *chain, CBas
 		iAnim, szAnimExt, skiplocal);
 }
 
-// DefaultReload/DefaultShotgunReload are the two helpers real weapon Reload()
-// implementations call - but calling them is not the same as reloading.
-// Both no-op and return 0/false when there is nothing to do (clip already
-// full, no reserve ammo): that check lives inside them, not before the
-// call, so a held/macroed reload key still reaches this hook every time.
-// The only reliable signal is the return value - true means the engine is
-// about to actually run the reload animation and refill the clip. Everything
-// but the shotguns (m3/xm1014, which reload one shell at a time through the
-// special path) goes through DefaultReload; both need a hook or shotgun
-// reloads go unseen.
+// DefaultReload/DefaultShotgunReload are helpers real Reload()s call - but
+// calling them is not the same as reloading; both no-op when there is nothing
+// to do. The return value is the only reliable signal. The shotguns (m3/xm1014)
+// use DefaultShotgunReload; everything else DefaultReload.
 static int hook_reload(IReGameHook_CBasePlayerWeapon_DefaultReload *chain, CBasePlayerWeapon *weapon,
 	int iClipSize, int iAnim, float fDelay)
 {
@@ -401,20 +370,16 @@ static int hook_reload(IReGameHook_CBasePlayerWeapon_DefaultReload *chain, CBase
 	return result;
 }
 
-// Shotguns load one shell at a time, so DefaultShotgunReload runs once per
-// shell and carries two delays: fStartDelay times the animation that opens
-// the reload (the first call, m_fInSpecialReload still false going in),
-// fDelay times every shell-insert loop after that. Reading the flag before
-// callNext picks the one that actually applies to this call.
+// Shotguns load one shell at a time, so this runs once per shell with two
+// delays: fStartDelay for the open animation (first call, m_fInSpecialReload
+// still false), fDelay for every shell-insert loop after.
 static bool hook_shotgun_reload(IReGameHook_CBasePlayerWeapon_DefaultShotgunReload *chain, CBasePlayerWeapon *weapon,
 	int iAnim, int iStartAnim, float fDelay, float fStartDelay, const char *pszReloadSound1, const char *pszReloadSound2)
 {
 	int clip_before = (weapon && weapon->pev) ? weapon->m_iClip : 0;
 	float delay = (weapon && weapon->m_fInSpecialReload) ? fDelay : fStartDelay;
 
-	// DefaultShotgunReload never gets iClipSize handed in - it loads one
-	// shell at a time, not to a fixed target in one call - so the only way
-	// to know the magazine capacity here is to ask the weapon directly.
+	// No iClipSize is handed in; ask the weapon for its magazine capacity.
 	ItemInfo info;
 	memset(&info, 0, sizeof info);
 	int max_clip = (weapon && weapon->GetItemInfo(&info)) ? info.iMaxClip : -1;
@@ -438,7 +403,7 @@ static bool hook_round_end(IReGameHook_RoundEnd *chain, int winStatus,
 {
 	bool result = chain->callNext(winStatus, event, delay);
 
-	// winStatus: 1 = CT, 2 = T, 3 = draw (see WinStatus in gamerules.h).
+	// winStatus: 1 = CT, 2 = T, 3 = draw (WinStatus in gamerules.h).
 	g_events.fire_round_end(winStatus);
 	return result;
 }
@@ -461,12 +426,9 @@ static void hook_go_to_intermission(IReGameHook_CSGameRules_GoToIntermission *ch
 	g_events.fire_round_intermission();
 }
 
-// fuse is read from grenade_throw before the engine creates the projectile -
-// a script can shorten it there, which is the only way to make a grenade
-// pop on (near enough) contact rather than ride out a multi-second timer,
-// since neither HE nor smoke exposes a touch hook. grenade_thrown fires
-// after, once the entity is real and spawned, so a script can reskin it with
-// the same ents API it would use on anything from ents.create.
+// fuse is read from grenade_throw before the engine creates the projectile - a
+// script can shorten it there, the only way to make one pop on contact.
+// grenade_thrown fires after, once the entity is real.
 static CGrenade *hook_throw_he_grenade(IReGameHook_ThrowHeGrenade *chain, entvars_t *pevOwner,
 	Vector &vecStart, Vector &vecVelocity, float time, int iTeam, unsigned short usEvent)
 {
@@ -483,14 +445,10 @@ static CGrenade *hook_throw_he_grenade(IReGameHook_ThrowHeGrenade *chain, entvar
 	return grenade;
 }
 
-// The one dispatcher every grenade-slot throw goes through before the
-// engine picks a specific type and creates its CGrenade - unlike
-// ThrowHeGrenade/ThrowSmokeGrenade above, this fires for ANY weapon in that
-// slot, including one a plugin has repurposed for something that is not a
-// grenade at all (see weapon_throw's docs). A handler that cancels is
-// expected to have already built its own projectile inside its own handler
-// (typically ents.create + e:movetype(8)); returning nullptr here skips the
-// engine's own CGrenade entirely, so nothing throws twice.
+// The one dispatcher every grenade-slot throw goes through before the engine
+// picks a type - fires for ANY weapon in that slot, including a repurposed one.
+// A handler that cancels is expected to have built its own projectile;
+// returning nullptr skips the engine's CGrenade so nothing throws twice.
 static CGrenade *hook_throw_grenade(IReGameHook_CBasePlayer_ThrowGrenade *chain,
 	CBasePlayer *player, CBasePlayerWeapon *item, Vector &vecSrc, Vector &vecThrow,
 	float time, unsigned short usEvent)
@@ -508,10 +466,8 @@ static CGrenade *hook_throw_grenade(IReGameHook_CBasePlayer_ThrowGrenade *chain,
 	return chain->callNext(player, item, vecSrc, vecThrow, time, usEvent);
 }
 
-// The buy menu goes through here for every weapon purchase - rebuy, autobuy,
-// a manual pick, all the same chain. The entity does not exist yet at this
-// point, so the classname comes from GetItemInfo(id) rather than reading it
-// off the result the way grenade_thrown does.
+// The buy menu goes through here for every weapon purchase. The entity does not
+// exist yet, so the classname comes from GetItemInfo(id).
 static CBaseEntity *hook_buy_weapon(IReGameHook_BuyWeaponByWeaponID *chain, CBasePlayer *player, WeaponIdType id)
 {
 	int slot = (player && player->IsPlayer()) ? player->entindex() : 0;
@@ -521,13 +477,12 @@ static CBaseEntity *hook_buy_weapon(IReGameHook_BuyWeaponByWeaponID *chain, CBas
 
 	bool cancelled = g_events.fire_weapon_buy(slot, weapon);
 	if (cancelled)
-		return nullptr;			// no charge, no weapon - same as buying nothing
+		return nullptr;			// no charge, no weapon
 
 	return chain->callNext(player, id);
 }
 
-// Ammo for whatever is currently in the player's hands, not a specific
-// weapon slot - weapon is that held item's own classname.
+// Ammo for whatever is in the player's hands.
 static bool hook_buy_gun_ammo(IReGameHook_BuyGunAmmo *chain, CBasePlayer *player,
 	CBasePlayerItem *weapon, bool bBlink)
 {
@@ -541,11 +496,8 @@ static bool hook_buy_gun_ammo(IReGameHook_BuyGunAmmo *chain, CBasePlayer *player
 	return chain->callNext(player, weapon, bBlink);
 }
 
-// Everything the buy menu sells that isn't a weapon: armor, NVGs, defuse
-// kit, shield, and (through the same menu slot) HE/flash/smoke. item is the
-// BuyItemMenuSlot the client sent - named here rather than left as a raw
-// number, same reason weapon/grenade events give a classname instead of a
-// WeaponIdType.
+// Everything the buy menu sells that isn't a weapon: armor, NVGs, defuse kit,
+// shield, and (through the same slot) HE/flash/smoke.
 static const char *buy_item_name(int item)
 {
 	switch (item) {
@@ -572,8 +524,7 @@ static void hook_buy_item(IReGameHook_BuyItem *chain, CBasePlayer *player, int i
 	chain->callNext(player, item);
 }
 
-// player.h's RewardType, named for Lua the same way buy_item_name() names
-// BuyItemMenuSlot - a plugin sees why the money moved, not a raw enum.
+// player.h's RewardType, named for Lua.
 static const char *reward_type_name(RewardType type)
 {
 	switch (type) {
@@ -619,10 +570,8 @@ static int hook_give_ammo(IReGameHook_CBasePlayer_GiveAmmo *chain, CBasePlayer *
 	return chain->callNext(player, iCount, pszName, iMax);
 }
 
-// Not the same path as p:give() (GiveNamedItemEx, a separate ReGameDLL API
-// call the SDK does not document as routing through this virtual) - whatever
-// else hands a player an item by classname: default round gear, an rcon
-// give, another mod's CBasePlayer::GiveNamedItem call.
+// Not the same path as p:give() (GiveNamedItemEx) - whatever else hands a
+// player an item by classname: default round gear, an rcon give, another mod.
 static CBaseEntity *hook_give_item(IReGameHook_CBasePlayer_GiveNamedItem *chain, CBasePlayer *player,
 	const char *pszName)
 {
@@ -630,7 +579,7 @@ static CBaseEntity *hook_give_item(IReGameHook_CBasePlayer_GiveNamedItem *chain,
 		return chain->callNext(player, pszName);
 
 	if (g_events.fire_item_give(player->entindex(), pszName ? pszName : ""))
-		return NULL;			// blocked: nothing created, nothing given
+		return NULL;			// blocked
 
 	return chain->callNext(player, pszName);
 }
@@ -655,11 +604,8 @@ static CBaseEntity *hook_drop_item(IReGameHook_CBasePlayer_DropPlayerItem *chain
 	return chain->callNext(player, pszItemName);
 }
 
-// CanHavePlayerItem's own comment in the SDK: "the player is touching an
-// CBasePlayerItem, do I give it to him?" - broader than a ground pickup,
-// whatever else asks this question before handing over an item goes through
-// here too. Pre-check only: cancelling forces "no", there is no way to force
-// a "yes" the game's own rules would not have given.
+// CanHavePlayerItem: "the player is touching an item, do I give it to him?" -
+// broader than a ground pickup. Pre-check only: cancelling forces "no".
 static BOOL hook_can_have_item(IReGameHook_CSGameRules_CanHavePlayerItem *chain,
 	CBasePlayer *player, CBasePlayerItem *item)
 {
@@ -672,9 +618,7 @@ static BOOL hook_can_have_item(IReGameHook_CSGameRules_CanHavePlayerItem *chain,
 	return chain->callNext(player, item);
 }
 
-// PlayerGotWeapon's own comment: "called each time a player picks up a
-// weapon from the ground" - unlike hook_give_item above, this is
-// specifically the ground-touch path.
+// PlayerGotWeapon: specifically the ground-touch pickup path.
 static void hook_got_weapon(IReGameHook_CSGameRules_PlayerGotWeapon *chain,
 	CBasePlayer *player, CBasePlayerItem *item)
 {
@@ -686,9 +630,8 @@ static void hook_got_weapon(IReGameHook_CSGameRules_PlayerGotWeapon *chain,
 	}
 }
 
-// Jump/Duck can't be blocked here - by the time this fires the engine has
-// already committed to the frame's movement, and skipping the chain would
-// leave player physics half-applied. Notify only.
+// Jump/Duck can't be blocked here - the engine has already committed to the
+// frame's movement. Notify only.
 static void hook_jump(IReGameHook_CBasePlayer_Jump *chain, CBasePlayer *player)
 {
 	chain->callNext(player);
@@ -722,18 +665,16 @@ static void hook_radio(IReGameHook_CBasePlayer_Radio *chain, CBasePlayer *player
 	bool cancelled = g_events.fire_player_radio(slot, radio_sentence ? radio_sentence : "",
 		sample ? sample : "");
 	if (cancelled)
-		return;					// no sound, no "Radio:" console line
+		return;					// no sound, no console line
 
 	chain->callNext(player, radio_sentence, sample, pitch, bSpecific);
 }
 
+// Pre-check only: cancelling forces "no". Cannot force a "yes".
 static BOOL hook_can_respawn(IReGameHook_CSGameRules_FPlayerCanRespawn *chain, CBasePlayer *player)
 {
 	int slot = (player && player->IsPlayer()) ? player->entindex() : 0;
 
-	// Pre-check only: cancelling forces "no" without ever asking the game's
-	// own rules. There is no way to force a "yes" the game would not have
-	// given on its own - this can only take away permission, not grant it.
 	if (g_events.fire_player_can_respawn(slot))
 		return FALSE;
 
@@ -765,8 +706,7 @@ static CGrenade *hook_throw_smoke_grenade(IReGameHook_ThrowSmokeGrenade *chain, 
 	return grenade;
 }
 
-// ThrowFlashbang has no usEvent parameter - the engine picks the flashbang's
-// own event internally, unlike ThrowHeGrenade/ThrowSmokeGrenade above.
+// ThrowFlashbang has no usEvent parameter - the engine picks it internally.
 static CGrenade *hook_throw_flashbang(IReGameHook_ThrowFlashbang *chain, entvars_t *pevOwner,
 	Vector &vecStart, Vector &vecVelocity, float time)
 {
@@ -792,7 +732,7 @@ static CGrenade *hook_plant_bomb(IReGameHook_PlantBomb *chain, entvars_t *pevOwn
 }
 
 // Fires whether the defuse finished or was interrupted; `success` tells them
-// apart, which is the whole point of hooking the end rather than the start.
+// apart.
 static void hook_defuse_end(IReGameHook_CGrenade_DefuseBombEnd *chain, CGrenade *bomb,
 	CBasePlayer *defuser, bool success)
 {
@@ -805,7 +745,6 @@ static void hook_defuse_end(IReGameHook_CGrenade_DefuseBombEnd *chain, CGrenade 
 static void hook_explode_bomb(IReGameHook_CGrenade_ExplodeBomb *chain, CGrenade *bomb,
 	TraceResult *ptr, int bitsDamageType)
 {
-	// Read the position before the chain runs - the entity is on its way out.
 	Vector where = bomb && bomb->pev ? bomb->pev->origin : Vector(0, 0, 0);
 
 	chain->callNext(bomb, ptr, bitsDamageType);
@@ -823,11 +762,9 @@ static int grenade_owner_slot(CGrenade *grenade)
 	return (idx >= 1 && idx < CSLUA_MAXPLAYERS) ? idx : 0;
 }
 
-// This is ExplodeHeGrenade specifically, not FireBullets or TakeDamage: an HE
-// grenade's blast never goes through either, so there was no way for a script
-// to tell "this player's HE just popped" from "the bomb just popped" short of
-// guessing off DMG_BLAST - which C4 sets too. Hooking the grenade's own
-// explode call sidesteps that entirely.
+// ExplodeHeGrenade specifically: an HE blast never goes through FireBullets or
+// TakeDamage, so this is the only way to tell "this player's HE popped" apart
+// from the bomb. Cancelling leaves the whole effect (entity removal too) to Lua.
 static void hook_explode_he_grenade(IReGameHook_CGrenade_ExplodeHeGrenade *chain, CGrenade *grenade,
 	TraceResult *ptr, int bitsDamageType)
 {
@@ -837,15 +774,12 @@ static void hook_explode_he_grenade(IReGameHook_CGrenade_ExplodeHeGrenade *chain
 
 	bool cancelled = g_events.fire_grenade_explode(owner, "weapon_hegrenade", index, where.x, where.y, where.z);
 	if (cancelled)
-		return;			// a script took the explosion over: no damage, no effects, no cleanup
+		return;
 
 	chain->callNext(grenade, ptr, bitsDamageType);
 }
 
-// Same idea as above, for the smoke grenade's own explode call. Cancelling
-// here does not free anyone from damage - smoke never dealt any - it only
-// stops the stock smoke cloud/sound so a script's own effect isn't fighting
-// the game's.
+// Smoke deals no damage: cancelling only stops the stock cloud/sound.
 static void hook_explode_smoke_grenade(IReGameHook_CGrenade_ExplodeSmokeGrenade *chain, CGrenade *grenade)
 {
 	Vector where = grenade && grenade->pev ? grenade->pev->origin : Vector(0, 0, 0);
@@ -859,9 +793,8 @@ static void hook_explode_smoke_grenade(IReGameHook_CGrenade_ExplodeSmokeGrenade 
 	chain->callNext(grenade);
 }
 
-// Same idea as hook_explode_smoke_grenade: flashbang deals no direct damage,
-// so cancelling only skips the stock blind/deafen effect and pop sound, not
-// any TakeDamage call.
+// Flashbang deals no direct damage: cancelling only skips the blind/deafen and
+// the pop sound.
 static void hook_explode_flashbang(IReGameHook_CGrenade_ExplodeFlashbang *chain, CGrenade *grenade,
 	TraceResult *ptr, int bitsDamageType)
 {
@@ -884,8 +817,6 @@ static void hook_disappear(IReGameHook_CBasePlayer_Disappear *chain, CBasePlayer
 		g_events.fire_player_disappear(player->entindex());
 }
 
-// lua_player.cpp has its own static team_name() for the same job - it isn't
-// reachable from here, so this is a small local twin rather than an export.
 static const char *team_name_of(TeamName team)
 {
 	switch (team) {
@@ -896,9 +827,7 @@ static const char *team_name_of(TeamName team)
 	}
 }
 
-// Pre-check only: cancelling forces "no" without ever asking the game's own
-// rules. There is no way to force a "yes" the game would not have given on
-// its own - this can only take away permission, not grant it.
+// Pre-check only: cancelling forces "no". Cannot force a "yes".
 static bool hook_can_switch_team(IReGameHook_CBasePlayer_CanSwitchTeam *chain, CBasePlayer *player, TeamName team)
 {
 	int slot = (player && player->IsPlayer()) ? player->entindex() : 0;
@@ -927,8 +856,7 @@ static CBaseEntity *hook_shield_drop(IReGameHook_CBasePlayer_DropShield *chain, 
 	return result;
 }
 
-// Notify only - this does not decide who carries the bomb, only reports who
-// the game already picked.
+// Notify only - reports who the game already picked.
 static CBasePlayer *hook_give_c4(IReGameHook_CSGameRules_GiveC4 *chain)
 {
 	CBasePlayer *result = chain->callNext();
@@ -945,8 +873,7 @@ static void hook_remove_guns(IReGameHook_CSGameRules_RemoveGuns *chain)
 	g_events.fire_round_remove_guns();
 }
 
-// mode is a return value, not an input - the default is only known after
-// asking the chain, so this reads it back rather than passing one in.
+// mode is a return value, not an input.
 static int hook_dead_weapons(IReGameHook_CSGameRules_DeadPlayerWeapons *chain, CBasePlayer *player)
 {
 	int slot = (player && player->IsPlayer()) ? player->entindex() : 0;
@@ -991,8 +918,7 @@ static void hook_add_points(IReGameHook_CBasePlayer_AddPoints *chain, CBasePlaye
 	chain->callNext(player, new_score, allow_negative ? TRUE : FALSE);
 }
 
-// Same shape as hook_add_points, for the team's score rather than the
-// player's own - player here is only who triggered the call.
+// Same shape, for the team's score. player is only who triggered the call.
 static void hook_add_points_to_team(IReGameHook_CBasePlayer_AddPointsToTeam *chain, CBasePlayer *player,
 	int score, BOOL bAllowNegativeScore)
 {
@@ -1016,8 +942,7 @@ static void hook_cleanup_map(IReGameHook_CSGameRules_CleanUpMap *chain)
 	g_events.fire_round_cleanup();
 }
 
-// infobuffer is deliberately never forwarded to Lua - p:info(key) is the
-// safe way to read specific keys out of it.
+// infobuffer is never forwarded to Lua - p:info(key) is the safe reader.
 static void hook_userinfo_changed(IReGameHook_CSGameRules_ClientUserInfoChanged *chain,
 	CBasePlayer *player, char *infobuffer)
 {
@@ -1027,8 +952,7 @@ static void hook_userinfo_changed(IReGameHook_CSGameRules_ClientUserInfoChanged 
 		g_events.fire_player_userinfo_change(player->entindex());
 }
 
-// Pre-check only: cancelling forces "no" without ever asking the game's own
-// rules, same contract as hook_can_switch_team above.
+// Pre-check only: cancelling forces "no".
 static bool hook_can_hear_player(IReGameHook_CSGameRules_CanPlayerHearPlayer *chain,
 	CBasePlayer *pListener, CBasePlayer *pSender)
 {
@@ -1050,9 +974,8 @@ static void hook_choose_appearance(IReGameHook_HandleMenu_ChooseAppearance *chai
 		g_events.fire_player_choose_model(player->entindex(), slot);
 }
 
-// slot is the menu item chosen, not a TeamName. The real team switch happens
-// inside this call, so a pre-cancel prevents it entirely rather than
-// reverting it after the fact - same contract as hook_can_respawn.
+// slot is the menu item, not a TeamName. The real switch happens inside this
+// call, so a pre-cancel prevents it entirely.
 static BOOL hook_choose_team(IReGameHook_HandleMenu_ChooseTeam *chain, CBasePlayer *player, int slot)
 {
 	int pslot = (player && player->IsPlayer()) ? player->entindex() : 0;
@@ -1063,11 +986,9 @@ static BOOL hook_choose_team(IReGameHook_HandleMenu_ChooseTeam *chain, CBasePlay
 	return chain->callNext(player, slot);
 }
 
-// RoundRespawn is the actual per-player reset for a new round (position,
-// health, weapons kept or not, team-kill punishment) - not to be confused
-// with hook_spawn (CBasePlayer_Spawn), which fires for a player's very
-// first spawn too. Pre-cancel: skipping the chain entirely leaves this
-// player exactly as they were, no reset at all for this round.
+// RoundRespawn is the per-player reset for a new round - not hook_spawn, which
+// also fires for a player's very first spawn. Pre-cancel leaves this player as
+// they were, no reset for this round.
 static void hook_round_respawn(IReGameHook_CBasePlayer_RoundRespawn *chain, CBasePlayer *player)
 {
 	if (!player || !player->IsPlayer()) {
@@ -1081,10 +1002,8 @@ static void hook_round_respawn(IReGameHook_CBasePlayer_RoundRespawn *chain, CBas
 	chain->callNext(player);
 }
 
-// GiveDefaultItems starts by stripping whatever the player is currently
-// holding (RemoveAllItems), then hands out the round's standard loadout.
-// Cancelling here skips both halves - nothing is taken away, nothing new is
-// given - not just the gift.
+// GiveDefaultItems starts by stripping the current inventory, then hands out
+// the loadout. Cancelling skips both halves.
 static void hook_give_default_items(IReGameHook_CBasePlayer_GiveDefaultItems *chain, CBasePlayer *player)
 {
 	if (!player || !player->IsPlayer()) {
@@ -1098,12 +1017,9 @@ static void hook_give_default_items(IReGameHook_CBasePlayer_GiveDefaultItems *ch
 	chain->callNext(player);
 }
 
-// Which chains we currently hold a hook on.
-//
-// registerHook is fatal when the same handler is added twice - ReGameDLL kills
-// the server outright - and `lua_reload <plugin>` calls this again with the
-// rest of the plugins still loaded. unregisterHook is the forgiving one, so
-// only the install side needs remembering.
+// Which chains we currently hold a hook on. registerHook is fatal when the same
+// handler is added twice; unregisterHook is forgiving, so only the install side
+// needs remembering.
 enum HookSlot
 {
 	HOOK_SPAWN,
@@ -1171,8 +1087,7 @@ enum HookSlot
 
 static bool s_installed[HOOK_COUNT];
 
-// Brings one chain in line with whether anything listens for it. Templated
-// because every chain is its own type; the body is the same for all of them.
+// Brings one chain in line with whether anything listens for it.
 template <typename Chain, typename Handler>
 static void sync_hook(HookSlot slot, Chain *chain, Handler handler, bool want)
 {
@@ -1187,10 +1102,8 @@ static void sync_hook(HookSlot slot, Chain *chain, Handler handler, bool want)
 	s_installed[slot] = want;
 }
 
-// Called after every load and after every single-plugin reload. Only hooks
-// what someone is listening for - a hookchain has a per-frame cost even when
-// the callback does nothing - and drops one whose last listener just went
-// away with the plugin that owned it.
+// Called after every load and every single-plugin reload. Only hooks what
+// someone listens for - a hookchain has a per-frame cost even when idle.
 void cslua_regamedll_install_hooks()
 {
 	if (!s_hooks)
@@ -1370,8 +1283,7 @@ void cslua_regamedll_remove_hooks()
 	if (!s_hooks)
 		return;
 
-	// unregisterHook is a no-op for a hook that was never registered, so it is
-	// safe to blanket-remove on reload.
+	// unregisterHook is a no-op for a hook that was never registered.
 	s_hooks->CBasePlayer_Spawn()->unregisterHook(&hook_spawn);
 	s_hooks->CBasePlayer_TakeDamage()->unregisterHook(&hook_takedamage);
 	s_hooks->CBasePlayer_Killed()->unregisterHook(&hook_killed);

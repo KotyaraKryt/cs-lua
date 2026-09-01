@@ -1,6 +1,5 @@
-// RTLD_NOLOAD is a GNU extension, and it is the whole point of the module
-// lookup below: we want a handle to what is already there, never a load.
-// g++ defines this for us already; a bare #define would warn about that.
+// RTLD_NOLOAD is a GNU extension and the whole point of the module lookup
+// below. g++ defines _GNU_SOURCE already; a bare #define would warn.
 #if !defined(_WIN32) && !defined(_GNU_SOURCE)
 	#define _GNU_SOURCE
 #endif
@@ -20,8 +19,7 @@
 
 #ifdef _WIN32
 
-// The dedicated server keeps the engine in swds.dll; the listen-server builds
-// keep it in hw.dll (hardware) or sw.dll (software renderer).
+// swds.dll = dedicated server; hw.dll / sw.dll = listen-server builds.
 const char *const CSLUA_ENGINE_MODULES[] = { "swds.dll", "hw.dll", "sw.dll", NULL };
 
 bool cslua_file_exists(const std::string &path)
@@ -35,7 +33,6 @@ bool cslua_make_dir(const std::string &path)
 	if (CreateDirectoryA(path.c_str(), NULL))
 		return true;
 
-	// A directory that is already there is the normal case, not a failure.
 	return GetLastError() == ERROR_ALREADY_EXISTS;
 }
 
@@ -72,14 +69,11 @@ void *cslua_module_symbol(void *handle, const char *symbol)
 
 void cslua_module_close(void *)
 {
-	// GetModuleHandle does not take a reference, so there is nothing to give
-	// back. Kept so callers read the same on both platforms.
+	// GetModuleHandle takes no reference, so nothing to give back.
 }
 
 #else	// Linux
 
-// ReHLDS ships engine_i486.so; stock HLDS has carried a few other names over
-// the years, and 64-bit builds use the amd64 one.
 const char *const CSLUA_ENGINE_MODULES[] = {
 	"engine_i486.so", "engine_i686.so", "engine_amd64.so", "engine.so", NULL
 };
@@ -95,7 +89,6 @@ bool cslua_make_dir(const std::string &path)
 	if (mkdir(path.c_str(), 0755) == 0)
 		return true;
 
-	// A directory that is already there is the normal case, not a failure.
 	struct stat st;
 	return stat(path.c_str(), &st) == 0 && S_ISDIR(st.st_mode);
 }
@@ -113,8 +106,7 @@ bool cslua_list_dir(const std::string &path, std::vector<CsLuaDirEntry> &out)
 		CsLuaDirEntry entry;
 		entry.name = e->d_name;
 
-		// d_type is an optimisation, not a guarantee: some filesystems answer
-		// DT_UNKNOWN and the only way left is to ask the file itself.
+		// d_type is an optimisation, not a guarantee: DT_UNKNOWN needs a stat.
 		if (e->d_type == DT_DIR) {
 			entry.is_dir = true;
 		} else if (e->d_type == DT_UNKNOWN) {
@@ -132,9 +124,8 @@ bool cslua_list_dir(const std::string &path, std::vector<CsLuaDirEntry> &out)
 	return true;
 }
 
-// dlopen(RTLD_NOLOAD) matches on the name the library was opened with, and the
-// engine was opened by path, not by basename. So for a bare name we look up
-// what the process actually has mapped and hand dlopen the full path it knows.
+// dlopen(RTLD_NOLOAD) matches on the name a library was opened with, and the
+// engine was opened by path. For a bare name, find what the process has mapped.
 static std::string mapped_path_of(const char *basename)
 {
 	FILE *maps = fopen("/proc/self/maps", "r");
@@ -146,7 +137,6 @@ static std::string mapped_path_of(const char *basename)
 	size_t len = strlen(basename);
 
 	while (fgets(line, sizeof line, maps)) {
-		// Every mapping backed by a file ends in its absolute path.
 		char *slash = strrchr(line, '/');
 		if (!slash)
 			continue;
@@ -171,17 +161,14 @@ void *cslua_module_open(const char *name)
 	if (!name || !*name)
 		return NULL;
 
-	// A path we were handed (metamod knows exactly which file it loaded as the
-	// game DLL) is worth trying as it came.
 	if (strchr(name, '/')) {
 		void *handle = dlopen(name, RTLD_NOW | RTLD_NOLOAD);
 		if (handle)
 			return handle;
 	}
 
-	// That can miss: the loader matches on the string a library was opened
-	// with, and metamod may hand us a differently spelled path to the same
-	// file. So fall back to the file name and ask the process what it has.
+	// metamod may hand a differently spelled path to the same file; fall back
+	// to the basename and ask the process what it has.
 	const char *slash = strrchr(name, '/');
 	std::string path = mapped_path_of(slash ? slash + 1 : name);
 	if (path.empty())
@@ -197,8 +184,7 @@ void *cslua_module_symbol(void *handle, const char *symbol)
 
 void cslua_module_close(void *handle)
 {
-	// RTLD_NOLOAD still takes a reference; give it back. Whoever loaded the
-	// module for real keeps it alive, so symbols stay valid.
+	// RTLD_NOLOAD still takes a reference; give it back.
 	if (handle)
 		dlclose(handle);
 }
