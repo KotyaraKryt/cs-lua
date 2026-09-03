@@ -1,6 +1,0 @@
-node_modules/
-# build и build-preview: превью для тестовой машины собирается сюда же.
-build*/
-.docusaurus/
-.cache-loader/
-*.log
