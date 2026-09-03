@@ -775,6 +775,37 @@ void enqueue_request(Request &req)
 // ---------------------------------------------------------------------------
 // CRUD helpers
 
+// Appends "<sep>col = ?" per key/value pair of the table on top of the
+// stack - `first` for the first pair, `rest` for every one after - and one
+// Param per value, in the same order find/create/update/delete each
+// hand-rolled this loop to build a WHERE or SET clause from a Lua table.
+// Table is left on the stack; caller's job to pop it. Returns how many pairs
+// got appended, so the caller can decide whether zero counts as an error.
+int append_assignments(lua_State *L, const char *first, const char *rest,
+	std::string &sql, std::vector<Param> &params, const char *fn_name, const char *what)
+{
+	int table_idx = lua_gettop(L);
+	int n = 0;
+
+	lua_pushnil(L);
+	while (lua_next(L, table_idx) != 0) {
+		if (!lua_isstring(L, -2))
+			luaL_error(L, "%s: %s keys must be strings", fn_name, what);
+		const char *col = lua_tostring(L, -2);
+		if (!valid_ident(col))
+			luaL_error(L, "%s: invalid column '%s'", fn_name, col);
+
+		sql += (n == 0) ? first : rest;
+		sql += col;
+		sql += " = ?";
+		params.push_back(to_param(L, -1));
+		lua_pop(L, 1);
+		n++;
+	}
+
+	return n;
+}
+
 // conn:find(table, opts, fn)
 int l_find(lua_State *L)
 {
@@ -815,27 +846,8 @@ int l_find(lua_State *L)
 	sql += table;
 
 	lua_getfield(L, 3, "where");
-	if (lua_istable(L, -1)) {
-		bool first = true;
-		lua_pushnil(L);
-		while (lua_next(L, -2) != 0) {
-			if (!lua_isstring(L, -2))
-				return luaL_error(L, "conn:find: where keys must be strings");
-			const char *col = lua_tostring(L, -2);
-			if (!valid_ident(col))
-				return luaL_error(L, "conn:find: invalid column '%s'", col);
-			if (first) {
-				sql += " WHERE ";
-				first = false;
-			} else {
-				sql += " AND ";
-			}
-			sql += col;
-			sql += " = ?";
-			params.push_back(to_param(L, -1));
-			lua_pop(L, 1);
-		}
-	}
+	if (lua_istable(L, -1))
+		append_assignments(L, " WHERE ", " AND ", sql, params, "conn:find", "where");
 	lua_pop(L, 1);
 
 	lua_getfield(L, 3, "order");
@@ -979,55 +991,16 @@ int l_update(lua_State *L)
 	lua_getfield(L, 3, "set");
 	if (!lua_istable(L, -1))
 		return luaL_error(L, "conn:update: opts.set table required");
-
-	bool first = true;
-	lua_pushnil(L);
-	while (lua_next(L, -2) != 0) {
-		if (!lua_isstring(L, -2))
-			return luaL_error(L, "conn:update: set keys must be strings");
-		const char *col = lua_tostring(L, -2);
-		if (!valid_ident(col))
-			return luaL_error(L, "conn:update: invalid column '%s'", col);
-		if (!first)
-			sql += ", ";
-		first = false;
-		sql += col;
-		sql += " = ?";
-		params.push_back(to_param(L, -1));
-		lua_pop(L, 1);
-	}
-	lua_pop(L, 1);
-
-	if (first)
+	if (append_assignments(L, "", ", ", sql, params, "conn:update", "set") == 0)
 		return luaL_error(L, "conn:update: opts.set is empty");
+	lua_pop(L, 1);
 
 	lua_getfield(L, 3, "where");
 	if (!lua_istable(L, -1))
 		return luaL_error(L, "conn:update: opts.where table required");
-
-	first = true;
-	lua_pushnil(L);
-	while (lua_next(L, -2) != 0) {
-		if (!lua_isstring(L, -2))
-			return luaL_error(L, "conn:update: where keys must be strings");
-		const char *col = lua_tostring(L, -2);
-		if (!valid_ident(col))
-			return luaL_error(L, "conn:update: invalid column '%s'", col);
-		if (first) {
-			sql += " WHERE ";
-			first = false;
-		} else {
-			sql += " AND ";
-		}
-		sql += col;
-		sql += " = ?";
-		params.push_back(to_param(L, -1));
-		lua_pop(L, 1);
-	}
-	lua_pop(L, 1);
-
-	if (first)
+	if (append_assignments(L, " WHERE ", " AND ", sql, params, "conn:update", "where") == 0)
 		return luaL_error(L, "conn:update: opts.where is empty");
+	lua_pop(L, 1);
 
 	Request req;
 	req.id = s_next_id++;
@@ -1063,30 +1036,9 @@ int l_delete(lua_State *L)
 	lua_getfield(L, 3, "where");
 	if (!lua_istable(L, -1))
 		return luaL_error(L, "conn:delete: opts.where table required");
-
-	bool first = true;
-	lua_pushnil(L);
-	while (lua_next(L, -2) != 0) {
-		if (!lua_isstring(L, -2))
-			return luaL_error(L, "conn:delete: where keys must be strings");
-		const char *col = lua_tostring(L, -2);
-		if (!valid_ident(col))
-			return luaL_error(L, "conn:delete: invalid column '%s'", col);
-		if (first) {
-			sql += " WHERE ";
-			first = false;
-		} else {
-			sql += " AND ";
-		}
-		sql += col;
-		sql += " = ?";
-		params.push_back(to_param(L, -1));
-		lua_pop(L, 1);
-	}
-	lua_pop(L, 1);
-
-	if (first)
+	if (append_assignments(L, " WHERE ", " AND ", sql, params, "conn:delete", "where") == 0)
 		return luaL_error(L, "conn:delete: opts.where is empty");
+	lua_pop(L, 1);
 
 	Request req;
 	req.id = s_next_id++;
@@ -1287,20 +1239,10 @@ const luaL_Reg s_api_ns[] =
 
 void cslua_register_mysql(lua_State *L)
 {
-	lua_newtable(L);
-
-	lua_newtable(L);
-	for (const luaL_Reg *r = s_conn_methods; r->name; r++) {
-		lua_pushcfunction(L, r->func);
-		lua_setfield(L, -2, r->name);
-	}
-	lua_setfield(L, -2, "__index");
+	cslua_push_metatable(L, s_conn_methods);
 
 	lua_pushcfunction(L, l_readonly);
 	lua_setfield(L, -2, "__newindex");
-
-	lua_pushboolean(L, 0);
-	lua_setfield(L, -2, "__metatable");
 
 	s_mysql_mt_ref = luaL_ref(L, LUA_REGISTRYINDEX);
 

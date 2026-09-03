@@ -749,20 +749,10 @@ static const luaL_Reg s_stmt_methods[] =
 
 static int push_metatable(lua_State *L, const luaL_Reg *methods)
 {
-	lua_newtable(L);
-
-	lua_newtable(L);
-	for (const luaL_Reg *r = methods; r->name; r++) {
-		lua_pushcfunction(L, r->func);
-		lua_setfield(L, -2, r->name);
-	}
-	lua_setfield(L, -2, "__index");
+	cslua_push_metatable(L, methods);
 
 	lua_pushcfunction(L, l_readonly);
 	lua_setfield(L, -2, "__newindex");
-
-	lua_pushboolean(L, 0);
-	lua_setfield(L, -2, "__metatable");
 
 	return luaL_ref(L, LUA_REGISTRYINDEX);
 }

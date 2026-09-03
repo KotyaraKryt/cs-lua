@@ -35,7 +35,7 @@ cstrike/addons/lua/
   - addons/
     - lua/
       - core/
-      - include/
+      - lib/
       - lua_mm.dll
 
 </FileTree>
@@ -44,7 +44,7 @@ cstrike/
 └── addons/
     └── lua/
         ├── core/
-        ├── include/
+        ├── lib/
         └── lua_mm.dll
 ```
 <Tip>Для Linux вместо `lua_mm.dll` используется `lua_mm_i386.so`.</Tip>

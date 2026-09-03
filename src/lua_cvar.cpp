@@ -154,16 +154,7 @@ static int l_cvar_register(lua_State *L)
 
 void cslua_register_cvar(lua_State *L)
 {
-	lua_newtable(L);
-	lua_newtable(L);
-	for (const luaL_Reg *r = s_cvar_methods; r->name; r++) {
-		lua_pushcfunction(L, r->func);
-		lua_setfield(L, -2, r->name);
-	}
-	lua_setfield(L, -2, "__index");
-	lua_pushboolean(L, 0);
-	lua_setfield(L, -2, "__metatable");
-	s_cvar_mt_ref = luaL_ref(L, LUA_REGISTRYINDEX);
+	s_cvar_mt_ref = cslua_register_metatable(L, s_cvar_methods);
 
 	static const luaL_Reg s_api[] =
 	{

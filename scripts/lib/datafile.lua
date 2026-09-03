@@ -7,8 +7,7 @@
 -- a set of chat prefixes. Hand edits survive, comments do not.
 --
 -- For anything counted in thousands of rows, or written on every frag, use
--- require("store") instead - it is a key-value store on SQLite and does not
--- rewrite the whole file to change one number.
+-- db.open() instead - SQLite changes one row without rewriting the whole file.
 --
 -- The module's own load/save work on addons/lua/data/, which is where the
 -- access list lives. A plugin wants its own corner instead:
@@ -64,6 +63,10 @@ local function load_from(dir, name, fallback)
 		return fallback, nil
 	end
 	return load_file(file)
+end
+
+local function exists_at(dir, name)
+	return exists(path(dir, name))
 end
 
 local function is_array(t)
@@ -186,6 +189,7 @@ function datafile.at(dir)
 		serialize = serialize,
 		load = function(name, fallback) return load_from(dir, name, fallback) end,
 		save = function(name, t, header) return save_to(dir, name, t, header) end,
+		exists = function(name) return exists_at(dir, name) end,
 	}
 end
 
@@ -195,6 +199,10 @@ end
 
 function datafile.save(name, t, header)
 	return save_to(DIR, name, t, header)
+end
+
+function datafile.exists(name)
+	return exists_at(DIR, name)
 end
 
 function datafile.dir()

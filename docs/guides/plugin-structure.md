@@ -15,7 +15,7 @@ description: "Как устроены Lua-плагины, их файлы, ок�
       </Tree.Folder>
     </Tree.Folder>
     <Tree.Folder name="core" />
-    <Tree.Folder name="include" />
+    <Tree.Folder name="lib" />
   </Tree.Folder>
 </Tree>
 
@@ -63,10 +63,10 @@ end, { source = "chat" })
     Файлы из `core/` определяют общие функции и API, доступные плагинам.
   </Accordion>
 
-  <Accordion title="include/">
+  <Accordion title="lib/">
     Содержит общие Lua-модули, которые можно подключать через `require()`.
 
-    В отличие от `core/`, файлы из `include/` не загружаются автоматически.
+    В отличие от `core/`, файлы из `lib/` не загружаются автоматически.
   </Accordion>
 
   <Accordion title="plugins/">
@@ -78,7 +78,7 @@ end, { source = "chat" })
 
 Для подключения Lua-модулей используется стандартная функция `require()`.
 
-Модули плагина ищутся сначала в его собственной папке, а затем в общей директории `addons/lua/include/`.
+Модули плагина ищутся сначала в его собственной папке, а затем в общей директории `addons/lua/lib/`.
 
 Например, если структура плагина выглядит так:
 
@@ -97,7 +97,7 @@ plugins/
 local Session = require("lib.sessions")
 ```
 
-Общие модули из `include/` подключаются таким же образом:
+Общие модули из `lib/` подключаются таким же образом:
 
 ```lua
 local class = require("class")

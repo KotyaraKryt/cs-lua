@@ -66,7 +66,7 @@ Slot *slot_for(edict_t *e, bool create)
 
 void cslua_visibility_set(edict_t *e, int recipient, const CsluaRenderOverride &values)
 {
-	if (recipient < 1 || recipient >= CSLUA_MAXPLAYERS)
+	if (!cslua_valid_player_id(recipient))
 		return;
 
 	Slot *slot = slot_for(e, /*create=*/true);
@@ -82,7 +82,7 @@ void cslua_visibility_set(edict_t *e, int recipient, const CsluaRenderOverride &
 
 void cslua_visibility_clear(edict_t *e, int recipient)
 {
-	if (recipient < 1 || recipient >= CSLUA_MAXPLAYERS)
+	if (!cslua_valid_player_id(recipient))
 		return;
 
 	Slot *slot = slot_for(e, /*create=*/false);
@@ -98,7 +98,7 @@ void cslua_visibility_clear(edict_t *e, int recipient)
 
 bool cslua_visibility_get(edict_t *e, int recipient, CsluaRenderOverride &out)
 {
-	if (recipient < 1 || recipient >= CSLUA_MAXPLAYERS)
+	if (!cslua_valid_player_id(recipient))
 		return false;
 
 	Slot *slot = slot_for(e, /*create=*/false);
@@ -122,7 +122,7 @@ void cslua_visibility_apply(entity_state_s *state, int index, edict_t *ent, edic
 		return;
 
 	int recipient = ENTINDEX(host);
-	if (recipient < 1 || recipient >= CSLUA_MAXPLAYERS)
+	if (!cslua_valid_player_id(recipient))
 		return;
 
 	const Row &row = slot.rows[recipient];

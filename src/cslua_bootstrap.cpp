@@ -11,7 +11,7 @@ namespace {
 
 const char *const REPO = "KotyaraKryt/cs-lua";
 
-// core/, include/ and data/ have never had subfolders, so a flat hand-kept
+// core/, lib/ and data/ have never had subfolders, so a flat hand-kept
 // list. Add a line here when a file is added to one of these three folders.
 struct BootstrapFile
 {
@@ -28,12 +28,13 @@ const BootstrapFile FILES[] =
 	{ "core", "i18n.lua" },
 	{ "core", "perms.lua" },
 	{ "core", "ui.lua" },
-	{ "include", "class.lua" },
-	{ "include", "color.lua" },
-	{ "include", "datafile.lua" },
-	{ "include", "json.lua" },
-	{ "include", "store.lua" },
-	{ "include", "text.lua" },
+	{ "lib", "class.lua" },
+	{ "lib", "color.lua" },
+	{ "lib", "datafile.lua" },
+	{ "lib", "json.lua" },
+	{ "lib", "store.lua" },
+	{ "lib", "text.lua" },
+	{ "lib", "util.lua" },
 	{ "data", "groups.lua" },
 	{ "data", "users.lua" },
 };
@@ -92,7 +93,7 @@ void cslua_bootstrap_if_missing()
 
 	if (!cslua_http_get_sync(api_url, api_headers, 10000, body, status, error) || status != 200) {
 		cslua_error("bootstrap: could not reach github.com (%s) - copy scripts/core, "
-			"scripts/include and scripts/data from the repo into addons/lua by hand",
+			"scripts/lib and scripts/data from the repo into addons/lua by hand",
 			!error.empty() ? error.c_str() : "request failed");
 		return;
 	}
@@ -105,7 +106,7 @@ void cslua_bootstrap_if_missing()
 
 	cslua_make_dir(cslua_base_dir());
 	cslua_make_dir(cslua_base_dir() + "/core");
-	cslua_make_dir(cslua_base_dir() + "/include");
+	cslua_make_dir(cslua_base_dir() + "/lib");
 	cslua_make_dir(cslua_base_dir() + "/data");
 
 	int done = 0, failed = 0;
@@ -137,7 +138,7 @@ void cslua_bootstrap_if_missing()
 		}
 	}
 
-	// data/ is seed content, not a hard requirement; core/ and include/ are.
+	// data/ is seed content, not a hard requirement; core/ and lib/ are.
 	if (failed == 0)
 		cslua_print("bootstrap: installed %d file(s) from release %s", done, tag.c_str());
 	else

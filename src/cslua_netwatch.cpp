@@ -57,7 +57,7 @@ static Slot s_slots[CSLUA_MAXPLAYERS];
 // hooks only give bytes, not the destination.
 static int s_active_id = 0;
 
-static bool valid(int id) { return id >= 1 && id < CSLUA_MAXPLAYERS; }
+static bool valid(int id) { return cslua_valid_player_id(id); }
 
 // Builtin (non-user) message opcodes, in engine order (see metamod-r's
 // mutil.cpp). Values at or above this table's length are custom usermessages.

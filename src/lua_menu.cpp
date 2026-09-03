@@ -85,7 +85,7 @@ static int l_show_menu(lua_State *L)
 	int time = (int)luaL_optinteger(L, 3, -1);
 	const char *text = luaL_checkstring(L, 4);
 
-	if (id < 1 || id >= CSLUA_MAXPLAYERS)
+	if (!cslua_valid_player_id(id))
 		return luaL_error(L, "menu._show: player index %d out of range", id);
 
 	if (!g_players.is_connected(id))
@@ -105,7 +105,7 @@ static int l_close_menu(lua_State *L)
 {
 	int id = (int)luaL_checkinteger(L, 1);
 
-	if (id < 1 || id >= CSLUA_MAXPLAYERS)
+	if (!cslua_valid_player_id(id))
 		return luaL_error(L, "menu._close: player index %d out of range", id);
 
 	if (g_players.is_connected(id))
@@ -117,7 +117,7 @@ static int l_close_menu(lua_State *L)
 
 void cslua_menu_reset(int id)
 {
-	if (id >= 1 && id < CSLUA_MAXPLAYERS)
+	if (cslua_valid_player_id(id))
 		forget_menu(id);
 }
 
@@ -126,7 +126,7 @@ bool cslua_menu_handle_select(int id, const char *cmd)
 	if (strcmp(cmd, "menuselect"))
 		return false;
 
-	if (id < 1 || id >= CSLUA_MAXPLAYERS || !s_menu_open[id])
+	if (!cslua_valid_player_id(id) || !s_menu_open[id])
 		return false;			// not ours
 
 	// Timed out and gone from the screen - the key belongs to the game now.

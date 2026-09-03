@@ -94,14 +94,29 @@ void cslua_error(const char *fmt, ...)
 	va_end(ap);
 }
 
-const std::string &cslua_base_dir()
+static const std::string &game_dir()
 {
 	static std::string dir;
 	if (dir.empty()) {
 		const char *gamedir = GET_GAME_INFO(PLID, GINFO_GAMEDIR);
 		dir = gamedir ? gamedir : ".";
-		dir += "/addons/lua";
 	}
+	return dir;
+}
+
+const std::string &cslua_base_dir()
+{
+	static std::string dir;
+	if (dir.empty())
+		dir = game_dir() + "/addons/lua";
+	return dir;
+}
+
+const std::string &cslua_maps_dir()
+{
+	static std::string dir;
+	if (dir.empty())
+		dir = game_dir() + "/maps";
 	return dir;
 }
 

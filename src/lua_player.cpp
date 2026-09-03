@@ -37,7 +37,7 @@ static int self_id(lua_State *L)
 	int id = (int)lua_tointeger(L, -1);
 	lua_pop(L, 1);
 
-	if (id < 0 || id >= CSLUA_MAXPLAYERS)
+	if (!cslua_valid_player_or_broadcast_id(id))
 		return luaL_error(L, "p: player index %d out of range", id);
 
 	// "id" is a plain table field, so __newindex (l_readonly) never fires for
@@ -154,7 +154,7 @@ static int l_ping(lua_State *L)
 
 void cslua_player_reset_ping(int id)
 {
-	if (id >= 0 && id < CSLUA_MAXPLAYERS) {
+	if (cslua_valid_player_or_broadcast_id(id)) {
 		s_last_ping[id] = 0;
 		s_last_loss[id] = 0;
 	}
@@ -312,7 +312,7 @@ void cslua_push_trace_result(lua_State *L, const TraceResult &tr, const Vector &
 	const char *kind;
 	if (tr.flFraction >= 1.0f && hit_index <= 0) {
 		kind = "none";
-	} else if (hit_index >= 1 && hit_index < CSLUA_MAXPLAYERS && g_players.is_connected(hit_index)) {
+	} else if (cslua_valid_player_id(hit_index) && g_players.is_connected(hit_index)) {
 		kind = "player";
 		cslua_push_player(L, hit_index);
 		lua_setfield(L, -2, "player");
@@ -377,7 +377,7 @@ static int l_trace_to(lua_State *L)
 	int other_id = (int)lua_tointeger(L, -1);
 	lua_pop(L, 1);
 
-	if (other_id <= 0 || other_id >= CSLUA_MAXPLAYERS || !g_players.is_connected(other_id))
+	if (!cslua_valid_player_id(other_id) || !g_players.is_connected(other_id))
 		return luaL_error(L, "p:trace_to: target player is not connected");
 
 	edict_t *other_edict = g_engfuncs.pfnPEntityOfEntIndex(other_id);
@@ -1562,7 +1562,7 @@ void cslua_player_shutdown()
 
 void cslua_push_player(lua_State *L, int id)
 {
-	if (id < 1 || id >= CSLUA_MAXPLAYERS || s_player_ref[id] == LUA_NOREF) {
+	if (!cslua_valid_player_id(id) || s_player_ref[id] == LUA_NOREF) {
 		lua_pushnil(L);
 		return;
 	}

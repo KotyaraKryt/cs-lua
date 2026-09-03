@@ -99,7 +99,7 @@ static void Hook_MessageEnd(void)
 			lua_setfield(L, -2, "dest");
 
 			int idx = (m.target && !m.target->free) ? ENTINDEX(m.target) : -1;
-			if (idx >= 1 && idx < CSLUA_MAXPLAYERS && g_players.is_connected(idx))
+			if (cslua_valid_player_id(idx) && g_players.is_connected(idx))
 				cslua_push_player(L, idx);
 			else
 				lua_pushnil(L);

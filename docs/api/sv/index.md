@@ -25,6 +25,8 @@ print("Карта: " .. sv.map() .. ", время раунда: " .. sv.cvar("mp
 |---|---|
 | [`sv.time`](server.md#time) | Серверные часы в секундах |
 | [`sv.map`](server.md#map) | Имя текущей карты |
+| [`sv.maps`](server.md#maps) | Список карт, установленных на сервере |
+| [`sv.map_exists`](server.md#map_exists) | Есть ли карта на диске |
 | [`sv.cmd`](server.md#cmd) | Ставит команду в очередь серверной консоли |
 
 ## Cvar

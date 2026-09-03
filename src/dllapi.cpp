@@ -301,7 +301,7 @@ void cslua_reset_team_cache()
 
 void cslua_forget_team(int id)
 {
-	if (id >= 0 && id < CSLUA_MAXPLAYERS)
+	if (cslua_valid_player_or_broadcast_id(id))
 		s_team[id] = NULL;
 }
 

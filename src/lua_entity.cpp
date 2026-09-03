@@ -457,7 +457,7 @@ static int l_attach(lua_State *L)
 	int id = (int)lua_tointeger(L, -1);
 	lua_pop(L, 1);
 
-	if (id <= 0 || id >= CSLUA_MAXPLAYERS)
+	if (!cslua_valid_player_id(id))
 		return luaL_error(L, "e:attach: invalid player");
 
 	edict_t *parent = g_engfuncs.pfnPEntityOfEntIndex(id);
@@ -653,7 +653,7 @@ static int arg_to_player_slot(lua_State *L, int idx)
 	if (!valid)
 		luaL_error(L, "expected a player object or a player id");
 
-	if (id < 1 || id >= CSLUA_MAXPLAYERS || !g_players.is_connected(id))
+	if (!cslua_valid_player_id(id) || !g_players.is_connected(id))
 		luaL_error(L, "no such connected player #%d", id);
 
 	return id;
@@ -819,14 +819,7 @@ static const luaL_Reg s_api[] =
 
 void cslua_register_entity(lua_State *L)
 {
-	lua_newtable(L);				// metatable
-
-	lua_newtable(L);				// methods
-	for (const luaL_Reg *r = s_methods; r->name; r++) {
-		lua_pushcfunction(L, r->func);
-		lua_setfield(L, -2, r->name);
-	}
-	lua_setfield(L, -2, "__index");
+	cslua_push_metatable(L, s_methods);
 
 	lua_pushcfunction(L, l_tostring);
 	lua_setfield(L, -2, "__tostring");
@@ -835,9 +828,6 @@ void cslua_register_entity(lua_State *L)
 	// must not carry one plugin's scratch fields.
 	lua_pushcfunction(L, l_readonly);
 	lua_setfield(L, -2, "__newindex");
-
-	lua_pushboolean(L, 0);
-	lua_setfield(L, -2, "__metatable");
 
 	s_entity_mt_ref = luaL_ref(L, LUA_REGISTRYINDEX);
 

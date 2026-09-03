@@ -10,6 +10,11 @@
 -- Up to 8 items per page; anything past that gets Next/Back automatically, so
 -- a long list needs no extra work. Key 0 is Exit unless you turn it off.
 --
+-- Not a list of choices - a game board, a free-form panel? menu.custom() lets
+-- you draw it yourself: hand back the text and the live keys, get the pressed
+-- key. A plain yes/no is menu.confirm(). menu.raw_show() is the bare
+-- AMXModX-style call under all of it.
+--
 -- The handler gets (player, item) - `item` is what add() returned, so you can
 -- hang your own fields on it.
 --
@@ -23,6 +28,11 @@
 --
 -- Nothing is coloured by default, which looks exactly like an uncoloured
 -- panel did before.
+--
+-- opts.layout restyles the generated lines - the "1. " prefix, the title, the
+-- Exit/Back/Next labels:
+--
+--   menu.new("Меню", { layout = { prefix = "[%d] ", exit_label = "Выйти" } })
 
 local color = require("color")
 
@@ -51,6 +61,24 @@ local KEY_0 = 10
 -- Yellow is what the panel paints with when no code was sent at all, so it
 -- doubles as the "back to normal" colour.
 local DEFAULT_COLOR = "\\y"
+
+-- A prefix built by hand (opts.layout.prefix, or a per-item one) can carry its
+-- own raw codes, same as any other menu text. If it ends on one, that is the
+-- colour the client is actually sitting in - even though it never went
+-- through paint() and the "only send it if it changed" tracker never saw it.
+-- Reads that back out so the next paint() call knows where it really stands,
+-- instead of repainting nothing because its own copy of `cur` is stale.
+local RAW_CODES = { w = true, r = true, y = true, d = true }
+
+local function trailing_raw_code(s)
+	local found
+	for i = 1, #s - 1 do
+		if s:sub(i, i) == "\\" and RAW_CODES[s:sub(i + 1, i + 1)] then
+			found = s:sub(i, i + 1)
+		end
+	end
+	return found
+end
 
 -- `level` is where to point the blame: the script that called menu.new() or
 -- add(), which is the line worth showing.
@@ -83,6 +111,45 @@ local function item_colors(v)
 	return { text = code_for(v, "item") }
 end
 
+-- opts.layout: relabels and reshapes the lines menu.new draws for you. Every
+-- field is optional - leave it out and the panel looks exactly as it did.
+--   prefix  : the "1. " in front of an item. A string with %d, or a
+--             function(slot) -> string. Used for the 9/0 nav keys too.
+--   title   : a string with %s, or function(text) -> string.
+--   counter : page marker glued after the title once there is more than one
+--             page. A string with two %d (page, total), or true for " [%d/%d]".
+--   exit_label / back_label / next_label : the nav labels, "Exit" / "Back" /
+--             "Next" by default.
+--
+--   menu.new("Меню", { layout = {
+--       prefix = "[%d] ", exit_label = "Выйти", counter = true,
+--   }})   -->   Меню [1/2]
+--             [1] Первый
+--             [0] Выйти
+local function as_fmt(v, default)
+	v = v or default
+	if type(v) == "function" then
+		return v
+	end
+	return function(...) return (v):format(...) end
+end
+
+local function menu_layout(v)
+	v = v or {}
+	local counter = v.counter
+	if counter == true then
+		counter = " [%d/%d]"
+	end
+	return {
+		prefix  = as_fmt(v.prefix or v.number, "%d. "),   -- `number` still accepted
+		title   = as_fmt(v.title, "%s"),
+		counter = counter and as_fmt(counter),
+		exit    = v.exit_label or v.exit or "Exit",       -- `exit`/`back`/`next` too
+		back    = v.back_label or v.back or "Back",
+		next    = v.next_label or v.next or "Next",
+	}
+end
+
 local function menu_colors(v)
 	v = v or {}
 
@@ -103,6 +170,9 @@ end
 
 local Menu = {}
 Menu.__index = Menu
+
+local Custom = {}
+Custom.__index = Custom
 
 -- Who is looking at what, so a reply lands on the right menu and page.
 local open = {}
@@ -129,19 +199,175 @@ function menu.raw_close(id)
 	return close_panel(id)
 end
 
+-- A menu you draw yourself. No items - you hand back the panel text and which
+-- keys are live every time it is shown, and get the pressed key back. For a
+-- game board, a confirm box, anything that is not a list of choices.
+--
+--   local board = menu.custom({
+--       render = function(p)
+--           return draw(game), free_cells(game)   -- text, list of keys 1..9
+--       end,
+--       on_key = function(p, key)
+--           play(game, key)
+--           board:show(p)                          -- redraw for the next move
+--       end,
+--   })
+--   board:show(p)
+--
+-- render(player) -> text, keys
+--   text : the whole panel, "\n" between lines, AMX colour codes if you want
+--   keys : which keys the player may press - a list like { 1, 2, 3, 0 } or a
+--          raw bitmask. Nil means all of 1-9 and 0. The number in the list is
+--          the key on the keyboard; "0" is the zero key.
+-- on_key(player, key) is called with that same number (0-9). The panel is
+-- gone by then; call :show() again to keep it up.
+local KEYMASK_ALL = 0x3FF
+
+local function keymask(keys)
+	if type(keys) == "number" then
+		return keys
+	end
+
+	local mask = 0
+	for _, k in ipairs(keys) do
+		k = tonumber(k)
+		if k == 0 then
+			mask = mask + 2 ^ (KEY_0 - 1)
+		elseif k and k >= 1 and k <= 9 then
+			mask = mask + 2 ^ (k - 1)
+		end
+	end
+	return mask
+end
+
+function menu.custom(opts)
+	opts = opts or {}
+	if type(opts.render) ~= "function" then
+		error("menu.custom: opts.render must be a function", 2)
+	end
+
+	return setmetatable({
+		render = opts.render,
+		on_key = opts.on_key,
+		time   = opts.time or -1,
+	}, Custom)
+end
+
+function Custom:show(p)
+	if not p or not p:connected() then
+		return
+	end
+
+	local text, keys = self.render(p)
+	if type(text) ~= "string" then
+		error("menu.custom: render must return the panel text as a string", 2)
+	end
+
+	open[p.id] = { custom = self }
+	show_panel(p.id, keys == nil and KEYMASK_ALL or keymask(keys), self.time, text)
+end
+
+function Custom:close(p)
+	open[p.id] = nil
+	close_panel(p.id)
+end
+
+-- menu.confirm(p, text, on_yes[, on_no][, opts]) - a yes/no box, the most
+-- common two-line menu there is. opts.yes / opts.no relabel the choices
+-- ("Купить" / "Отмена"), opts.timeout sets the time on screen.
+--
+--   menu.confirm(p, "Выдать VIP игроку " .. t:name() .. "?", function()
+--       grant_vip(t)
+--   end)
+function menu.confirm(p, text, on_yes, on_no, opts)
+	if type(on_no) == "table" then
+		opts, on_no = on_no, nil
+	end
+	opts = opts or {}
+
+	local box = menu.custom({
+		time = opts.timeout or -1,
+		render = function()
+			return ("%s\n\n\\r1. \\w%s\n\\r2. \\w%s"):format(
+				text, opts.yes or "Да", opts.no or "Нет"), { 1, 2 }
+		end,
+		on_key = function(pl, key)
+			if key == 1 then
+				if on_yes then on_yes(pl) end
+			elseif on_no then
+				on_no(pl)
+			end
+		end,
+	})
+	box:show(p)
+	return box
+end
+
+-- opts, all optional:
+--   closable : key 0 closes the menu. Default true. (was `exit`)
+--   timeout  : seconds on screen, -1 = until answered. Default -1. (was `time`)
+--   per_page : selectable items before it splits into pages. Default 8, max 8.
+--              Set 5 and a 6-item menu already paginates.
+--   on_close : called with the player when they close it. (was `on_exit`)
+--   on_select: called with (player, item) for any pick, before the item's own
+--              handler - a single switch instead of a function per item.
+--   color    : see the colours block above.
+--   layout   : labels and prefixes, see menu_layout above.
+--
+-- items can also be handed in up front instead of :add()'ing them one by one:
+--   menu.new("Оружие", { items = {
+--       { "AK-47", give_ak },
+--       { "AWP", give_awp, color = "red" },
+--       "---",                       -- a bare string is a separator
+--   }})
 function menu.new(title, opts)
 	opts = opts or {}
-	return setmetatable({
-		title    = title or "",
-		items    = {},
-		exit     = opts.exit ~= false,      -- key 0 closes, unless exit = false
-		time     = opts.time or -1,         -- seconds on screen, -1 = until answered
-		on_exit  = opts.on_exit,            -- called when the player closes it
-		colors   = menu_colors(opts.color),
+	local function pick(new, old) local v = opts[new]; if v == nil then v = opts[old] end; return v end
+
+	local closable = pick("closable", "exit")
+	local per_page = tonumber(pick("per_page", "page_size")) or ITEMS_PER_PAGE
+
+	local m = setmetatable({
+		title     = title or "",
+		items     = {},
+		closable  = closable ~= false,
+		time      = pick("timeout", "time") or -1,
+		per_page  = math.max(1, math.min(ITEMS_PER_PAGE, math.floor(per_page))),
+		on_close  = pick("on_close", "on_exit"),
+		on_select = opts.on_select,
+		colors    = menu_colors(opts.color),
+		layout    = menu_layout(opts.layout),
 	}, Menu)
+
+	for _, row in ipairs(opts.items or {}) do
+		if type(row) == "string" then
+			m:separator(row == "---" and "" or row)
+		elseif row.sep ~= nil then
+			m:separator(row.sep == true and "" or row.sep)
+		else
+			m:add(row[1] or row.text, row[2] or row.handler, row)
+		end
+	end
+
+	return m
 end
 
 -- add(text, handler, opts) -> item
+--
+-- `handler` is function(player, item), OR another menu.new menu - picking the
+-- row then opens it, with key 0 walking back to this one (see Menu:submenu).
+--
+-- text and opts.disabled may each be a function(player) resolved every time
+-- the menu is shown - one menu object then serves every player and keeps
+-- itself current (a live count in the label, a row that greys out when the
+-- player can't afford it), no rebuild needed.
+--
+-- opts, all optional:
+--   disabled : true, or function(player) -> bool. Shown, not pressable.
+--   prefix   : its own "1. " - a string, or function(slot). Good for a locked
+--              row: { disabled = true, prefix = "[#] " }. Settable later too.
+--   value    : anything you want to hang on the item.
+--   color    : see the colours block above.
 function Menu:add(text, handler, opts)
 	opts = opts or {}
 	local item = {
@@ -150,9 +376,25 @@ function Menu:add(text, handler, opts)
 		disabled = opts.disabled or false,
 		value    = opts.value,
 		colors   = item_colors(opts.color),
+		prefix   = opts.prefix or opts.number,   -- `number` still accepted
 	}
 	self.items[#self.items + 1] = item
 	return item
+end
+
+-- A line with no key - a heading or a gap between groups. text is optional
+-- and may be a function(player).
+function Menu:separator(text)
+	local item = { sep = true, text = text or "" }
+	self.items[#self.items + 1] = item
+	return item
+end
+
+-- submenu(text, child, opts) -> item. Sugar for add() with a menu as the
+-- handler; reads better and hints that key 0 in `child` returns here rather
+-- than closing. The chain is unlimited - a submenu can hold its own submenus.
+function Menu:submenu(text, child, opts)
+	return self:add(text, child, opts)
 end
 
 function Menu:count()
@@ -179,12 +421,44 @@ function Menu:item_color(item, spec)
 	return item
 end
 
--- Builds the panel text and the key mask for one page.
-local function render(self, page)
-	local first = page * ITEMS_PER_PAGE + 1
-	local last  = math.min(first + ITEMS_PER_PAGE - 1, #self.items)
+-- Splits items into page windows { first, last } by raw index, counting only
+-- selectable rows toward per - separators ride along for free and never push
+-- an item to the next page on their own.
+local function paginate(items, per)
+	local pages, first, n = {}, 1, 0
+	for i = 1, #items do
+		if not items[i].sep then
+			n = n + 1
+			if n >= per then
+				pages[#pages + 1] = { first, i }
+				first, n = i + 1, 0
+			end
+		end
+	end
+	if first <= #items then
+		pages[#pages + 1] = { first, #items }
+	end
+	if #pages == 0 then
+		pages[1] = { 1, 0 }
+	end
+	return pages
+end
+
+-- Builds the panel text and the key mask for one page. Returns the clamped
+-- page as the last value so show() records where the player actually landed.
+local function render(self, page, p, has_parent)
+	local windows = paginate(self.items, self.per_page)
+	local pages = #windows
+	page = math.max(0, math.min(page, pages - 1))
+	local first, last = windows[page + 1][1], windows[page + 1][2]
 
 	local c = self.colors
+	local L = self.layout
+
+	-- A function(player) field is resolved here, once per show.
+	local function val(v)
+		return type(v) == "function" and v(p) or v
+	end
 
 	-- A colour code stays in effect until the next one, across line breaks, so
 	-- the panel is painted as a stream: emit a code only where the colour has
@@ -200,31 +474,61 @@ local function render(self, page)
 		return code
 	end
 
-	local lines = { paint(c.title) .. self.title, "" }
+	-- A raw code baked into a hand-written prefix (see trailing_raw_code above)
+	-- is invisible to paint() unless something tells `cur` it happened - this
+	-- is that something, wrapped around every place a prefix string is built.
+	local function resync(s)
+		local raw = trailing_raw_code(s)
+		if raw then
+			cur = raw
+		end
+		return s
+	end
+
+	-- The "1. " in front of a row: the item's own prefix if it set one, else
+	-- the menu-wide layout.prefix.
+	local function prefix(item, slot)
+		local n = item.prefix
+		if n == nil then
+			return resync(L.prefix(slot))
+		end
+		return resync(type(n) == "function" and n(slot) or n)
+	end
+
+	local title = L.title(tostring(val(self.title)))
+	if L.counter and pages > 1 then
+		title = title .. L.counter(page + 1, pages)
+	end
+
+	local lines = { paint(c.title) .. title, "" }
 	local keys  = 0
 	local slots = {}          -- key number -> item index
 
 	local slot = 0
 	for i = first, last do
-		slot = slot + 1
 		local item = self.items[i]
 		local ic = item.colors
+		local text = tostring(val(item.text))
 
-		if item.disabled then
+		if item.sep then
+			lines[#lines + 1] = paint(c.disabled) .. text
+		elseif val(item.disabled) then
+			slot = slot + 1
 			-- Shown, but the key is not in the mask, so it cannot be pressed.
 			-- The whole line goes grey, number included.
-			lines[#lines + 1] = paint(c.disabled) .. ("%d. %s"):format(slot, item.text)
+			lines[#lines + 1] = paint(c.disabled) .. prefix(item, slot) .. text
 		else
+			slot = slot + 1
 			lines[#lines + 1] = paint(ic and ic.number or c.number)
-				.. slot .. ". "
+				.. prefix(item, slot)
 				.. paint(ic and ic.text or c.text)
-				.. item.text
+				.. text
 			keys = keys + 2 ^ (slot - 1)
 			slots[slot] = i
 		end
 	end
 
-	local has_next = last < #self.items
+	local has_next = page + 1 < pages
 	local has_back = page > 0
 
 	lines[#lines + 1] = ""
@@ -232,36 +536,41 @@ local function render(self, page)
 	local nav_num = c.nav or c.number
 
 	if has_next then
-		lines[#lines + 1] = paint(nav_num) .. "9. " .. paint(c.text) .. "Next"
+		lines[#lines + 1] = paint(nav_num) .. resync(L.prefix(KEY_9)) .. paint(c.text) .. L.next
 		keys = keys + 2 ^ (KEY_9 - 1)
 	end
 
-	if has_back then
-		lines[#lines + 1] = paint(nav_num) .. "0. " .. paint(c.text) .. "Back"
+	if has_back or has_parent then
+		-- Key 0 walks back: a page first, then out to the parent menu.
+		lines[#lines + 1] = paint(nav_num) .. resync(L.prefix(0)) .. paint(c.text) .. L.back
 		keys = keys + 2 ^ (KEY_0 - 1)
-	elseif self.exit then
-		lines[#lines + 1] = paint(nav_num) .. "0. " .. paint(c.text) .. "Exit"
+	elseif self.closable then
+		lines[#lines + 1] = paint(nav_num) .. resync(L.prefix(0)) .. paint(c.text) .. L.exit
 		keys = keys + 2 ^ (KEY_0 - 1)
 	end
 
-	return table.concat(lines, "\n"), keys, slots, has_next, has_back
+	return table.concat(lines, "\n"), keys, slots, has_next, has_back, page
 end
 
--- show(player [, page])
-function Menu:show(p, page)
+-- show(player [, page [, back]])
+-- `back` is an internal frame { menu, page, back } - the submenu machinery
+-- fills it in; callers pass just the player (and maybe a page).
+function Menu:show(p, page, back)
 	page = page or 0
 	if not p or not p:connected() then
 		return
 	end
 
-	local text, keys, slots, has_next, has_back = render(self, page)
+	local text, keys, slots, has_next, has_back, landed =
+		render(self, page, p, back ~= nil)
 
 	open[p.id] = {
 		menu     = self,
-		page     = page,
+		page     = landed,
 		slots    = slots,
 		has_next = has_next,
 		has_back = has_back,
+		back     = back,
 	}
 
 	show_panel(p.id, keys, self.time, text)
@@ -279,21 +588,38 @@ hook.add("menu:select", "core.menu_select", function(e)
 		return
 	end
 
-	local m = state.menu
 	local key = e.key
 
+	-- A draw-it-yourself menu: hand the pressed key straight back, "0" as 0.
+	if state.custom then
+		open[p.id] = nil
+		local c = state.custom
+		if c.on_key then
+			c.on_key(p, key == KEY_0 and 0 or key)
+		end
+		return
+	end
+
+	local m = state.menu
+
 	if key == KEY_9 and state.has_next then
-		return m:show(p, state.page + 1)
+		return m:show(p, state.page + 1, state.back)
 	end
 
 	if key == KEY_0 then
 		if state.has_back then
-			return m:show(p, state.page - 1)
+			return m:show(p, state.page - 1, state.back)
 		end
 
 		open[p.id] = nil
-		if m.on_exit then
-			m.on_exit(p)
+
+		if state.back then                    -- a submenu: walk out to the parent
+			return state.back.menu:show(p, state.back.page, state.back.back)
+		end
+
+		local on_close = m.on_close or m.on_exit   -- `m.on_exit = fn` still works
+		if on_close then
+			on_close(p)
 		end
 		return
 	end
@@ -308,7 +634,17 @@ hook.add("menu:select", "core.menu_select", function(e)
 	open[p.id] = nil
 
 	local item = m.items[index]
-	if item and item.handler then
+	if not item then
+		return
+	end
+	if m.on_select then
+		m.on_select(p, item)
+	end
+
+	if getmetatable(item.handler) == Menu then
+		-- The row is a submenu: open it, key 0 comes back here.
+		item.handler:show(p, 0, { menu = m, page = state.page, back = state.back })
+	elseif type(item.handler) == "function" then
 		item.handler(p, item)
 	end
 end)

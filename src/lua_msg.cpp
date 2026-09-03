@@ -240,7 +240,7 @@ static int l_msg_send(lua_State *L)
 
 	if (need_edict) {
 		int index = resolve_ent_index(L, 3);
-		if (index < 1 || index >= CSLUA_MAXPLAYERS || !g_players.is_connected(index))
+		if (!cslua_valid_player_id(index) || !g_players.is_connected(index))
 			return luaL_error(L, "msg.send: '%s' needs a connected player as the target", dest_name);
 		target_edict = g_engfuncs.pfnPEntityOfEntIndex(index);
 		if (!target_edict || target_edict->free)

@@ -1,4 +1,4 @@
--- Minimal class helper. Optional: it is a library in addons/lua/include, not
+-- Minimal class helper. Optional: it is a library in addons/lua/lib, not
 -- part of the engine API, so ignore it if you prefer plain metatables.
 --
 --   local Timer = class("Timer")

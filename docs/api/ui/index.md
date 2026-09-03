@@ -56,7 +56,7 @@ p:chat("{green}[Server]{default} Привет, {team}" .. p:name() .. "{default}
 проводе, кириллическая буква — 2 и 1 соответственно.
 </Warning>
 
-Считает `include/text.lua`:
+Считает `lib/text.lua`:
 
 | вызов | |
 |---|---|

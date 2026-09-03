@@ -22,10 +22,28 @@ class CBaseEntity;
 // Max players (32) + 1: edict indices are 1-based.
 #define CSLUA_MAXPLAYERS 33
 
+// A real player slot: 1..32. The same range check was independently
+// hand-rolled at 20+ call sites across the module; this is the one copy.
+inline bool cslua_valid_player_id(int id)
+{
+	return id >= 1 && id < CSLUA_MAXPLAYERS;
+}
+
+// A real player slot, or 0 - the players.broadcast target, not a player.
+// A handful of call sites (the ones dealing with a message/ping cache
+// indexed the same way broadcast writes go) accept that too.
+inline bool cslua_valid_player_or_broadcast_id(int id)
+{
+	return id >= 0 && id < CSLUA_MAXPLAYERS;
+}
+
 void cslua_print(const char *fmt, ...);
 void cslua_error(const char *fmt, ...);
 
 const std::string &cslua_base_dir();
+
+// The mod's maps/ directory, e.g. "cstrike/maps" - where .bsp files live.
+const std::string &cslua_maps_dir();
 
 // Monotonic seconds, independent of gpGlobals->time (which restarts every map).
 double cslua_now_seconds();

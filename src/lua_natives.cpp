@@ -31,6 +31,30 @@ void cslua_register_namespace(lua_State *L, const char *name, const luaL_Reg *li
 	lua_pop(L, 1);
 }
 
+// The __index + __metatable half shared by every protected method table this
+// module hands out. Independently hand-rolled at each call site before this
+// existed; factored out so there is one copy of the loop. Leaves the table
+// on the stack rather than ref'ing it, so a caller that also needs
+// __newindex or __tostring can add those first.
+void cslua_push_metatable(lua_State *L, const luaL_Reg *list)
+{
+	lua_newtable(L);
+	lua_newtable(L);
+	for (const luaL_Reg *r = list; r->name; r++) {
+		lua_pushcfunction(L, r->func);
+		lua_setfield(L, -2, r->name);
+	}
+	lua_setfield(L, -2, "__index");
+	lua_pushboolean(L, 0);
+	lua_setfield(L, -2, "__metatable");
+}
+
+int cslua_register_metatable(lua_State *L, const luaL_Reg *list)
+{
+	cslua_push_metatable(L, list);
+	return luaL_ref(L, LUA_REGISTRYINDEX);
+}
+
 // print(...) -> server console and log, tab separated like the stock print.
 static int l_print(lua_State *L)
 {
@@ -337,6 +361,43 @@ static int l_sv_map(lua_State *L)
 	return 1;
 }
 
+// sv.map_exists(name) -> true if maps/<name>.bsp is on disk. A map-vote
+// plugin's own list can drift from what actually got uploaded; this is how
+// it checks before offering a name nobody can load.
+static int l_sv_map_exists(lua_State *L)
+{
+	const char *name = luaL_checkstring(L, 1);
+	lua_pushboolean(L, cslua_file_exists(cslua_maps_dir() + "/" + name + ".bsp"));
+	return 1;
+}
+
+// sv.maps() -> { "de_dust2", ... }. Every .bsp installed under maps/, name
+// without the extension, in whatever order the filesystem hands them back.
+static int l_sv_maps(lua_State *L)
+{
+	lua_newtable(L);
+
+	std::vector<CsLuaDirEntry> entries;
+	if (!cslua_list_dir(cslua_maps_dir(), entries))
+		return 1;
+
+	int n = 0;
+	for (size_t i = 0; i < entries.size(); i++) {
+		if (entries[i].is_dir)
+			continue;
+
+		const std::string &name = entries[i].name;
+		size_t len = name.size();
+		if (len <= 4 || name.compare(len - 4, 4, ".bsp") != 0)
+			continue;
+
+		lua_pushlstring(L, name.c_str(), len - 4);
+		lua_rawseti(L, -2, ++n);
+	}
+
+	return 1;
+}
+
 // sv.set_game_desc(name) -> overrides the "game" column a server browser shows.
 // "" (or nil) drops back to the engine's own description.
 static int l_sv_set_game_desc(lua_State *L)
@@ -478,6 +539,8 @@ static const luaL_Reg s_sv[] =
 	{ "cmd",           l_sv_cmd },
 	{ "time",          l_sv_time },
 	{ "map",           l_sv_map },
+	{ "map_exists",    l_sv_map_exists },
+	{ "maps",          l_sv_maps },
 	{ "hull_free",     cslua_sv_hull_free },
 	{ "set_game_desc", l_sv_set_game_desc },
 	{ NULL, NULL }

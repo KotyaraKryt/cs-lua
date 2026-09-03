@@ -143,7 +143,7 @@ void LuaEngine::report_error(const char *where)
 }
 
 // Fills `out` with the paths a module name maps to, in search order. Plugin-
-// local files win over the shared include/ directory.
+// local files win over the shared lib/ directory.
 int LuaEngine::module_paths(int plugin_index, const char *modname, std::string out[4]) const
 {
 	std::string rel = modname;
@@ -157,8 +157,8 @@ int LuaEngine::module_paths(int plugin_index, const char *modname, std::string o
 			out[n++] = dir + "/" + rel + "/init.lua";
 		}
 	}
-	out[n++] = cslua_base_dir() + "/include/" + rel + ".lua";
-	out[n++] = cslua_base_dir() + "/include/" + rel + "/init.lua";
+	out[n++] = cslua_base_dir() + "/lib/" + rel + ".lua";
+	out[n++] = cslua_base_dir() + "/lib/" + rel + "/init.lua";
 	return n;
 }
 
@@ -275,7 +275,7 @@ void LuaEngine::init()
 	const std::string &base = cslua_base_dir();
 	lua_getglobal(m_L, "package");
 	if (lua_istable(m_L, -1)) {
-		std::string path = base + "/include/?.lua;" + base + "/include/?/init.lua";
+		std::string path = base + "/lib/?.lua;" + base + "/lib/?/init.lua";
 		lua_pushstring(m_L, path.c_str());
 		lua_setfield(m_L, -2, "path");
 	}

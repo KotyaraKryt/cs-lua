@@ -159,7 +159,7 @@ static int attacker_slot(entvars_t *pevAttacker)
 		return 0;
 
 	int idx = ENTINDEX(e);
-	return (idx >= 1 && idx < CSLUA_MAXPLAYERS) ? idx : 0;
+	return cslua_valid_player_id(idx) ? idx : 0;
 }
 
 // TraceAttack fires once per hit (per shotgun pellet) and only accumulates into
@@ -278,7 +278,7 @@ static int firing_slot(CBaseEntity *shooter)
 		return 0;
 
 	int idx = ENTINDEX(e);
-	return (idx >= 1 && idx < CSLUA_MAXPLAYERS) ? idx : 0;
+	return cslua_valid_player_id(idx) ? idx : 0;
 }
 
 // The clip is read after the shot, so a plugin counting rounds sees what's left.
@@ -759,7 +759,7 @@ static int grenade_owner_slot(CGrenade *grenade)
 		return 0;
 
 	int idx = ENTINDEX(grenade->pev->owner);
-	return (idx >= 1 && idx < CSLUA_MAXPLAYERS) ? idx : 0;
+	return cslua_valid_player_id(idx) ? idx : 0;
 }
 
 // ExplodeHeGrenade specifically: an HE blast never goes through FireBullets or

@@ -3,7 +3,7 @@
 --     luajit tests/run.lua              всё
 --     luajit tests/run.lua access       только tests/access_spec.lua
 --
--- Тестируется то, что не требует игры: core/ и include/ — обычный Lua, а
+-- Тестируется то, что не требует игры: core/ и lib/ — обычный Lua, а
 -- пространства имён движка подменяются стабами из tests/support/stubs.lua.
 -- Сюда попадает разрешение прав, роутер команд, разбор цвета, подсчёт длины
 -- строки и запись данных — то есть код, который ломается молча.
@@ -18,7 +18,7 @@ end
 
 package.path = table.concat({
 	root .. "/tests/?.lua",
-	root .. "/scripts/include/?.lua",
+	root .. "/scripts/lib/?.lua",
 	package.path,
 }, ";")
 
