@@ -7,14 +7,22 @@
 ## Что здесь
 
 ```
-addons/
-  amxmodx/
-    modules/cslua_bridge_amxx.dll      AMXX-модуль (мост), Win32
-    scripting/cslua_army_ranks.sma     обёртки натив -> public, исходник
-  lua/
-    lua_mm.dll                         cs-lua с namespace amxx, Win32
-    plugins/army_ranks/                Lua-обёртка с человеческим API
+common/addons/                         нужно в любом случае
+  amxmodx/scripting/cslua_army_ranks.sma   обёртки натив -> public, исходник
+  lua/plugins/army_ranks/                  Lua-обёртка с человеческим API
+
+linux/addons/                          если прод на Linux
+  amxmodx/modules/cslua_bridge_amxx_i386.so
+  lua/lua_mm_i386.so
+
+windows/addons/                        если прод на Windows
+  amxmodx/modules/cslua_bridge_amxx.dll
+  lua/lua_mm.dll
 ```
+
+Копировать поверх `cstrike/`: сначала `common/addons/`, затем `addons/` из
+своей платформы. Linux-бинарники собраны в ubuntu:18.04 (glibc 2.27), тем
+же способом, что и релизные сборки cs-lua.
 
 ## Как это работает
 
@@ -93,10 +101,6 @@ end)
 
 ## Ограничения
 
-- **Только Win32.** Обе `.dll` собраны под Windows. Если прод на Linux —
-  их нужно пересобрать там (`cmake` из репы, 32-битный тулчейн:
-  `gcc-multilib g++-multilib`), файлы будут называться
-  `cslua_bridge_amxx_i386.so` и `lua_mm_i386.so`.
 - **Только в одну сторону: Lua зовёт Pawn.** Форварды самого army_ranks
   (`ar_forward_newlevel`, `ar_forward_addxp`, `ar_forward_addanew`,
   `ar_forward_putinserver`) сюда не приходят — обратное направление в
