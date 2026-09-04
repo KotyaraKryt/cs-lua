@@ -115,6 +115,20 @@ static int l_close_menu(lua_State *L)
 	return 0;
 }
 
+// menu._is_open(playerId) -> is any panel (menu.new, custom, or raw_show)
+// currently on their screen. Backed by the same state send_menu keeps, so it
+// sees a raw_show panel too, unlike the Lua-side open[] table in ui.lua.
+static int l_is_menu_open(lua_State *L)
+{
+	int id = (int)luaL_checkinteger(L, 1);
+
+	if (!cslua_valid_player_id(id))
+		return luaL_error(L, "menu._is_open: player index %d out of range", id);
+
+	lua_pushboolean(L, g_players.is_connected(id) && s_menu_open[id]);
+	return 1;
+}
+
 void cslua_menu_reset(int id)
 {
 	if (cslua_valid_player_id(id))
@@ -160,8 +174,9 @@ void cslua_register_menu(lua_State *L)
 	// locals and clears them before any plugin runs.
 	static const luaL_Reg s_internal[] =
 	{
-		{ "_show",  l_show_menu },
-		{ "_close", l_close_menu },
+		{ "_show",    l_show_menu },
+		{ "_close",   l_close_menu },
+		{ "_is_open", l_is_menu_open },
 		{ NULL, NULL }
 	};
 

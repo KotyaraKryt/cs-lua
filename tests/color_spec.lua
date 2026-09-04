@@ -94,4 +94,21 @@ return function(t, support)
 	t.it("color.rgb — это parse", function()
 		t.eq(color.rgb, color.parse)
 	end)
+
+	--------------------------------------------------------------------
+	-- strip_chat
+	--------------------------------------------------------------------
+
+	t.it("strip_chat убирает все теги чата", function()
+		t.eq(color.strip_chat("{green}~ {default}До конца карты: {team}15:00"),
+			"~ До конца карты: 15:00")
+	end)
+
+	t.it("strip_chat не трогает текст без тегов", function()
+		t.eq(color.strip_chat("обычный текст"), "обычный текст")
+	end)
+
+	t.it("strip_chat не трогает фигурные скобки, которые не тег", function()
+		t.eq(color.strip_chat("{unknown} {notacolor}"), "{unknown} {notacolor}")
+	end)
 end

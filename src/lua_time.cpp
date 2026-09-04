@@ -1,9 +1,11 @@
 #include "cslua.h"
 #include "lua_time.h"
 #include "lua_natives.h"
+#include "lua_engine.h"
 
 #include <stdio.h>
 #include <time.h>
+#include <vector>
 
 struct TimeUnit
 {
@@ -31,6 +33,21 @@ static long long unit_seconds(char suffix)
 	return -1;
 }
 
+static const long long MONTH_SECONDS = 2592000; // fixed 30-day approximation
+
+// 'y'/'mo' are fixed-length approximations here, so a span crossing a real
+// month/leap year drifts. Fine for timeouts, wrong for "same date next
+// year/month" - warn so it isn't mistaken for calendar math.
+static void warn_fixed_unit(lua_State *L, const char *str, const char *unit_name)
+{
+	int plugin = g_lua.current_index();
+	const std::vector<LuaPlugin> &plugins = g_lua.plugins();
+	const char *who = (plugin >= 0 && plugin < (int)plugins.size())
+		? plugins[plugin].id.c_str() : "core";
+	cslua_print("time.parse: '%s' in plugin '%s' uses a fixed-length %s "
+		"- can drift from the calendar; use time.add_calendar for a real calendar %s", str, who, unit_name, unit_name);
+}
+
 // time.parse("60s60m24h32d") -> 2854860. A malformed string throws.
 static int l_parse(lua_State *L)
 {
@@ -53,9 +70,21 @@ static int l_parse(lua_State *L)
 		if (!has_digits)
 			return luaL_error(L, "time.parse: '%c' in \"%s\" has no number before it", c, str);
 
+		if (c == 'm' && i + 1 < len && str[i + 1] == 'o') {
+			i++; // consume the 'o'
+			warn_fixed_unit(L, str, "month");
+			total += number * MONTH_SECONDS;
+			number = 0;
+			has_digits = false;
+			continue;
+		}
+
 		long long secs = unit_seconds(c);
 		if (secs < 0)
-			return luaL_error(L, "time.parse: unknown unit '%c' in \"%s\" (expected s/m/h/d/w/y)", c, str);
+			return luaL_error(L, "time.parse: unknown unit '%c' in \"%s\" (expected s/m/h/d/w/mo/y)", c, str);
+
+		if (c == 'y')
+			warn_fixed_unit(L, str, "year");
 
 		total += number * secs;
 		number = 0;

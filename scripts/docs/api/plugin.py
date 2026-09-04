@@ -76,7 +76,7 @@ plugin {
                     'sig': 'plugin.data_dir()',
                     'args': [],
                     'returns': [('string', '`addons/lua/data/<plugin_id>/`')],
-                    'extra': 'Создаётся при первом вызове. Туда же кладут файлы [`store`](../store/open.md) и [`db.open`](../db/open.md).',
+                    'extra': 'Создаётся при первом вызове. Туда же кладут файлы [`datafile`](../datafile/index.md) и [`db.open`](../db/open.md).',
                 },
                 {
                     'name': 'plugin.on_unload',

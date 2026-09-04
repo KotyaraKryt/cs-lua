@@ -180,7 +180,7 @@ end)
                     'args': [],
                     'returns': [('boolean', '`true` при успехе'),
                                 ('string', 'причина при ошибке')],
-                    'extra': 'Атомарно, с `.bak` — как [`datafile.save`](../store/save.md).',
+                    'extra': 'Атомарно, с `.bak` — как [`datafile.save`](../datafile/index.md).',
                 },
                 {
                     'name': 'access.reload',

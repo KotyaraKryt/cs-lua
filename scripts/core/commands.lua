@@ -1,18 +1,28 @@
--- Core: the command system. One cmd.add() covers three sources - the server
--- console/rcon, chat (!name), and team chat (say_team) - and a command may
--- listen on any combination of them.
+-- Core: the command system. One cmd.add() covers four sources - the
+-- dedicated server console/rcon, a player's own client console, chat
+-- (!name), and team chat (say_team) - and a command may listen on any
+-- combination of them.
 --
 --   cmd.add("heal", function(ctx)
---       local p = ctx.player          -- player object, or nil from the console
+--       local p = ctx.player          -- player object, or nil from the server console
 --       local n = tonumber(ctx.args[1]) or 25
 --       if p then p:health(p:health() + n) end
 --       ctx.reply("healed +" .. n)    -- answers back where the command came from
 --   end)
 --
---   cmd.add("plant", fn, { source = "chat_team" })          -- team chat only
---   cmd.add("kick",  fn, { source = { "console", "chat" } }) -- both of these
+--   cmd.add("plant", fn, { source = "chat_team" })         -- team chat only
+--   cmd.add("kick",  fn, { source = { "server", "chat" } }) -- both of these
 --
--- Sources: "console", "chat", "chat_team". Omitting source means all three.
+-- Sources: "server", "console", "chat", "chat_team". Omitting source means
+-- all four.
+--
+-- "server" is the dedicated console and rcon - no player, above all rights,
+-- the way it always was. "console" is a connected player typing the command
+-- into their own client console instead of chat: a real ctx.player, checked
+-- against `perm` and immunity exactly like chat is. Mixing up the two turns
+-- a debug-only admin command into something any player can type at home, or
+-- the other way round locks a player command out of rcon - so pick the one
+-- that actually matches who is meant to run it.
 --
 -- Rights come from core/access.lua and are declared right here, so a handler
 -- never starts running for someone who may not use it:
@@ -21,28 +31,74 @@
 --
 -- `perm` is a permission node checked before the handler runs. `target = N`
 -- says the Nth argument names a player: the router looks them up into
--- ctx.target and refuses when they outrank the caller. The console has no
--- player object and passes both checks - it is already the highest authority
--- on the box.
+-- ctx.target and refuses when they outrank the caller. The server console
+-- has no player object and passes both checks - it is already the highest
+-- authority on the box; a player's own console is checked the same as chat.
 --
 -- The ctx table is the same shape an event handler gets: one table in, fields
 -- out. There is no second calling convention to remember.
+--
+-- name can be a list instead of one string - aliases, all landing on the same
+-- handler:
+--
+--   cmd.add({ "nomination", "nominate" }, fn)
+--
+-- opts.layout_alias adds one more alias per name: the same word typed in the
+-- other keyboard layout ("nomination" -> "тщьштфешщт"), for the player who
+-- forgot to switch back before typing. Off by default - most names have
+-- nothing sensible to add.
+--
+--   cmd.add("maps", fn, { layout_alias = true })  -- "ьфзы" works too
 
--- The raw engine registration, taken into a local and then cleared: a plugin
--- has no business reaching past cmd.add() to the console primitive.
-local register_console = cmd._register
-cmd._register = nil
+-- The raw engine registrations, taken into locals and then cleared: a plugin
+-- has no business reaching past cmd.add() to either primitive.
+local register_server  = cmd._register_server
+local register_console = cmd._register_console
+cmd._register_server, cmd._register_console = nil, nil
+
+local color = require("color")
+
+-- QWERTY <-> ЙЦУКЕН (Windows), letters only - enough for a command name.
+-- opts.layout_alias on cmd.add uses this to add the name someone gets when
+-- they type it without checking which layout they're in. One direction only
+-- (Latin -> Cyrillic): command names in this codebase are English, and
+-- there is nothing here to translate the other way.
+local LAYOUT_EN = "qwertyuiopasdfghjklzxcvbnm"
+local LAYOUT_RU = {
+	"й", "ц", "у", "к", "е", "н", "г", "ш", "щ", "з",
+	"ф", "ы", "в", "а", "п", "р", "о", "л", "д",
+	"я", "ч", "с", "м", "и", "т", "ь",
+}
+
+local layout_map = {}
+for i = 1, #LAYOUT_EN do
+	layout_map[LAYOUT_EN:sub(i, i)] = LAYOUT_RU[i]
+end
+
+-- "nomination" -> "тщьштфешщт". nil if the name has anything outside a-z -
+-- nothing to remap, and a half-transliterated name would just be confusing.
+local function to_ru_layout(name)
+	local out = {}
+	for i = 1, #name do
+		local mapped = layout_map[name:sub(i, i)]
+		if not mapped then
+			return nil
+		end
+		out[i] = mapped
+	end
+	return table.concat(out)
+end
 
 local prefixes = { "!", "/" }
-local VALID = { console = true, chat = true, chat_team = true }
+local VALID = { server = true, console = true, chat = true, chat_team = true }
 
--- name -> { fn = fn, console = bool, chat = bool, chat_team = bool }
+-- name -> { fn = fn, server = bool, console = bool, chat = bool, chat_team = bool }
 local registry = {}
 
 local function parse_sources(source)
 	local set = {}
 	if source == nil then
-		set.console, set.chat, set.chat_team = true, true, true
+		set.server, set.console, set.chat, set.chat_team = true, true, true, true
 	elseif type(source) == "string" then
 		assert(VALID[source], "cmd.add: unknown source '" .. source .. "'")
 		set[source] = true
@@ -133,10 +189,34 @@ local function run(entry, ctx)
 	entry.fn(ctx)
 end
 
+-- name is a string, or a list of names/aliases - "nomination" and "nominate"
+-- both landing on the same handler. opts.layout_alias (default false) adds
+-- one more alias per name automatically: what it reads like typed in the
+-- other keyboard layout, for the player who forgot to switch back.
 function cmd.add(name, fn, opts)
-	assert(type(name) == "string", "cmd.add: name must be a string")
+	assert(type(name) == "string" or type(name) == "table",
+		"cmd.add: name must be a string or a list of strings")
 	assert(type(fn) == "function", "cmd.add: handler must be a function")
-	name = name:lower()
+
+	local names = type(name) == "table" and name or { name }
+	assert(#names > 0, "cmd.add: name list is empty")
+
+	local all_names = {}
+	for _, n in ipairs(names) do
+		assert(type(n) == "string", "cmd.add: name must be a string or a list of strings")
+		all_names[#all_names + 1] = n:lower()
+	end
+
+	if opts and opts.layout_alias then
+		-- Appended after the loop above, not inside it: a layout alias of a
+		-- layout alias would just be the original name again.
+		for i = 1, #all_names do
+			local swapped = to_ru_layout(all_names[i])
+			if swapped and swapped ~= all_names[i] then
+				all_names[#all_names + 1] = swapped
+			end
+		end
+	end
 
 	local sources = parse_sources(opts and opts.source)
 	local entry = {
@@ -144,33 +224,58 @@ function cmd.add(name, fn, opts)
 		perm      = opts and opts.perm,
 		target    = opts and opts.target,
 		immunity  = not (opts and opts.immunity == false),
+		server    = sources.server or false,
 		console   = sources.console or false,
 		chat      = sources.chat or false,
 		chat_team = sources.chat_team or false,
 	}
 	assert(entry.perm == nil or type(entry.perm) == "string",
 		"cmd.add: perm must be a permission node")
-	registry[name] = entry
 
-	-- The console side needs an engine registration; do it once, only if this
-	-- command actually listens there.
-	if sources.console then
-		register_console(name, function(args)
-			-- No player: rights are skipped, but a `target` still gets looked
-			-- up so console and chat handlers can share one body.
-			run(registry[name] or entry, {
-				name   = name,
-				source = "console",
-				player = nil,
-				args   = args,
-				reply  = function(text) print(text) end,
-			})
-		end)
+	-- Every name/alias is its own registry entry, its own engine registration
+	-- where one applies, and its own ctx.name - a handler that echoes the name
+	-- back shows whichever one was actually typed.
+	for _, cname in ipairs(all_names) do
+		registry[cname] = entry
+
+		if sources.server then
+			register_server(cname, function(args)
+				-- No player: rights are skipped, but a `target` still gets looked
+				-- up so server and chat handlers can share one body.
+				run(registry[cname] or entry, {
+					name   = cname,
+					source = "server",
+					player = nil,
+					args   = args,
+					-- Neither the dedicated console nor rcon render chat markup -
+					-- a reply written with {green}/{team}/... for chat would show
+					-- the raw tags otherwise.
+					reply  = function(text) print(color.strip_chat(text)) end,
+				})
+			end)
+		end
+
+		if sources.console then
+			register_console(cname, function(id, args)
+				-- A real player: perm and immunity apply exactly like chat.
+				local p = players.get(id)
+				run(registry[cname] or entry, {
+					name   = cname,
+					source = "console",
+					player = p,
+					args   = args,
+					-- A player's own console is just as colour-blind as the
+					-- server one - same strip.
+					reply  = function(text) if p then p:console(color.strip_chat(text)) end end,
+				})
+			end)
+		end
 	end
 end
 
--- cmd.remove(name) - drop a command. The console registration stays (the
--- engine keeps our name pointer forever) but stops resolving to anything.
+-- cmd.remove(name) - drop a command. The engine-side registration (server
+-- console keeps our name pointer forever either way) stays, but stops
+-- resolving to anything.
 function cmd.remove(name)
 	assert(type(name) == "string", "cmd.remove: name must be a string")
 	local existed = registry[name:lower()] ~= nil

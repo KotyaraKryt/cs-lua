@@ -370,11 +370,9 @@ def generate(namespaces, api_dir):
 
 
 def mintlify_navigation(namespaces):
-    """Список {'group': ns_label, 'pages': [...]} для docs.json - параллельный
-
-    вывод, пока сайт живёт и на Docusaurus, и на Mintlify. Пути - id страниц
-    без расширения, ровно то же самое разбиение на группы, что write() уже
-    даёт под sidebars.ts, просто без обёртки под TS-литерал.
+    """Список {'group': ns_label, 'pages': [...]} для docs.json. Пути - id
+    страниц без расширения, то же разбиение на группы, что write() уже
+    даёт по файлам под docs/api/.
     """
     groups = []
     for ns in namespaces:
@@ -387,19 +385,3 @@ def mintlify_navigation(namespaces):
     return groups
 
 
-def _ts(value, indent=8):
-    """Питоновские dict/list -> литерал TypeScript."""
-    pad = ' ' * indent
-    if isinstance(value, dict):
-        inner = ', '.join('%s: %s' % (k, _ts(v, indent)) for k, v in value.items())
-        return '{%s}' % inner
-    if isinstance(value, list):
-        rows = ',\n'.join(pad + _ts(v, indent + 2) for v in value)
-        return '[\n%s,\n%s]' % (rows, ' ' * (indent - 2))
-    if isinstance(value, bool):
-        return 'true' if value else 'false'
-    return "'%s'" % value
-
-
-def sidebar(entries):
-    return _ts(entries, 8)

@@ -1,6 +1,7 @@
--- Роутер команд: одна регистрация обслуживает чат, командный чат и консоль,
--- и на нём же висят проверка прав и иммунитет. Разъедься эти пути — и право
--- будет проверяться в чате, но не в консоли.
+-- Роутер команд: одна регистрация обслуживает чат, командный чат, консоль
+-- игрока и серверную консоль, и на нём же висят проверка прав и иммунитет.
+-- Разъедься эти пути — и право будет проверяться в чате, но не в консоли
+-- игрока.
 
 local GROUPS = [[{
 	default   = { weight = 0 },
@@ -169,25 +170,32 @@ return function(t, support)
 		t.eq(hits, 1)
 	end)
 
-	t.it("консольная команда не срабатывает из чата", function()
+	t.it("серверная команда не срабатывает из чата", function()
 		setup()
 		local hits = 0
-		cmd.add("lua_thing", function() hits = hits + 1 end, { source = "console" })
+		cmd.add("lua_thing", function() hits = hits + 1 end, { source = "server" })
 
 		say(support.player(1), "!lua_thing")
 		t.eq(hits, 0)
 	end)
 
-	t.it("консольная команда регистрируется в движке", function()
+	t.it("серверная команда регистрируется в движке", function()
 		setup()
-		cmd.add("lua_thing", function() end, { source = "console" })
-		t.ok(support.console_commands["lua_thing"])
+		cmd.add("lua_thing", function() end, { source = "server" })
+		t.ok(support.server_commands["lua_thing"])
 	end)
 
 	t.it("чат-команда движок не занимает", function()
 		setup()
 		cmd.add("hp", function() end, { source = "chat" })
-		t.eq(support.console_commands["hp"], nil)
+		t.eq(support.server_commands["hp"], nil)
+	end)
+
+	t.it("команда для консоли игрока не занимает движок, а клиентский реестр", function()
+		setup()
+		cmd.add("lua_stats", function() end, { source = "console" })
+		t.eq(support.server_commands["lua_stats"], nil)
+		t.ok(support.client_commands["lua_stats"])
 	end)
 
 	t.it("неизвестный источник — ошибка при регистрации", function()
@@ -198,27 +206,118 @@ return function(t, support)
 	end)
 
 	--------------------------------------------------------------------
-	-- Консоль
+	-- Алиасы и раскладка
 	--------------------------------------------------------------------
 
-	t.it("из консоли ctx.player равен nil", function()
+	t.it("список имён — все алиасы бьют в один обработчик", function()
+		setup()
+		local hits = 0
+		cmd.add({ "nomination", "nominate" }, function() hits = hits + 1 end)
+
+		say(support.player(1), "!nomination")
+		say(support.player(1), "!nominate")
+		t.eq(hits, 2)
+	end)
+
+	t.it("layout_alias добавляет вариант в другой раскладке", function()
+		setup()
+		local hits = 0
+		cmd.add("nomination", function() hits = hits + 1 end, { layout_alias = true })
+
+		say(support.player(1), "!тщьштфешщт")
+		t.eq(hits, 1)
+	end)
+
+	t.it("без layout_alias раскладочный вариант не работает", function()
+		setup()
+		local hits = 0
+		cmd.add("nomination", function() hits = hits + 1 end)
+
+		say(support.player(1), "!тщьштфешщт")
+		t.eq(hits, 0)
+	end)
+
+	t.it("layout_alias применяется к каждому имени из списка", function()
+		setup()
+		cmd.add({ "maps" }, function() end, { layout_alias = true, source = "server" })
+		t.ok(support.server_commands["maps"])
+		t.ok(support.server_commands["ьфзы"])
+	end)
+
+	t.it("layout_alias не ломается на имени без латиницы", function()
+		setup()
+		local ok = pcall(cmd.add, "карты", function() end, { layout_alias = true })
+		t.ok(ok, "кириллическое имя должно просто остаться без алиаса, а не падать")
+	end)
+
+	--------------------------------------------------------------------
+	-- Консоль сервера
+	--------------------------------------------------------------------
+
+	t.it("с сервера ctx.player равен nil", function()
 		setup()
 		local seen = "не вызывалось"
-		cmd.add("lua_who", function(ctx) seen = ctx.player end, { source = "console" })
+		cmd.add("lua_who", function(ctx) seen = ctx.player end, { source = "server" })
 
-		support.console_commands["lua_who"]({})
+		support.server_commands["lua_who"]({})
 		t.eq(seen, nil)
 	end)
 
-	-- Консоль — высшая власть на машине, ей права не проверяют.
-	t.it("из консоли право не проверяется", function()
+	-- Сервер и rcon — высшая власть на машине, им права не проверяют.
+	t.it("с сервера право не проверяется", function()
+		setup()
+		local hits = 0
+		cmd.add("lua_slay", function() hits = hits + 1 end,
+			{ source = "server", perm = "admin.slay" })
+
+		support.server_commands["lua_slay"]({})
+		t.eq(hits, 1)
+	end)
+
+	--------------------------------------------------------------------
+	-- Консоль игрока
+	--------------------------------------------------------------------
+
+	t.it("из своей консоли ctx.player — вызвавший игрок", function()
+		setup()
+		local seen
+		cmd.add("lua_where", function(ctx) seen = ctx.player end, { source = "console" })
+
+		local p = support.player(1)
+		support.client_commands["lua_where"](p.id, {})
+		t.eq(seen, p)
+	end)
+
+	-- В отличие от серверной консоли это реальный игрок: право проверяется
+	-- так же, как в чате.
+	t.it("из своей консоли право проверяется", function()
 		setup()
 		local hits = 0
 		cmd.add("lua_slay", function() hits = hits + 1 end,
 			{ source = "console", perm = "admin.slay" })
 
-		support.console_commands["lua_slay"]({})
-		t.eq(hits, 1)
+		local p = support.player(1)
+		support.client_commands["lua_slay"](p.id, {})
+		t.eq(hits, 0)
+	end)
+
+	t.it("из своей консоли reply уходит в консоль тому же игроку", function()
+		setup()
+		cmd.add("lua_ping", function(ctx) ctx.reply("pong") end, { source = "console" })
+
+		local p = support.player(1)
+		support.client_commands["lua_ping"](p.id, {})
+		t.eq(p.consoled[1], "pong")
+	end)
+
+	t.it("аргументы из консоли игрока доходят так же, как из чата", function()
+		setup()
+		local got
+		cmd.add("give", function(ctx) got = ctx.args end, { source = "console" })
+
+		local p = support.player(1)
+		support.client_commands["give"](p.id, { "kotya", "500" })
+		t.eq(got[2], "500")
 	end)
 
 	--------------------------------------------------------------------
@@ -386,11 +485,41 @@ return function(t, support)
 		t.eq(p.said[1], "pong")
 	end)
 
-	t.it("из консоли reply уходит в консоль", function()
+	t.it("из серверной консоли reply уходит в неё же", function()
 		setup()
-		cmd.add("lua_ping", function(ctx) ctx.reply("pong") end, { source = "console" })
+		cmd.add("lua_ping", function(ctx) ctx.reply("pong") end, { source = "server" })
 
-		support.console_commands["lua_ping"]({})
+		support.server_commands["lua_ping"]({})
 		t.eq(support.printed[#support.printed], "pong")
+	end)
+
+	-- Ни серверная консоль, ни консоль игрока не умеют цвет чата - сырые
+	-- {tag} никто там не отрисует.
+	t.it("из серверной консоли теги цвета срезаются", function()
+		setup()
+		cmd.add("lua_ping", function(ctx) ctx.reply("{green}~ {default}pong") end,
+			{ source = "server" })
+
+		support.server_commands["lua_ping"]({})
+		t.eq(support.printed[#support.printed], "~ pong")
+	end)
+
+	t.it("из консоли игрока теги цвета срезаются", function()
+		setup()
+		cmd.add("lua_ping", function(ctx) ctx.reply("{green}~ {default}pong") end,
+			{ source = "console" })
+
+		local p = support.player(1)
+		support.client_commands["lua_ping"](p.id, {})
+		t.eq(p.consoled[1], "~ pong")
+	end)
+
+	t.it("из чата теги цвета остаются", function()
+		setup()
+		cmd.add("ping", function(ctx) ctx.reply("{green}pong") end)
+
+		local p = support.player(1)
+		say(p, "!ping")
+		t.eq(p.said[1], "{green}pong")
 	end)
 end

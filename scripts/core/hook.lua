@@ -45,4 +45,4 @@ cmd.add("lua_hooks", function(ctx)
 			ctx.reply(("      %-24s %s"):format(row.plugin, row.id))
 		end
 	end
-end, { source = "console" })
+end, { source = "server" })

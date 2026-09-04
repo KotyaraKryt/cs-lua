@@ -35,6 +35,14 @@ print("Карта: " .. sv.map() .. ", время раунда: " .. sv.cvar("mp
                     'notes': [('note', '`os.clock()` — это CPU-время, оно сильно расходится на сервере,\nкоторый спит между кадрами. Для интервалов бери `sv.time()`.')],
                 },
                 {
+                    'name': 'sv.timeleft',
+                    'brief': 'Секунд до конца карты по mp_timelimit.',
+                    'sig': 'sv.timeleft()',
+                    'args': [],
+                    'returns': [('number', 'целые секунды; `-1`, если `mp_timelimit` — `0` (без лимита)')],
+                    'extra': 'То же, что `get_timeleft` в AMX Mod X: `mp_timelimit * 60 - sv.time()`,\nобрезано снизу нулём.',
+                },
+                {
                     'name': 'sv.map',
                     'brief': 'Имя текущей карты.',
                     'sig': 'sv.map()',

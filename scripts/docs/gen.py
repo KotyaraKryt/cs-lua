@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Собирает docs/api/ и website/sidebars.ts из scripts/docs/api/*.py.
+"""Собирает docs/api/ и docs/docs.json (навигация Mintlify) из scripts/docs/api/*.py.
 
     python scripts/docs/gen.py
 
@@ -21,33 +21,10 @@ import render  # noqa: E402
 
 # Порядок в меню: от того, с чего начинают, к тому, что ищут реже.
 NAMESPACES = [
-    'hook', 'msg', 'cmd', 'players', 'timer', 'ents', 'vec', 'fx', 'res',
-    'sv', 'db', 'mysql', 'store', 'file', 'log', 'regex',
+    'hook', 'msg', 'cmd', 'players', 'timer', 'time', 'ents', 'vec', 'fx', 'res',
+    'sv', 'db', 'mysql', 'datafile', 'file', 'log', 'regex',
     'http', 'menu', 'ui', 'access', 'plugin', 'exports',
 ]
-
-SIDEBAR = """import type {SidebarsConfig} from '@docusaurus/plugin-content-docs';
-
-// Этот файл генерируется: python scripts/docs/gen.py
-// Правь scripts/docs/api/*.py, а не его.
-const sidebars: SidebarsConfig = {
-  docs: [
-    {type: 'doc', id: 'intro', label: 'Что это'},
-    {type: 'doc', id: 'install', label: 'Установка'},
-    {type: 'doc', id: 'plugins', label: 'Структура плагина'},
-    {
-      type: 'category',
-      label: 'Справочник API',
-      collapsed: false,
-      link: {type: 'doc', id: 'api/index'},
-      items: %(items)s,
-    },
-    {type: 'doc', id: 'building', label: 'Сборка модуля'},
-  ],
-};
-
-export default sidebars;
-"""
 
 
 def main():
@@ -70,22 +47,12 @@ def main():
         io.open(os.path.join(api_dir, name), 'w', encoding='utf-8', newline='').write(text)
 
     loaded = [importlib.import_module('api.' + name).NS for name in NAMESPACES]
-    entries, registry, pages = render.generate(loaded, api_dir)
+    _entries, registry, pages = render.generate(loaded, api_dir)
 
     io.open(os.path.join(api_dir, 'all.md'), 'w', encoding='utf-8', newline='').write(
         render.render_all(loaded, registry))
     pages += 1
 
-    entries.append({'type': 'doc', 'id': 'api/all', 'label': 'Все вызовы'})
-    entries.append({'type': 'doc', 'id': 'api/console', 'label': 'Консольные команды'})
-
-    io.open(os.path.join(ROOT, 'website', 'sidebars.ts'), 'w',
-            encoding='utf-8', newline='').write(
-        SIDEBAR % {'items': render.sidebar(entries)})
-
-    # Параллельный вывод под Mintlify - живёт рядом с Docusaurus, пока переезд
-    # не подтверждён (см. план миграции). Структура групп та же, что и в
-    # sidebars.ts выше, просто в формате docs.json вместо TS-литерала.
     docs_json = {
         '$schema': 'https://mintlify.com/docs.json',
         'theme': 'palm',

@@ -143,6 +143,20 @@ function color.chat(v)
 	return chat_nearest(v)
 end
 
+-- The exact tags SayText understands - see s_chat_tags in lua_message.cpp.
+-- Nothing else (console, rcon, a player's own client console) renders them,
+-- so a reply that started life as a chat message needs these gone, not just
+-- left as literal "{green}" noise.
+local CHAT_TAGS = { "{default}", "{yellow}", "{team}", "{green}" }
+
+-- color.strip_chat(text) -> text with every {tag} above removed.
+function color.strip_chat(text)
+	for _, tag in ipairs(CHAT_TAGS) do
+		text = text:gsub(tag, "")
+	end
+	return text
+end
+
 --------------------------------------------------------------------------
 -- HUD: whatever it is given.
 --------------------------------------------------------------------------

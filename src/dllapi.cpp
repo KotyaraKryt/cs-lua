@@ -7,6 +7,7 @@
 #include "lua_httpserver.h"
 #include "lua_sound.h"
 #include "lua_menu.h"
+#include "lua_command.h"
 #include "lua_entity.h"
 #include "lua_player.h"
 #include "players.h"
@@ -134,16 +135,21 @@ static void ClientCommand(edict_t *pEntity)
 	if (!cmd)
 		RETURN_META(MRES_IGNORED);
 
+	int id = g_engfuncs.pfnIndexOfEdict(pEntity);
+
 	// A menu answer is consumed here so CS never treats the key as a reply to
 	// its own team/buy menu.
-	if (cslua_menu_handle_select(g_engfuncs.pfnIndexOfEdict(pEntity), cmd))
+	if (cslua_menu_handle_select(id, cmd))
 		RETURN_META(MRES_SUPERCEDE);
-
-	int id = g_engfuncs.pfnIndexOfEdict(pEntity);
 
 	// Superceded outright: the game DLL's "drop" handler never runs, so there
 	// is no weapon entity in the world - see p:suppress_drop.
 	if (!strcmp(cmd, "drop") && g_players.suppress_drop(id))
+		RETURN_META(MRES_SUPERCEDE);
+
+	// A cmd.add(..., { source = "console" }) command, typed into the player's
+	// own client console rather than chat or the dedicated server console.
+	if (cslua_command_handle_client(id, cmd))
 		RETURN_META(MRES_SUPERCEDE);
 
 	bool team = !strcmp(cmd, "say_team");

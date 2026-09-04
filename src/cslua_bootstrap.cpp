@@ -27,6 +27,7 @@ const BootstrapFile FILES[] =
 	{ "core", "hook.lua" },
 	{ "core", "i18n.lua" },
 	{ "core", "perms.lua" },
+	{ "core", "res.lua" },
 	{ "core", "ui.lua" },
 	{ "lib", "class.lua" },
 	{ "lib", "color.lua" },

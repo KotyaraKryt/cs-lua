@@ -216,4 +216,4 @@ cmd.add("lua_perms", function(ctx)
 		return ctx.reply("lua_perms: groups | list | users | who | check | grant | revoke | copy | save | reload")
 	end
 	sub(ctx)
-end, { source = "console" })
+end, { source = "server" })
