@@ -58,6 +58,7 @@ function Player:userid()  return self._userid end
 function Player:team()    return self._team end
 function Player:alive()   return self._alive end
 function Player:chat(text) self.said[#self.said + 1] = text end
+function Player:console(text) self.consoled[#self.consoled + 1] = text end
 
 -- p:can и остальное появляются через players.method, поэтому промах ищем
 -- сначала там.
@@ -77,6 +78,7 @@ function support.player(id, opts)
 		_team    = opts.team or "CT",
 		_alive   = opts.alive ~= false,
 		said     = {},
+		consoled = {},
 	}, Player)
 
 	support.connected[id] = p
@@ -90,7 +92,8 @@ end
 function support.reset()
 	support.connected = {}
 	support.hooks = {}
-	support.console_commands = {}
+	support.server_commands = {}
+	support.client_commands = {}
 	support.printed = {}
 
 	for _, name in ipairs({ "access", "cmd", "hook", "players", "sv", "ui",
@@ -134,8 +137,11 @@ function support.reset()
 	}
 
 	_G.cmd = {
-		_register = function(name, fn)
-			support.console_commands[name] = fn
+		_register_server = function(name, fn)
+			support.server_commands[name] = fn
+		end,
+		_register_console = function(name, fn)
+			support.client_commands[name] = fn
 		end,
 	}
 
