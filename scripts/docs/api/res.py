@@ -47,6 +47,49 @@ NS = {
                     'notes': [WHEN],
                     'see': [('e:model', '../ents/model.md')],
                 },
+                {
+                    'name': 'res.declare',
+                    'brief': 'Объявляет и прекеширует дерево ресурсов одним вызовом.',
+                    'sig': 'res.declare(t)',
+                    'args': [('t', 'table', '`{ sound = ..., model = ... }`, см. пример')],
+                    'returns': [('table', 'тот же `t`, без изменений')],
+                    'example': """
+local resource = res.declare({
+	sound = {
+		"i18/mm/1.wav", "i18/mm/2.wav",
+		start = "i18/mm/start.wav",
+		voice = { "i18/vo/a.wav", "i18/vo/b.wav" },
+	},
+})
+
+players.broadcast:play_sound(resource.sound.start)
+""",
+                    'extra': """
+Обходит `t.sound`/`t.model` на любую глубину — список, именованные ключи,
+вложенные подтаблицы, вперемешку — и зовёт `res.sound`/`res.model` на каждую
+найденную строку. Возвращает тот же `t`: путь, который объявил, и есть
+готовый хендл, разворачивать нечего.
+
+Сахар поверх `res.sound`/`res.model`, не отдельный механизм — тот же лимит и
+тот же перенос на следующую карту, если вызвано не в теле плагина.
+""",
+                    'notes': [WHEN],
+                },
+                {
+                    'name': 'res.sound_exists',
+                    'brief': 'Уже зарегистрирован ли этот звук.',
+                    'sig': 'res.sound_exists(path)',
+                    'args': [('path', 'string', 'путь от `cstrike/sound/`')],
+                    'returns': [('boolean', '`true`, если путь уже в списке прекеша — своего плагина или чужого')],
+                    'extra': 'Не защита от дублей — res.sound() и так безопасно звать дважды с одним путём,\nвторой вызов просто ничего не делает. Это для "хочу знать", не для "прекешить\nили нет".',
+                },
+                {
+                    'name': 'res.model_exists',
+                    'brief': 'Уже зарегистрирована ли эта модель.',
+                    'sig': 'res.model_exists(path)',
+                    'args': [('path', 'string', 'путь от `cstrike/`')],
+                    'returns': [('boolean', '`true`, если путь уже в списке прекеша — своего плагина или чужого')],
+                },
             ],
         },
     ],

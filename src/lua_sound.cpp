@@ -224,6 +224,26 @@ static int l_precache_model(lua_State *L)
 	return add_resource(L, s_models, true);
 }
 
+// res.sound_exists(name) / res.model_exists(name) -> true if that exact path
+// is already registered, by this plugin or any other. Not a permission
+// check, not a "should I precache this" gate - add_resource() already
+// dedupes by name on its own (see `contains` above), so calling res.sound()
+// twice for the same path across two plugins is already a no-op, not a
+// double registration. This is for a plugin that wants to know, not to act.
+static int l_sound_exists(lua_State *L)
+{
+	const char *name = luaL_checkstring(L, 1);
+	lua_pushboolean(L, contains(s_sounds, name));
+	return 1;
+}
+
+static int l_model_exists(lua_State *L)
+{
+	const char *name = luaL_checkstring(L, 1);
+	lua_pushboolean(L, contains(s_models, name));
+	return 1;
+}
+
 void cslua_play_sound(int id, const char *sample, int channel, float volume,
 	float attenuation, int pitch)
 {
@@ -279,8 +299,10 @@ void cslua_play_sound_private(int id, const char *sample)
 // replays the registry on every map.
 static const luaL_Reg s_res[] =
 {
-	{ "sound", l_precache_sound },
-	{ "model", l_precache_model },
+	{ "sound",        l_precache_sound },
+	{ "model",        l_precache_model },
+	{ "sound_exists", l_sound_exists },
+	{ "model_exists", l_model_exists },
 	{ NULL, NULL }
 };
 
