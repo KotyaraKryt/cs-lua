@@ -8,7 +8,8 @@
 
 ```
 common/addons/                         нужно в любом случае
-  amxmodx/scripting/cslua_army_ranks.sma   обёртки натив -> public, исходник
+  amxmodx/plugins/cslua_army_ranks.amxx    готовый плагин-обёртка
+  amxmodx/scripting/cslua_army_ranks.sma   его исходник
   lua/plugins/army_ranks/                  Lua-обёртка с человеческим API
 
 linux/addons/                          если прод на Linux
@@ -53,17 +54,16 @@ cslua_bridge
 Имя именно такое. `_amxx` внутри имени модуля вешает AMXX 1.9.0.5249
 намертво при старте (проверено), суффикс `_amxx` он дописывает сам.
 
-**2. Плагин-обёртка.** Скомпилировать `cslua_army_ranks.sma` — рядом с
-ним в `scripting/include/` должен лежать `army_ranks_ultimate.inc` от
-самого army_ranks:
+**2. Плагин-обёртка.** `cslua_army_ranks.amxx` уже собран (amxxpc
+1.9.0.5271 против настоящего `army_ranks_ultimate.inc`) — просто положить
+в `plugins/`. Пересобрать при желании:
 
 ```
 cd cstrike/addons/amxmodx/scripting
 ./amxxpc cslua_army_ranks.sma -iinclude
 ```
 
-Готовый `.amxx` — в `plugins/`, и строку в `configs/plugins.ini`
-**после** `army_ranks_ultimate.amxx`:
+Строку в `configs/plugins.ini` — **после** `army_ranks_ultimate.amxx`:
 
 ```
 cslua_army_ranks.amxx

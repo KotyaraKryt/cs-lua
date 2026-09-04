@@ -74,7 +74,9 @@ public ARB_LockMap(const mapname[])
     return ar_get_lockmap(mapname)
 }
 
-public ARB_WriteAddXP(const write[])
+// Без const: ar_get_write_addxp объявлен как write[], а не const write[] -
+// с const компилятор ругается на несоответствие типа первого аргумента.
+public ARB_WriteAddXP(write[])
 {
     return ar_get_write_addxp(write)
 }
