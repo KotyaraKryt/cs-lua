@@ -147,4 +147,4 @@ cmd.add("lua_exports", function(ctx)
 		end
 		ctx.reply(("  %-20s %s"):format(id, table.concat(names, ", ")))
 	end
-end, { source = "console" })
+end, { source = "server" })

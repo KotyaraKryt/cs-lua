@@ -255,4 +255,4 @@ cmd.add("lua_lang", function(ctx)
 	end
 	ctx.reply(("your language: %s (explicit: %s, guessed: %s, default: %s)")
 		:format(lang.of(p), override[p.id] or "-", guessed[p.id] or "-", server_default:str()))
-end, { source = { "console", "chat" } })
+end, { source = { "server", "chat" } })

@@ -292,7 +292,7 @@ end
 
 cmd.add("lua_test", function(ctx)
 	report(ctx.reply)
-end, { source = "console" })
+end, { source = "server" })
 
 -- Не при загрузке: сущностей тогда ещё нет, и проверка ents.* упала бы на том
 -- самом правиле, которое проверяет. Первый кадр наступает уже с картой.

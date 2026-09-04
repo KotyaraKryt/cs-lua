@@ -354,6 +354,26 @@ static int l_sv_time(lua_State *L)
 	return 1;
 }
 
+// sv.timeleft() -> seconds left on mp_timelimit, -1 if it is 0 (unlimited).
+// Same formula AMX Mod X's get_timeleft used: gpGlobals->time is already
+// seconds since this map started (sv.time() above), so timelimit*60 minus
+// that is what is left. Clamped to 0, never negative once the limit passes.
+static int l_sv_timeleft(lua_State *L)
+{
+	float limit = CVAR_GET_FLOAT("mp_timelimit");
+	if (limit <= 0.0f) {
+		lua_pushinteger(L, -1);
+		return 1;
+	}
+
+	float left = limit * 60.0f - (gpGlobals ? gpGlobals->time : 0.0f);
+	if (left < 0.0f)
+		left = 0.0f;
+
+	lua_pushinteger(L, (lua_Integer)left);
+	return 1;
+}
+
 // sv.map() -> the current map, "de_dust2".
 static int l_sv_map(lua_State *L)
 {
@@ -538,6 +558,7 @@ static const luaL_Reg s_sv[] =
 {
 	{ "cmd",           l_sv_cmd },
 	{ "time",          l_sv_time },
+	{ "timeleft",      l_sv_timeleft },
 	{ "map",           l_sv_map },
 	{ "map_exists",    l_sv_map_exists },
 	{ "maps",          l_sv_maps },

@@ -40,7 +40,8 @@ local color = require("color")
 -- plugin sees by default...
 local show_panel  = menu._show
 local close_panel = menu._close
-menu._show, menu._close = nil, nil
+local panel_open  = menu._is_open
+menu._show, menu._close, menu._is_open = nil, nil, nil
 
 -- ui.color(v) -> { r, g, b }. The one place a colour is turned into numbers,
 -- for a plugin that wants to compute one rather than name it.
@@ -177,6 +178,47 @@ Custom.__index = Custom
 -- Who is looking at what, so a reply lands on the right menu and page.
 local open = {}
 
+-- Drops whatever panel a player has on screen, tracked or not (menu.new,
+-- custom, or raw_show all go through the same show_panel/close_panel pair).
+local function close_any(p)
+	open[p.id] = nil
+	close_panel(p.id)
+end
+
+-- players.broadcast has no :connected() or .id in the per-player sense - a
+-- caller that wants "everyone" hands it in instead of walking players.list()
+-- itself. Rejects it where a single player is required (is_open queries):
+-- "is it open" only means something for one specific screen.
+local function each_connected(fn)
+	for _, pl in ipairs(players.list()) do
+		fn(pl)
+	end
+end
+
+local function reject_broadcast(p, who)
+	if p == players.broadcast then
+		error(who .. ": needs a single player, not players.broadcast", 3)
+	end
+end
+
+-- menu.is_open(p) -> is anything at all on their screen right now (menu.new,
+-- menu.custom, menu.confirm, or a raw_show panel). Backed by the engine-side
+-- state, not the open[] table below, so a raw_show panel counts too.
+function menu.is_open(p)
+	reject_broadcast(p, "menu.is_open")
+	return panel_open(p.id)
+end
+
+-- menu.close_all([p]) -> close whatever is on screen, no matter whose menu it
+-- is. No argument (or players.broadcast) hits every connected player; a
+-- single player closes just that one screen.
+function menu.close_all(p)
+	if p == nil or p == players.broadcast then
+		return each_connected(close_any)
+	end
+	close_any(p)
+end
+
 -- ...but a plugin that wants to build the panel text and key mask itself -
 -- the same shape AMXModX's show_menu()/register_menucmd() offered - gets
 -- that here instead. Handle the answer with hook.add("menu:select", ...);
@@ -254,6 +296,10 @@ function menu.custom(opts)
 end
 
 function Custom:show(p)
+	if p == players.broadcast then
+		return each_connected(function(pl) self:show(pl) end)
+	end
+
 	if not p or not p:connected() then
 		return
 	end
@@ -267,9 +313,23 @@ function Custom:show(p)
 	show_panel(p.id, keys == nil and KEYMASK_ALL or keymask(keys), self.time, text)
 end
 
+-- Only touches a player whose screen is actually showing this panel right
+-- now - a broadcast close must not swat some other menu they happen to have
+-- open instead.
 function Custom:close(p)
-	open[p.id] = nil
-	close_panel(p.id)
+	if p == players.broadcast then
+		return each_connected(function(pl)
+			if self:is_open(pl) then close_any(pl) end
+		end)
+	end
+	close_any(p)
+end
+
+-- Is this exact panel (not just some panel) on screen for them right now.
+function Custom:is_open(p)
+	reject_broadcast(p, "menu:is_open")
+	local state = open[p.id]
+	return state ~= nil and state.custom == self
 end
 
 -- menu.confirm(p, text, on_yes[, on_no][, opts]) - a yes/no box, the most
@@ -555,7 +615,15 @@ end
 -- show(player [, page [, back]])
 -- `back` is an internal frame { menu, page, back } - the submenu machinery
 -- fills it in; callers pass just the player (and maybe a page).
+--
+-- player can be players.broadcast to open it for everyone connected. Each
+-- gets their own render() pass - text/disabled can be function(player), so
+-- one player's panel can legitimately read different from another's.
 function Menu:show(p, page, back)
+	if p == players.broadcast then
+		return each_connected(function(pl) self:show(pl, page, back) end)
+	end
+
 	page = page or 0
 	if not p or not p:connected() then
 		return
@@ -576,9 +644,24 @@ function Menu:show(p, page, back)
 	show_panel(p.id, keys, self.time, text)
 end
 
+-- player can be players.broadcast: closes this menu for everyone who
+-- currently has it on screen. Someone looking at a different menu (or
+-- another plugin's) is left alone.
 function Menu:close(p)
-	open[p.id] = nil
-	close_panel(p.id)
+	if p == players.broadcast then
+		return each_connected(function(pl)
+			if self:is_open(pl) then close_any(pl) end
+		end)
+	end
+	close_any(p)
+end
+
+-- Is this exact menu (this page or a submenu of it does NOT count) on their
+-- screen right now - not just some menu, this one.
+function Menu:is_open(p)
+	reject_broadcast(p, "menu:is_open")
+	local state = open[p.id]
+	return state ~= nil and state.menu == self
 end
 
 hook.add("menu:select", "core.menu_select", function(e)
