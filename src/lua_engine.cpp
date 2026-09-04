@@ -20,6 +20,7 @@
 #include "lua_http.h"
 #include "lua_mysql.h"
 #include "lua_httpserver.h"
+#include "lua_amxx.h"
 #include "regamedll.h"
 #include "platform.h"
 
@@ -270,6 +271,7 @@ void LuaEngine::init()
 	cslua_register_http(m_L);
 	cslua_register_httpserver(m_L);
 	cslua_register_mysql(m_L);
+	cslua_register_amxx(m_L);
 
 	// Only for code that reaches for the stock require; plugins get their own.
 	const std::string &base = cslua_base_dir();

@@ -199,6 +199,7 @@ add_library(lua_mm SHARED
 	src/lua_http.cpp
 	src/lua_httpserver.cpp
 	src/lua_mysql.cpp
+	src/lua_amxx.cpp
 	src/regamedll.cpp
 	src/rehlds.cpp
 	src/cslua_corpse.cpp
@@ -334,5 +335,62 @@ if(CSLUA_SERVER_DIR)
 		# не затирается - копируется только если его там ещё нет.
 		COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${CMAKE_SOURCE_DIR}/scripts/load_order.txt" "${SERVER_LUA_DIR}/load_order.txt.example"
 		COMMENT "Installing $<TARGET_FILE_NAME:lua_mm> and the core layer into ${SERVER_LUA_DIR}"
+	)
+endif()
+
+# ---------------------------------------------------------------------------
+# EXPERIMENTAL - branch experiment/amxx-native-bridge only, never merged to
+# main. A real AMXX module (loaded by amxmodx via modules.ini, not metamod -
+# see third_party/amxmodx-sdk/README.md), so it cannot join the lua_mm
+# target above: separate loader, separate exports.
+# ---------------------------------------------------------------------------
+
+# amxxmodule.cpp itself is not compiled in - see the comment atop
+# src/amxx_bridge.cpp: its own AMXX_Attach REQFUNCs several dozen amxmodx
+# core functions unconditionally, and asking this old a server build for
+# one it does not have hung the whole process instead of failing cleanly.
+# Only amxxmodule.h (types/macros) is used.
+set(AMXXSDK_ROOT "${CMAKE_SOURCE_DIR}/third_party/amxmodx-sdk")
+
+add_library(lua_amxx_bridge SHARED src/amxx_bridge.cpp)
+
+target_include_directories(lua_amxx_bridge PRIVATE src "${AMXXSDK_ROOT}")
+
+# Modern compilers ship a real <stdint.h>; without this, amxxmodule.h's own
+# pre-C99 int32_t/uint32_t typedefs (for compilers that lack one) collide
+# with it. amxmodx's own build sets this ahead of time for the same reason.
+target_compile_definitions(lua_amxx_bridge PRIVATE HAVE_STDINT_H)
+
+if(WIN32)
+	# Name must not contain "_amxx" anywhere but the suffix amxmodx itself
+	# appends: an entry like "lua_amxx_bridge" in modules.ini hung amxmodx
+	# 1.9.0.5249 solid, spinning before it ever mapped the file.
+	set_target_properties(lua_amxx_bridge PROPERTIES
+		PREFIX ""
+		OUTPUT_NAME "cslua_bridge_amxx"
+		MSVC_RUNTIME_LIBRARY "MultiThreaded"
+	)
+	target_compile_definitions(lua_amxx_bridge PRIVATE _CRT_SECURE_NO_WARNINGS)
+else()
+	set_target_properties(lua_amxx_bridge PROPERTIES
+		PREFIX ""
+		OUTPUT_NAME "cslua_bridge_amxx_i386"
+		POSITION_INDEPENDENT_CODE ON
+	)
+	# No LuaJIT (or anything else) statically linked in here, unlike lua_mm -
+	# nothing to leak, so a plain -fvisibility=hidden is enough; every symbol
+	# amxmodx/lua_mm actually need is marked DLLEXPORT in amxxmodule.h, which
+	# forces default visibility back on per-symbol.
+	target_compile_options(lua_amxx_bridge PRIVATE -Wall -fvisibility=hidden)
+	target_link_options(lua_amxx_bridge PRIVATE -static-libgcc -static-libstdc++)
+endif()
+
+if(CSLUA_SERVER_DIR AND EXISTS "${CSLUA_SERVER_DIR}/addons/amxmodx")
+	set(SERVER_AMXX_MODULES_DIR "${CSLUA_SERVER_DIR}/addons/amxmodx/modules")
+
+	add_custom_command(TARGET lua_amxx_bridge POST_BUILD
+		COMMAND "${CMAKE_COMMAND}" -E make_directory "${SERVER_AMXX_MODULES_DIR}"
+		COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:lua_amxx_bridge>" "${SERVER_AMXX_MODULES_DIR}/$<TARGET_FILE_NAME:lua_amxx_bridge>"
+		COMMENT "Installing $<TARGET_FILE_NAME:lua_amxx_bridge> into ${SERVER_AMXX_MODULES_DIR}"
 	)
 endif()
