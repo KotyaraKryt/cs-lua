@@ -2,7 +2,10 @@ name: build
 
 on:
   push:
-    branches: [main]
+    # experiment/** тоже: у экспериментальных веток нет своего релиза, а
+    # собранные там бинарники (в частности мост под AmxModX) нужны как
+    # артефакты - собрать их локально под Linux с Windows-машины нечем.
+    branches: [main, 'experiment/**']
     tags: ['v*']
   pull_request:
   workflow_dispatch:
@@ -52,6 +55,16 @@ jobs:
         with:
           name: lua_mm-x86
           path: build/Release/lua_mm.dll
+          if-no-files-found: error
+
+      # Экспериментальный мост к AmxModX (ветка experiment/amxx-native-bridge).
+      # На ветках, где его нет, шага просто не будет - отсюда `if`.
+      - name: Upload the AMXX bridge
+        if: hashFiles('src/amxx_bridge.cpp') != ''
+        uses: actions/upload-artifact@v5
+        with:
+          name: cslua_bridge-x86
+          path: build/Release/cslua_bridge_amxx.dll
           if-no-files-found: error
 
   linux:
@@ -119,6 +132,27 @@ jobs:
         with:
           name: lua_mm-linux-x86
           path: build/lua_mm_i386.so
+          if-no-files-found: error
+
+      # Тот же экспериментальный мост, но собранный внутри ubuntu:18.04 -
+      # значит с тем же полом по glibc, что и сам модуль.
+      - name: Check the AMXX bridge
+        if: hashFiles('src/amxx_bridge.cpp') != ''
+        run: |
+          file build/cslua_bridge_amxx_i386.so
+          file build/cslua_bridge_amxx_i386.so | grep -q "ELF 32-bit" \
+            || { echo "not a 32-bit ELF"; exit 1; }
+          echo "--- exported module API ---"
+          nm -D --defined-only build/cslua_bridge_amxx_i386.so \
+            | grep -E "AMXX_(Query|Attach|Detach)|cslua_amxx_call" \
+            || { echo "module entry points are missing"; exit 1; }
+
+      - name: Upload the AMXX bridge
+        if: hashFiles('src/amxx_bridge.cpp') != ''
+        uses: actions/upload-artifact@v5
+        with:
+          name: cslua_bridge-linux-x86
+          path: build/cslua_bridge_amxx_i386.so
           if-no-files-found: error
 
   # CI artifacts expire, release assets do not - so on a version tag the same

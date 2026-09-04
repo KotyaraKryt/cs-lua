@@ -33,6 +33,7 @@
 #include "amxxmodule.h"
 #include "amxx_bridge.h"
 
+#include <stdio.h>
 #include <string.h>
 
 #include <string>
@@ -233,7 +234,7 @@ extern "C" DLLEXPORT bool cslua_amxx_call(const char *public_name, const CsluaAm
 	// The shape is part of the key: the same public called with a different
 	// signature is a different forward as far as AMXX is concerned.
 	char sig[32];
-	sprintf(sig, "/%d.%d", (int)shape, ncells);
+	snprintf(sig, sizeof sig, "/%d.%d", (int)shape, ncells);
 	std::string key = std::string(public_name) + sig;
 
 	if (!any_plugin_has_public(public_name))
