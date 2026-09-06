@@ -78,7 +78,10 @@ int s_generation = 1;
 int s_inflight = 0;
 std::mutex s_inflight_lock;
 
-const size_t WORKER_COUNT = 2;
+// 2 workers meant a long-poll request (getUpdates-style, tens of seconds)
+// could tie one up almost permanently, starving every other plugin's http.*
+// calls down to a single shared worker.
+const size_t WORKER_COUNT = 6;
 
 // A body this large is a bug on a game server, not a feature.
 const size_t MAX_BODY = 4 * 1024 * 1024;
