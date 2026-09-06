@@ -347,6 +347,15 @@ static int l_sv_cmd(lua_State *L)
 	return 0;
 }
 
+// sv.exec() - run every sv.cmd() queued so far right now, instead of at the
+// engine's own next flush. Needed when a command's effect (a cvar it sets)
+// has to be read back in the same call, e.g. Dproto's dp_clientinfo.
+static int l_sv_exec(lua_State *L)
+{
+	SERVER_EXECUTE();
+	return 0;
+}
+
 // sv.time() -> the server clock in seconds. Same clock timers run on.
 static int l_sv_time(lua_State *L)
 {
@@ -557,6 +566,7 @@ static const luaL_Reg s_plugin[] =
 static const luaL_Reg s_sv[] =
 {
 	{ "cmd",           l_sv_cmd },
+	{ "exec",          l_sv_exec },
 	{ "time",          l_sv_time },
 	{ "timeleft",      l_sv_timeleft },
 	{ "map",           l_sv_map },
