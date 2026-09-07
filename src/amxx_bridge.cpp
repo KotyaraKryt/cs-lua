@@ -279,13 +279,15 @@ static amxx_module_info_s g_module_info =
 	MODULE_NAME,
 	MODULE_AUTHOR,
 	MODULE_VERSION,
-	// Must stay 0. With reload-on-mapchange amxmodx unloads and remaps this
-	// module every changelevel; lua_mm resolves cslua_amxx_call by name and
-	// a remap left it calling into freed memory - the server segfaulted in
-	// l_amxx_call during the ClientDisconnect storm of SV_SpawnServer. The
-	// module holds no per-map state that needs resetting: g_forward_ids are
-	// process-lifetime forward slots that survive plugin reloads anyway.
-	0,				// do NOT reload on mapchange
+	// Must stay 1. On a mapchange amxmodx rebuilds its forward registry as
+	// plugins reload, so a g_forward_ids entry cached on the previous map
+	// then points at a dead slot and ExecuteForward silently does nothing
+	// (empty out-strings, zero returns). reload=1 runs AMXX_Detach each
+	// mapchange, which clears the cache so the next call re-registers against
+	// the current plugin set. The remap this causes is handled on the lua_mm
+	// side: it resolves cslua_amxx_call fresh on every call (see lua_amxx.cpp)
+	// instead of caching a pointer that a remap would dangle.
+	1,				// reload on mapchange
 	MODULE_LOGTAG,
 	MODULE_LIBRARY,
 	MODULE_LIBCLASS,
@@ -336,9 +338,10 @@ C_DLLEXPORT int AMXX_Attach(PFN_REQ_FNPTR reqFnptrFunc)
 
 C_DLLEXPORT int AMXX_Detach()
 {
-	// reload-on-mapchange is off (see g_module_info), so this runs only at
-	// server shutdown. Multi-plugin forwards have no unregister call in the
-	// module API anyway - just drop the id cache.
+	// Runs on every mapchange (reload=1). Multi-plugin forwards have no
+	// unregister call in the module API, so there is nothing to hand back -
+	// just drop the id cache. It has to be dropped: amxmodx rebuilds its
+	// forward registry as plugins reload, and a stale id executes nothing.
 	g_forward_ids.clear();
 	return AMXX_OK;
 }
