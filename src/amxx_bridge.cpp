@@ -58,21 +58,28 @@ static PFN_EXECUTE_FORWARD g_ExecuteForward;
 static PFN_GET_AMXSCRIPT g_GetAmxScript;
 static PFN_AMX_FINDPUBLIC g_AmxFindPublic;
 
+// Single-plugin forward, used only for the out-string shape (see below). May
+// be NULL on an amxmodx too old to expose them - the cell shapes do not need
+// it, so that is not a load failure, just an out-string call that fails soft.
+static PFN_REGISTER_SPFORWARD_BYNAME g_RegisterSPForwardByName;
+static PFN_UNREGISTER_SPFORWARD g_UnregisterSPForward;
+
 // RegisterForward takes a name and succeeds whether or not anybody
 // implements it - a multi-plugin forward with no implementers is perfectly
 // legal, it just calls nothing and returns 0. That would turn a typo in a
-// public's name into a silent zero, so check the loaded plugins first.
-// Not cached: the answer changes as plugins load and unload.
-static bool any_plugin_has_public(const char *name)
+// public's name into a silent zero, so find the implementing plugin first.
+// The AMX* is also what a single-plugin forward needs to target. Not cached:
+// the answer changes as plugins load and unload.
+static AMX *plugin_with_public(const char *name)
 {
 	for (int i = 0; ; i++) {
 		AMX *amx = g_GetAmxScript(i);
 		if (!amx)
-			return false;
+			return NULL;
 
 		int index;
 		if (g_AmxFindPublic(amx, name, &index) == AMX_ERR_NONE)
-			return true;
+			return amx;
 	}
 }
 
@@ -134,14 +141,11 @@ static int register_forward(const char *name, Shape shape, int ncells)
 			}
 			break;
 
-		case SHAPE_CELLS_OUT:
-			switch (ncells) {
-				case 0: return g_RegisterForward(name, ET_STOP2, FP_STRINGEX, FP_DONE);
-				case 1: return g_RegisterForward(name, ET_STOP2, FP_CELL, FP_STRINGEX, FP_DONE);
-				case 2: return g_RegisterForward(name, ET_STOP2, FP_CELL, FP_CELL, FP_STRINGEX, FP_DONE);
-				case 3: return g_RegisterForward(name, ET_STOP2, FP_CELL, FP_CELL, FP_CELL, FP_STRINGEX, FP_DONE);
-			}
-			break;
+		// SHAPE_CELLS_OUT is not here: a multi-plugin RegisterForward does not
+		// copy an FP_STRINGEX buffer back on every amxmodx build (cells and
+		// the return value come through, the out-string stays empty - seen on
+		// 1.9.x), so it goes through a single-plugin forward instead, see
+		// register_sp_forward_out.
 
 		case SHAPE_IN_CELLS:
 			switch (ncells) {
@@ -156,6 +160,21 @@ static int register_forward(const char *name, Shape shape, int ncells)
 			break;
 	}
 
+	return -1;
+}
+
+// The out-string shape, as a single-plugin forward against the one wrapper
+// that implements `name`. Targeted at a real AMX*, so the "NULL means any
+// plugin and crashes the server" caveat on RegisterSPForwardByName does not
+// apply. Single-plugin forwards do copy FP_STRINGEX back after the call.
+static int register_sp_forward_out(AMX *amx, const char *name, int ncells)
+{
+	switch (ncells) {
+		case 0: return g_RegisterSPForwardByName(amx, name, FP_STRINGEX, FP_DONE);
+		case 1: return g_RegisterSPForwardByName(amx, name, FP_CELL, FP_STRINGEX, FP_DONE);
+		case 2: return g_RegisterSPForwardByName(amx, name, FP_CELL, FP_CELL, FP_STRINGEX, FP_DONE);
+		case 3: return g_RegisterSPForwardByName(amx, name, FP_CELL, FP_CELL, FP_CELL, FP_STRINGEX, FP_DONE);
+	}
 	return -1;
 }
 
@@ -237,36 +256,52 @@ extern "C" DLLEXPORT bool cslua_amxx_call(const char *public_name, const CsluaAm
 	if (shape == SHAPE_BAD)
 		return false;
 
-	// The shape is part of the key: the same public called with a different
-	// signature is a different forward as far as AMXX is concerned.
-	char sig[32];
-	snprintf(sig, sizeof sig, "/%d.%d", (int)shape, ncells);
-	std::string key = std::string(public_name) + sig;
-
-	if (!any_plugin_has_public(public_name))
+	AMX *amx = plugin_with_public(public_name);
+	if (!amx)
 		return false;
 
-	auto it = g_forward_ids.find(key);
-	int id;
-	if (it != g_forward_ids.end()) {
-		id = it->second;
-	} else {
-		id = register_forward(public_name, shape, ncells);
-		if (id == -1)
-			return false;
-		g_forward_ids[key] = id;
-	}
-
-	if (shape == SHAPE_CELLS_OUT)
-		s_str_scratch[0] = '\0';
-
-	int result = execute_forward(id, args, argc, shape, ncells);
+	int result = 0;
 
 	if (shape == SHAPE_CELLS_OUT) {
+		// Single-plugin forward, registered and dropped per call: it needs the
+		// current AMX* (which changes when the plugin reloads on a mapchange),
+		// and out-string calls are rare enough - chat-prefix formatting - that
+		// caching is not worth the invalidation it would need.
+		if (!g_RegisterSPForwardByName || !g_UnregisterSPForward)
+			return false;
+
+		int id = register_sp_forward_out(amx, public_name, ncells);
+		if (id < 0)
+			return false;
+
+		s_str_scratch[0] = '\0';
+		result = execute_forward(id, args, argc, shape, ncells);
+		g_UnregisterSPForward(id);
+
 		s_str_scratch[kStringExMax - 1] = '\0';
 		const CsluaAmxxArg &o = args[argc - 1];
 		strncpy(o.out, s_str_scratch, o.outlen - 1);
 		o.out[o.outlen - 1] = '\0';
+	} else {
+		// Cell and in-string shapes: multi-plugin forward, cached by
+		// name+shape. The shape is part of the key - the same public called
+		// with a different signature is a different forward to amxmodx.
+		char sig[32];
+		snprintf(sig, sizeof sig, "/%d.%d", (int)shape, ncells);
+		std::string key = std::string(public_name) + sig;
+
+		auto it = g_forward_ids.find(key);
+		int id;
+		if (it != g_forward_ids.end()) {
+			id = it->second;
+		} else {
+			id = register_forward(public_name, shape, ncells);
+			if (id == -1)
+				return false;
+			g_forward_ids[key] = id;
+		}
+
+		result = execute_forward(id, args, argc, shape, ncells);
 	}
 
 	if (out_result)
@@ -332,6 +367,12 @@ C_DLLEXPORT int AMXX_Attach(PFN_REQ_FNPTR reqFnptrFunc)
 	g_AmxFindPublic = (PFN_AMX_FINDPUBLIC)reqFnptrFunc("amx_FindPublic");
 	if (!g_AmxFindPublic)
 		return AMXX_FUNC_NOT_PRESENT;
+
+	// Optional: only the out-string shape uses these. Missing means an
+	// amxmodx too old for single-plugin forwards - cell calls still work, an
+	// out-string call fails soft.
+	g_RegisterSPForwardByName = (PFN_REGISTER_SPFORWARD_BYNAME)reqFnptrFunc("RegisterSPForwardByName");
+	g_UnregisterSPForward = (PFN_UNREGISTER_SPFORWARD)reqFnptrFunc("UnregisterSPForward");
 
 	return AMXX_OK;
 }
