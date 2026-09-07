@@ -223,7 +223,13 @@ extern "C" DLLEXPORT int cslua_amxx_bridge_abi()
 
 extern "C" DLLEXPORT bool cslua_amxx_call(const char *public_name, const CsluaAmxxArg *args, int argc, long *out_result)
 {
-	if (!public_name || argc < 0 || argc > CSLUA_AMXX_MAX_ARGS || !g_RegisterForward)
+	if (!public_name || argc < 0 || argc > CSLUA_AMXX_MAX_ARGS)
+		return false;
+
+	// All four are handed over in AMXX_Attach and only cleared implicitly when
+	// the module unloads; check every one rather than just g_RegisterForward,
+	// so a half-attached state fails soft instead of calling through NULL.
+	if (!g_RegisterForward || !g_ExecuteForward || !g_GetAmxScript || !g_AmxFindPublic)
 		return false;
 
 	int ncells = 0;
@@ -273,7 +279,13 @@ static amxx_module_info_s g_module_info =
 	MODULE_NAME,
 	MODULE_AUTHOR,
 	MODULE_VERSION,
-	1,				// reload on mapchange
+	// Must stay 0. With reload-on-mapchange amxmodx unloads and remaps this
+	// module every changelevel; lua_mm resolves cslua_amxx_call by name and
+	// a remap left it calling into freed memory - the server segfaulted in
+	// l_amxx_call during the ClientDisconnect storm of SV_SpawnServer. The
+	// module holds no per-map state that needs resetting: g_forward_ids are
+	// process-lifetime forward slots that survive plugin reloads anyway.
+	0,				// do NOT reload on mapchange
 	MODULE_LOGTAG,
 	MODULE_LIBRARY,
 	MODULE_LIBCLASS,
@@ -324,9 +336,9 @@ C_DLLEXPORT int AMXX_Attach(PFN_REQ_FNPTR reqFnptrFunc)
 
 C_DLLEXPORT int AMXX_Detach()
 {
-	// Multi-plugin forwards have no unregister call in the module API (only
-	// single-plugin ones do), so there is nothing to hand back - just drop
-	// the ids so a reload re-registers against the new plugin set.
+	// reload-on-mapchange is off (see g_module_info), so this runs only at
+	// server shutdown. Multi-plugin forwards have no unregister call in the
+	// module API anyway - just drop the id cache.
 	g_forward_ids.clear();
 	return AMXX_OK;
 }

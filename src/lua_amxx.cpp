@@ -26,32 +26,27 @@ static const int kExpectedAbi = 2;
 // for more than that would be a lie.
 static const int kOutMax = 128;
 
-static bool s_looked_up = false;
-static CsluaAmxxCallFn s_bridge_call = NULL;
-
-// Looked up once and cached: the bridge, once loaded by amxmodx, stays
-// mapped for the life of the process (a mapchange reruns its
-// AMXX_Attach/Detach, not the module load), so the pointer stays good.
-static bool ensure_bridge()
+// Resolved fresh on every call, never cached across calls. amxmodx can drop
+// and remap the bridge module (or have it briefly absent mid-reload), and a
+// cached cslua_amxx_call would then be a dangling pointer - lua_mm segfaulted
+// exactly that way in l_amxx_call during a changelevel's ClientDisconnect
+// storm. cslua_module_open never loads anything, it only reports what is
+// mapped right now, so a NULL means "bridge not available this instant" and
+// we fail soft instead of jumping into freed memory. amxx.call is never a
+// hot path (chat lines, disconnects), so the per-call lookup is fine.
+static CsluaAmxxCallFn resolve_bridge()
 {
-	if (s_looked_up)
-		return s_bridge_call != NULL;
-
-	s_looked_up = true;
-
 	void *handle = cslua_module_open(kBridgeModuleName);
 	if (!handle)
-		return false;
+		return NULL;
 
 	CsluaAmxxBridgeAbiFn abi = (CsluaAmxxBridgeAbiFn)cslua_module_symbol(handle, "cslua_amxx_bridge_abi");
 	CsluaAmxxCallFn call = (CsluaAmxxCallFn)cslua_module_symbol(handle, "cslua_amxx_call");
+
+	bool ok = abi && call && abi() == kExpectedAbi;
 	cslua_module_close(handle);
 
-	if (!abi || !call || abi() != kExpectedAbi)
-		return false;
-
-	s_bridge_call = call;
-	return true;
+	return ok ? call : NULL;
 }
 
 // amxx.out() - marks the slot a `public Foo(..., out[])` writes into. A
@@ -99,7 +94,8 @@ static int l_amxx_call(lua_State *L)
 		return luaL_error(L, "amxx.call: %d arguments, the bridge takes at most %d",
 			argc, CSLUA_AMXX_MAX_ARGS);
 
-	if (!ensure_bridge())
+	CsluaAmxxCallFn bridge_call = resolve_bridge();
+	if (!bridge_call)
 		return fail(L, "AMXX bridge module not loaded - check modules.ini (cslua_bridge)");
 
 	CsluaAmxxArg args[CSLUA_AMXX_MAX_ARGS];
@@ -131,7 +127,7 @@ static int l_amxx_call(lua_State *L)
 	}
 
 	long result = 0;
-	if (!s_bridge_call(name, args, argc, &result))
+	if (!bridge_call(name, args, argc, &result))
 		return fail(L, lua_pushfstring(L,
 			"amxx.call: no loaded plugin has public '%s' with this signature, "
 			"or the argument shape is not one the bridge can build", name));
