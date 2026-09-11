@@ -821,9 +821,10 @@ void LuaEvents::fire_player_spawn(int id)
 }
 
 float LuaEvents::fire_player_hurt(int victim, int attacker, float damage, int bits,
-	int hitgroup)
+	int hitgroup, const char *weapon)
 {
 	float result = damage;
+	std::string weapon_name = weapon ? weapon : "";
 
 	bool cancelled = run(CSLUA_EVENT_PLAYER_HURT,
 		[=](lua_State *L) {
@@ -833,6 +834,8 @@ float LuaEvents::fire_player_hurt(int victim, int attacker, float damage, int bi
 			lua_pushinteger(L, bits);
 			lua_setfield(L, -2, "bits");
 			set_hitgroup(L, hitgroup);
+			if (!weapon_name.empty())
+				set_string(L, weapon_name, "weapon");
 		},
 		[&result](lua_State *L) {
 			// Whatever the chain left in e.damage is what the game applies.
@@ -849,8 +852,10 @@ float LuaEvents::fire_player_hurt(int victim, int attacker, float damage, int bi
 }
 
 void LuaEvents::fire_player_hurt_post(int victim, int attacker, float damage, int bits,
-	int hitgroup)
+	int hitgroup, const char *weapon)
 {
+	std::string weapon_name = weapon ? weapon : "";
+
 	notify(CSLUA_EVENT_PLAYER_HURT_POST, [=](lua_State *L) {
 		set_player(L, victim, "victim");
 		set_player_or_nil(L, attacker, "attacker");
@@ -858,6 +863,8 @@ void LuaEvents::fire_player_hurt_post(int victim, int attacker, float damage, in
 		lua_pushinteger(L, bits);
 		lua_setfield(L, -2, "bits");
 		set_hitgroup(L, hitgroup);
+		if (!weapon_name.empty())
+			set_string(L, weapon_name, "weapon");
 	});
 }
 
@@ -1198,9 +1205,10 @@ void LuaEvents::fire_bomb_defuse_start(int player, bool defuser)
 }
 
 float LuaEvents::fire_player_trace_attack(int victim, int attacker, float damage, int bits,
-	int hitgroup, float x, float y, float z)
+	int hitgroup, float x, float y, float z, const char *weapon)
 {
 	float result = damage;
+	std::string weapon_name = weapon ? weapon : "";
 
 	bool cancelled = run(CSLUA_EVENT_PLAYER_TRACE_ATTACK,
 		[=](lua_State *L) {
@@ -1213,6 +1221,8 @@ float LuaEvents::fire_player_trace_attack(int victim, int attacker, float damage
 			set_number(L, x, "x");
 			set_number(L, y, "y");
 			set_number(L, z, "z");
+			if (!weapon_name.empty())
+				set_string(L, weapon_name, "weapon");
 		},
 		[&result](lua_State *L) {
 			lua_getfield(L, -1, "damage");

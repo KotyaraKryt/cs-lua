@@ -219,12 +219,14 @@ end)
                        ('e.attacker', 'player \\| nil', '`nil` при падении и уроне мира'),
                        ('e.damage', 'number', 'запись: сколько урона применить'),
                        ('e.bits', 'number', 'маска типа урона: `DMG_FALL`, `DMG_BULLET`'),
-                       ('e.hitgroup', 'number \\| nil', 'куда попали: `1` голова, `2` грудь, `3` живот, `4`/`5` руки, `6`/`7` ноги; `nil`, если урон не от попадания')],
+                       ('e.hitgroup', 'number \\| nil', 'куда попали: `1` голова, `2` грудь, `3` живот, `4`/`5` руки, `6`/`7` ноги; `nil`, если урон не от попадания'),
+                       ('e.weapon', 'string \\| nil', 'classname источника: граната/C4 своим именем, иначе оружие в руках атакующего; `nil` для падения и урона мира')],
                       slug='player_hurt',
                       cancel='`e:cancel()` гасит урон полностью: ни звука боли, ни брони, ни смерти. Цепочка на этом обрывается.',
                       example="""
-hook.add("player:hurt", "myplugin.double", function(e)
-	e.damage = e.damage * 2
+hook.add("player:hurt", "myplugin.per_weapon", function(e)
+	local mult = ({ weapon_awp = 1.5, weapon_deagle = 1.2, hegrenade = 0.8 })[e.weapon]
+	if mult then e.damage = e.damage * mult end
 end)
 """,
                       extra='''Единственное событие, которое меняет игру. Каждый следующий обработчик видит
@@ -241,7 +243,8 @@ end)
                        ('e.attacker', 'player \\| nil', '`nil` при падении и уроне мира'),
                        ('e.damage', 'number', 'сколько урона применилось'),
                        ('e.bits', 'number', 'маска типа урона'),
-                       ('e.hitgroup', 'number \\| nil', 'куда попали: `1` голова, `2` грудь, `3` живот, `4`/`5` руки, `6`/`7` ноги; `nil`, если урон не от попадания')],
+                       ('e.hitgroup', 'number \\| nil', 'куда попали: `1` голова, `2` грудь, `3` живот, `4`/`5` руки, `6`/`7` ноги; `nil`, если урон не от попадания'),
+                       ('e.weapon', 'string \\| nil', 'то же, что в `player:hurt`')],
                       slug='player_hurt_post',
                       extra='`e.victim:health()` здесь уже актуальное. Менять нечего — событие неотменяемое.',
                       regamedll=True),
@@ -251,10 +254,11 @@ end)
                        ('e.damage', 'number', 'запись: сырой урон этого попадания, до брони и множителей'),
                        ('e.bits', 'number', 'маска типа урона'),
                        ('e.hitgroup', 'number \\| nil', 'куда попали: `1` голова, `2` грудь, `3` живот, `4`/`5` руки, `6`/`7` ноги'),
-                       ('e.x, e.y, e.z', 'number', 'точка попадания')],
+                       ('e.x, e.y, e.z', 'number', 'точка попадания'),
+                       ('e.weapon', 'string \\| nil', 'оружие в руках атакующего; `nil`, если распознать не удалось')],
                       slug='player_trace_attack',
                       cancel='`e:cancel()` (или `e.damage = 0`) убирает это попадание целиком: ни крови, ни вклада в итоговый урон, который дальше увидит `player:hurt`.',
-                      extra='Название — по движковому хуку `CBasePlayer::TraceAttack` (тот же, что `RG_CBasePlayer_TraceAttack` в ReAPI). Дробовик даёт одно `player:trace_attack` на каждую долетевшую дробину и одно `player:hurt`/`weapon:fire` в сумме — здесь урон ещё не сложен.',
+                      extra='Название — по движковому хуку `CBasePlayer::TraceAttack` (тот же, что `RG_CBasePlayer_TraceAttack` в ReAPI). Дробовик даёт одно `player:trace_attack` на каждую долетевшую дробину и одно `player:hurt`/`weapon:fire` в сумме — здесь урон ещё не сложен. В отличие от `player:hurt`, `e.weapon` тут всегда берётся из активного оружия атакующего — у попадания трассировкой нет отдельного инфликтора.',
                       regamedll=True,
                       see=[('player:hurt', 'player_hurt.md')]),
                 event('player:heal', 'Игроку вот-вот дадут здоровье — аптечка, админ-команда; своей регенерации в CS нет.',
@@ -278,7 +282,7 @@ end)
 """,
                       extra='Суицид приходит как `e.killer.id == e.victim.id`. Вместе с `e.killer` в `nil` уходят `e.weapon` и `e.distance`.',
                       regamedll=True,
-                      notes=[('note', 'Граната и взрыв C4 приходят как оружие в руках убийцы, а не как\n`hegrenade`. Отличить снаряд можно по `e.bits` в `player:hurt`.')]),
+                      notes=[('note', 'Граната и взрыв C4 приходят как оружие в руках убийцы, а не как\n`hegrenade`. Отличить снаряд точнее можно через `e.weapon` в `player:hurt` —\nтам для гранаты/C4 приходит classname самого снаряда (`hegrenade`, `grenade`,\n`c4`), а не оружие в руках.')]),
                 event('player:team_change', 'Игрок сменил сторону.',
                       [PLAYER, ('e.old_team', 'string', '`CT`, `T`, `SPEC`, `NONE`'),
                        ('e.new_team', 'string', 'куда перешёл')],
