@@ -195,6 +195,44 @@ static edict_t *player_edict(int id)
 	return e;
 }
 
+// HUD auto-channel (p.channel == -1): mirrors AmxModX's set_hudmessage(-1) -
+// least-recently-used of the 4 TE_TEXTMESSAGE channels, tracked per player so
+// two unrelated plugins calling p:hud() without a channel don't stomp each
+// other's text. A channel picked explicitly never touches this table, same
+// quirk as AmxModX (it can still get reclaimed by auto if it goes idle).
+#define HUD_AUTO_CHANNELS 4
+static float s_hud_channel_time[CSLUA_MAXPLAYERS][HUD_AUTO_CHANNELS];
+
+void cslua_hud_channel_reset(int id)
+{
+	if (id < 0 || id >= CSLUA_MAXPLAYERS)
+		return;
+	for (int i = 0; i < HUD_AUTO_CHANNELS; i++)
+		s_hud_channel_time[id][i] = 0.0f;
+}
+
+static int next_hud_channel(int id)
+{
+	int best = 0;
+	for (int i = 1; i < HUD_AUTO_CHANNELS; i++) {
+		if (s_hud_channel_time[id][i] < s_hud_channel_time[id][best])
+			best = i;
+	}
+	return best;
+}
+
+// Resolves a HudParams.channel (possibly -1) to a concrete 0..3 byte for one
+// recipient, claiming it in the LRU table when auto-picked.
+static int resolve_hud_channel(int id, int requested)
+{
+	if (requested < 0) {
+		int ch = next_hud_channel(id);
+		s_hud_channel_time[id][ch] = gpGlobals->time;
+		return ch;
+	}
+	return ((requested % HUD_AUTO_CHANNELS) + HUD_AUTO_CHANNELS) % HUD_AUTO_CHANNELS;
+}
+
 // Runs `fn` for one player, or for everyone connected when id is 0.
 template <typename Fn>
 static void for_targets(int id, Fn fn)
@@ -464,8 +502,9 @@ void cslua_read_hud_params(lua_State *L, int index, HudParams &out)
 	out.hold = opt_number(L, index, "hold", out.hold);
 	out.fxtime = opt_number(L, index, "fxtime", out.fxtime);
 
-	int channel = (int)opt_number(L, index, "channel", (float)out.channel);
-	out.channel = channel & 0xFF;
+	// Left as-is (including a caller's explicit -1): resolved to a concrete
+	// 0..3 byte per recipient in cslua_send_hud, not here.
+	out.channel = (int)opt_number(L, index, "channel", (float)out.channel);
 
 	opt_color(L, index, "color", out.r1, out.g1, out.b1, out.a1);
 	// Effect 2 fades from color to color2; default color2 to color.
@@ -622,10 +661,10 @@ void cslua_send_hud(int id, const char *text, const HudParams &p)
 	char buf[512];
 	prepare(text, buf, sizeof buf, false);
 
-	for_targets(id, [&](int, edict_t *e) {
+	for_targets(id, [&](int slot, edict_t *e) {
 		MESSAGE_BEGIN(MSG_ONE, SVC_TEMPENTITY, NULL, e);
 		WRITE_BYTE(TE_TEXTMESSAGE);
-		WRITE_BYTE(p.channel & 0xFF);
+		WRITE_BYTE(resolve_hud_channel(slot, p.channel));
 
 		WRITE_SHORT(fixed_signed16(p.x, 1 << 13));
 		WRITE_SHORT(fixed_signed16(p.y, 1 << 13));

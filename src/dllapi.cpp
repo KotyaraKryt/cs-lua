@@ -7,6 +7,7 @@
 #include "lua_httpserver.h"
 #include "lua_sound.h"
 #include "lua_menu.h"
+#include "lua_message.h"
 #include "lua_command.h"
 #include "lua_entity.h"
 #include "lua_player.h"
@@ -71,8 +72,10 @@ static void ServerActivate(edict_t *pEdictList, int edictCount, int clientMax)
 	cslua_reset_auth_poll();
 	cslua_reset_team_cache();
 
-	for (int id = 1; id < CSLUA_MAXPLAYERS; id++)
+	for (int id = 1; id < CSLUA_MAXPLAYERS; id++) {
 		cslua_menu_reset(id);
+		cslua_hud_channel_reset(id);
+	}
 
 	RETURN_META(MRES_IGNORED);
 }
@@ -99,6 +102,7 @@ static qboolean ClientConnect(edict_t *pEntity, const char *pszName, const char 
 	// Slots get reused; the new occupant starts clean.
 	cslua_menu_reset(id);
 	cslua_forget_team(id);
+	cslua_hud_channel_reset(id);
 
 	RejectInfo reject;
 	reject.reason[0] = '\0';
@@ -205,6 +209,7 @@ static void ClientDisconnect(edict_t *pEntity)
 
 	g_players.on_disconnect(id);
 	cslua_menu_reset(id);
+	cslua_hud_channel_reset(id);
 	cslua_netwatch_forget(id);
 	RETURN_META(MRES_IGNORED);
 }

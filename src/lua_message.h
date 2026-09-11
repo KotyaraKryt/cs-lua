@@ -16,7 +16,9 @@ struct HudParams
 	float fadeout = 0.2f;
 	float hold = 5.0f;
 	float fxtime = 0.25f;
-	int channel = 3;			// hud channels are 0..3
+	// hud channels are 0..3; -1 (the default) auto-picks one per recipient,
+	// least-recently-used first, same as AmxModX's set_hudmessage(channel=-1)
+	int channel = -1;
 };
 
 // Reads an options table at `index` (nil/absent means "all defaults").
@@ -35,6 +37,9 @@ std::string cslua_text_for_client(const char *text);
 // Resolved user message ids, for the lua_debug command.
 int cslua_msg_saytext_id();
 int cslua_msg_textmsg_id();
+
+// Slot reused by a new client: forget its HUD auto-channel history.
+void cslua_hud_channel_reset(int id);
 
 // Sends the same line three ways to see which one a client renders. Diagnostics.
 void cslua_chat_probe(int id);
