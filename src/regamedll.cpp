@@ -162,6 +162,33 @@ static int attacker_slot(entvars_t *pevAttacker)
 	return cslua_valid_player_id(idx) ? idx : 0;
 }
 
+// The classname behind a hit: the inflictor's own classname when it is a
+// distinct entity (grenade, C4 - not the attacker itself), otherwise the
+// attacker's active weapon. NULL for fall damage, world damage, and the like.
+// Copies into buf since the source string lives inside the game's entity.
+static const char *resolve_damage_weapon(entvars_t *pevInflictor, entvars_t *pevAttacker,
+	char *buf, size_t buf_size)
+{
+	const char *weapon = NULL;
+
+	if (pevInflictor && pevInflictor != pevAttacker)
+		weapon = STRING(pevInflictor->classname);
+
+	if ((!weapon || !*weapon) && pevAttacker) {
+		int aslot = attacker_slot(pevAttacker);
+		CBasePlayer *attacker = aslot ? cslua_player_entity(aslot) : NULL;
+		if (attacker && attacker->m_pActiveItem && attacker->m_pActiveItem->pev)
+			weapon = STRING(attacker->m_pActiveItem->pev->classname);
+	}
+
+	if (!weapon || !*weapon)
+		return NULL;
+
+	cslua_snprintf(buf, buf_size, "%s", weapon);
+	buf[buf_size - 1] = '\0';
+	return buf;
+}
+
 // TraceAttack fires once per hit (per shotgun pellet) and only accumulates into
 // the multi-damage buffer. flDamage is the raw per-hit amount, before armor and
 // multipliers. Not by reference, so a changed value is forwarded into callNext.
@@ -180,7 +207,12 @@ static void hook_trace_attack(IReGameHook_CBasePlayer_TraceAttack *chain, CBaseP
 	float y = ptr ? ptr->vecEndPos.y : 0.0f;
 	float z = ptr ? ptr->vecEndPos.z : 0.0f;
 
-	flDamage = g_events.fire_player_trace_attack(vslot, aslot, flDamage, bitsDamageType, hitgroup, x, y, z);
+	// TraceAttack has no separate inflictor - a hitscan trace always comes
+	// straight from the attacker's own weapon.
+	char weapon_buf[64];
+	const char *weapon = resolve_damage_weapon(NULL, pevAttacker, weapon_buf, sizeof weapon_buf);
+
+	flDamage = g_events.fire_player_trace_attack(vslot, aslot, flDamage, bitsDamageType, hitgroup, x, y, z, weapon);
 	if (flDamage <= 0.0f)
 		return;				// fully blocked: no blood, no multidamage
 
@@ -203,13 +235,16 @@ static BOOL hook_takedamage(IReGameHook_CBasePlayer_TakeDamage *chain, CBasePlay
 	int hitgroup = (bitsDamageType & (DMG_BULLET | DMG_SLASH | DMG_CLUB))
 		? victim->m_LastHitGroup : -1;
 
-	flDamage = g_events.fire_player_hurt(vslot, aslot, flDamage, bitsDamageType, hitgroup);
+	char weapon_buf[64];
+	const char *weapon = resolve_damage_weapon(pevInflictor, pevAttacker, weapon_buf, sizeof weapon_buf);
+
+	flDamage = g_events.fire_player_hurt(vslot, aslot, flDamage, bitsDamageType, hitgroup, weapon);
 	if (flDamage <= 0.0f)
 		return FALSE;			// fully blocked: no pain sound, no armor loss
 
 	BOOL result = chain->callNext(victim, pevInflictor, pevAttacker, flDamage, bitsDamageType);
 
-	g_events.fire_player_hurt_post(vslot, aslot, flDamage, bitsDamageType, hitgroup);
+	g_events.fire_player_hurt_post(vslot, aslot, flDamage, bitsDamageType, hitgroup, weapon);
 	return result;
 }
 

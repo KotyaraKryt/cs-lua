@@ -36,6 +36,9 @@ CI собирает обе платформы и прикладывает бин
 **События**
 
 - `player_death` несёт `weapon` и `distance`.
+- `player_hurt`/`player_hurt_post`/`player_trace_attack` несут `weapon` —
+  classname гранаты/C4 как отдельного инфликтора, иначе активное оружие
+  атакующего; позволяет писать per-weapon множитель урона в Lua.
 - `player_team_change`, `weapon_fire` — опрашиваются каждый кадр, ловят любой
   источник смены, включая сторонние моды.
 - `map_change`, `plugin_unload` — точки, где плагин снимает свои эффекты.

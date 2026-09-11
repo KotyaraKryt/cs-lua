@@ -263,17 +263,21 @@ public:
 
 	// damage is by reference in TakeDamage. Returns the final damage: e.damage
 	// after the chain, or 0 if a handler cancelled. hitgroup is -1 when the
-	// damage did not come from a hit (fall, world, gas).
-	float fire_player_hurt(int victim, int attacker, float damage, int bits, int hitgroup);
+	// damage did not come from a hit (fall, world, gas). weapon is the
+	// classname behind the hit - the inflictor (grenade, c4) if it is its own
+	// entity, otherwise the attacker's active item; NULL when neither applies.
+	float fire_player_hurt(int victim, int attacker, float damage, int bits, int hitgroup,
+		const char *weapon);
 
 	// Post: the damage the game actually applied, for observers.
-	void fire_player_hurt_post(int victim, int attacker, float damage, int bits, int hitgroup);
+	void fire_player_hurt_post(int victim, int attacker, float damage, int bits, int hitgroup,
+		const char *weapon);
 
 	// The exact hit before TakeDamage sums same-frame hits. damage is the raw
 	// per-hit amount before armor/multipliers. x,y,z is the trace position.
 	// Returns the (possibly changed) damage, 0 if cancelled.
 	float fire_player_trace_attack(int victim, int attacker, float damage, int bits,
-		int hitgroup, float x, float y, float z);
+		int hitgroup, float x, float y, float z, const char *weapon);
 
 	// TakeHealth. Returns the (possibly changed) amount, 0 if cancelled.
 	float fire_player_heal(int player, float amount, int bits);
