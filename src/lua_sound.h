@@ -2,6 +2,8 @@
 
 #include <lua.hpp>
 
+struct PlayerFilter;
+
 // Sound and precache.
 //
 // GoldSrc only accepts precache calls while a map is loading, but a plugin
@@ -23,14 +25,15 @@ void cslua_precache_all();
 // Opens/closes the window where an immediate precache is legal.
 void cslua_sound_set_window(bool open);
 
-// Plays a sound. id is a player slot, or 0 for everyone connected.
+// Plays a sound. id is a player slot, or 0 for everyone connected; filter
+// narrows the id == 0 case like players.list{...} does. NULL means everyone.
 void cslua_play_sound(int id, const char *sample, int channel, float volume,
-	float attenuation, int pitch);
+	float attenuation, int pitch, const PlayerFilter *filter = NULL);
 
 // Plays a sound locally on one client via its own "spk" console command - no
-// EMIT_SOUND, no PAS, nobody nearby hears it. Player slot only (id > 0); still
-// needs res.sound().
-void cslua_play_sound_private(int id, const char *sample);
+// EMIT_SOUND, no PAS, nobody nearby hears it. Player slot, or 0 for everyone
+// (optionally narrowed by filter); still needs res.sound().
+void cslua_play_sound_private(int id, const char *sample, const PlayerFilter *filter = NULL);
 
 // For the lua_precache report. used is -1 before anything has been precached.
 int cslua_precache_used(bool models);

@@ -4,6 +4,8 @@
 
 #include <string>
 
+struct PlayerFilter;
+
 // Text placement and styling for hud()/dhud(). Every field has a default.
 struct HudParams
 {
@@ -44,21 +46,23 @@ void cslua_hud_channel_reset(int id);
 // Sends the same line three ways to see which one a client renders. Diagnostics.
 void cslua_chat_probe(int id);
 
-// id is a slot 1..32, or 0 for everyone connected.
-void cslua_send_console(int id, const char *text);
+// id is a slot 1..32, or 0 for everyone connected. filter narrows the id == 0
+// case down to a subset, the way players.list{...} narrows its result - NULL
+// (the default) means everyone.
+void cslua_send_console(int id, const char *text, const PlayerFilter *filter = NULL);
 
 // `from` is the slot whose team {team} resolves to; 0 means "the receiver".
-void cslua_send_chat(int id, const char *text, int from);
-void cslua_send_center(int id, const char *text);
-void cslua_send_hud(int id, const char *text, const HudParams &p);
+void cslua_send_chat(int id, const char *text, int from, const PlayerFilter *filter = NULL);
+void cslua_send_center(int id, const char *text, const PlayerFilter *filter = NULL);
+void cslua_send_hud(int id, const char *text, const HudParams &p, const PlayerFilter *filter = NULL);
 
 // The MOTD window - the one multi-line surface the game has. Renders HTML on
 // every client; raw = false wraps the text so it arrives readable, raw = true
 // sends it untouched.
 void cslua_send_motd(int id, const char *text, bool raw);
-void cslua_send_dhud(int id, const char *text, const HudParams &p);
+void cslua_send_dhud(int id, const char *text, const HudParams &p, const PlayerFilter *filter = NULL);
 
-void cslua_send_screen_shake(int id, float amplitude, float frequency, float duration);
+void cslua_send_screen_shake(int id, float amplitude, float frequency, float duration, const PlayerFilter *filter = NULL);
 
 // Options for p:screen_fade(). Defaults: the classic "flash and clear" damage
 // effect - opaque at t=0, fading away over `duration`.
@@ -73,4 +77,4 @@ struct ScreenFadeParams
 };
 
 void cslua_read_screen_fade_params(lua_State *L, int index, ScreenFadeParams &out);
-void cslua_send_screen_fade(int id, const ScreenFadeParams &p);
+void cslua_send_screen_fade(int id, const ScreenFadeParams &p, const PlayerFilter *filter = NULL);

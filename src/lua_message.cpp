@@ -1,6 +1,7 @@
 #include "cslua.h"
 #include "lua_message.h"
 #include "players.h"
+#include "player_filter.h"
 
 #include <string.h>
 #include <vector>
@@ -233,9 +234,11 @@ static int resolve_hud_channel(int id, int requested)
 	return ((requested % HUD_AUTO_CHANNELS) + HUD_AUTO_CHANNELS) % HUD_AUTO_CHANNELS;
 }
 
-// Runs `fn` for one player, or for everyone connected when id is 0.
+// Runs `fn` for one player, or for everyone connected when id is 0. A filter
+// only makes sense for the id == 0 case - players.broadcast{team=...} - and is
+// ignored otherwise.
 template <typename Fn>
-static void for_targets(int id, Fn fn)
+static void for_targets(int id, const PlayerFilter *filter, Fn fn)
 {
 	if (id > 0) {
 		edict_t *e = player_edict(id);
@@ -245,10 +248,18 @@ static void for_targets(int id, Fn fn)
 	}
 
 	for (int i = 1; i < CSLUA_MAXPLAYERS; i++) {
+		if (filter && !cslua_player_matches_filter(i, *filter))
+			continue;
 		edict_t *e = player_edict(i);
 		if (e)
 			fn(i, e);
 	}
+}
+
+template <typename Fn>
+static void for_targets(int id, Fn fn)
+{
+	for_targets(id, NULL, fn);
 }
 
 // The HUD protocol stores floats as fixed point; same conversion the SDK uses.
@@ -549,22 +560,22 @@ std::string cslua_text_for_client(const char *text)
 	return std::string(&buf[0]);
 }
 
-void cslua_send_console(int id, const char *text)
+void cslua_send_console(int id, const char *text, const PlayerFilter *filter)
 {
 	char buf[256];
 	prepare(text, buf, sizeof buf, true);
 
-	for_targets(id, [&](int, edict_t *e) {
+	for_targets(id, filter, [&](int, edict_t *e) {
 		CLIENT_PRINTF(e, print_console, buf);
 	});
 }
 
-void cslua_send_center(int id, const char *text)
+void cslua_send_center(int id, const char *text, const PlayerFilter *filter)
 {
 	char buf[256];
 	prepare(text, buf, sizeof buf, true);
 
-	for_targets(id, [&](int, edict_t *e) {
+	for_targets(id, filter, [&](int, edict_t *e) {
 		CLIENT_PRINTF(e, print_center, buf);
 	});
 }
@@ -605,7 +616,7 @@ static void expand_chat_tags(const char *in, char *out, size_t outsz)
 	out[w] = '\0';
 }
 
-void cslua_send_chat(int id, const char *text, int from)
+void cslua_send_chat(int id, const char *text, int from, const PlayerFilter *filter)
 {
 	int msg = msg_saytext();
 	if (!msg)
@@ -618,7 +629,7 @@ void cslua_send_chat(int id, const char *text, int from)
 	char buf[190];
 	prepare(tagged, buf, sizeof buf, true);
 
-	for_targets(id, [&](int slot, edict_t *e) {
+	for_targets(id, filter, [&](int slot, edict_t *e) {
 		// The first byte is the "speaker" slot and decides what \x03 shows as.
 		MESSAGE_BEGIN(MSG_ONE, msg, NULL, e);
 		WRITE_BYTE(from > 0 ? from : slot);
@@ -656,12 +667,12 @@ void cslua_chat_probe(int id)
 	});
 }
 
-void cslua_send_hud(int id, const char *text, const HudParams &p)
+void cslua_send_hud(int id, const char *text, const HudParams &p, const PlayerFilter *filter)
 {
 	char buf[512];
 	prepare(text, buf, sizeof buf, false);
 
-	for_targets(id, [&](int slot, edict_t *e) {
+	for_targets(id, filter, [&](int slot, edict_t *e) {
 		MESSAGE_BEGIN(MSG_ONE, SVC_TEMPENTITY, NULL, e);
 		WRITE_BYTE(TE_TEXTMESSAGE);
 		WRITE_BYTE(resolve_hud_channel(slot, p.channel));
@@ -685,7 +696,7 @@ void cslua_send_hud(int id, const char *text, const HudParams &p)
 	});
 }
 
-void cslua_send_dhud(int id, const char *text, const HudParams &p)
+void cslua_send_dhud(int id, const char *text, const HudParams &p, const PlayerFilter *filter)
 {
 	// The directed HUD is an engine message, no registration. Client caps at 128.
 	char buf[128];
@@ -693,7 +704,7 @@ void cslua_send_dhud(int id, const char *text, const HudParams &p)
 
 	int length = (int)strlen(buf);
 
-	for_targets(id, [&](int, edict_t *e) {
+	for_targets(id, filter, [&](int, edict_t *e) {
 		MESSAGE_BEGIN(MSG_ONE_UNRELIABLE, SVC_DIRECTOR, NULL, e);
 		WRITE_BYTE(length + 31);				// payload size, header included
 		WRITE_BYTE(DRC_CMD_MESSAGE);
@@ -711,7 +722,7 @@ void cslua_send_dhud(int id, const char *text, const HudParams &p)
 }
 
 // UTIL_ScreenShake's own fixed-point scales (dlls/util.cpp).
-void cslua_send_screen_shake(int id, float amplitude, float frequency, float duration)
+void cslua_send_screen_shake(int id, float amplitude, float frequency, float duration, const PlayerFilter *filter)
 {
 	int msg = msg_screenshake();
 	if (!msg)
@@ -721,7 +732,7 @@ void cslua_send_screen_shake(int id, float amplitude, float frequency, float dur
 	short ffrequency = fixed_unsigned16(frequency, 1 << 8);
 	short fduration = fixed_unsigned16(duration, 1 << 12);
 
-	for_targets(id, [&](int, edict_t *e) {
+	for_targets(id, filter, [&](int, edict_t *e) {
 		MESSAGE_BEGIN(MSG_ONE_UNRELIABLE, msg, NULL, e);
 		WRITE_SHORT(famplitude);
 		WRITE_SHORT(fduration);
@@ -750,7 +761,7 @@ void cslua_read_screen_fade_params(lua_State *L, int index, ScreenFadeParams &ou
 	lua_getfield(L, index, "stay");     out.stay     = lua_toboolean(L, -1) != 0; lua_pop(L, 1);
 }
 
-void cslua_send_screen_fade(int id, const ScreenFadeParams &p)
+void cslua_send_screen_fade(int id, const ScreenFadeParams &p, const PlayerFilter *filter)
 {
 	int msg = msg_screenfade();
 	if (!msg)
@@ -763,7 +774,7 @@ void cslua_send_screen_fade(int id, const ScreenFadeParams &p)
 	if (p.modulate) flags |= FFADE_MODULATE;
 	if (p.stay) flags |= FFADE_STAYOUT;
 
-	for_targets(id, [&](int, edict_t *e) {
+	for_targets(id, filter, [&](int, edict_t *e) {
 		MESSAGE_BEGIN(MSG_ONE, msg, NULL, e);
 		WRITE_SHORT(fduration);
 		WRITE_SHORT(fhold);

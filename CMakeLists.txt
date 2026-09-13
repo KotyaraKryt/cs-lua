@@ -176,6 +176,7 @@ add_library(lua_mm SHARED
 	src/dllapi.cpp
 	src/commands.cpp
 	src/players.cpp
+	src/player_filter.cpp
 	src/platform.cpp
 	src/lua_engine.cpp
 	src/lua_events.cpp

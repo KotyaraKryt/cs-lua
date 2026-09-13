@@ -8,11 +8,16 @@
 #include "lua_sound.h"
 #include "regamedll.h"
 #include "players.h"
+#include "player_filter.h"
 #include "lua_pev.h"
 
 // Registry refs to the cached objects: one per slot plus the broadcast target.
 static int s_player_ref[CSLUA_MAXPLAYERS];
 static int s_all_ref = LUA_NOREF;
+
+// The broadcast metatable itself, so players.broadcast{...} can stamp a fresh
+// filtered clone with the same one (see l_broadcast_call).
+static int s_broadcast_mt_ref = LUA_NOREF;
 
 // pfnGetPlayerStats reads client_t->latency, which the engine keeps live from
 // its own frame_latency[] ring. The only gap is the couple of frames right
@@ -43,12 +48,24 @@ static int self_id(lua_State *L)
 	// "id" is a plain table field, so __newindex (l_readonly) never fires for
 	// it - the key already exists. p.id = N would silently repoint this shared,
 	// cached object, so check here that it still matches the slot it claims.
-	if (id == 0)
-		cslua_push_all(L);
-	else
+	//
+	// id == 0 covers both the singleton players.broadcast and the one-off
+	// filtered clones players.broadcast{...} hands back (see l_broadcast_call),
+	// so that case checks for the broadcast metatable rather than object
+	// identity with the singleton.
+	bool genuine;
+	if (id == 0) {
+		genuine = lua_getmetatable(L, 1) != 0;
+		if (genuine) {
+			lua_rawgeti(L, LUA_REGISTRYINDEX, s_broadcast_mt_ref);
+			genuine = lua_rawequal(L, -1, -2) != 0;
+			lua_pop(L, 2);
+		}
+	} else {
 		cslua_push_player(L, id);
-	bool genuine = lua_rawequal(L, 1, -1) != 0;
-	lua_pop(L, 1);
+		genuine = lua_rawequal(L, 1, -1) != 0;
+		lua_pop(L, 1);
+	}
 	if (!genuine)
 		return luaL_error(L, "p: stale player object (its id field was overwritten)");
 
@@ -1171,16 +1188,35 @@ static int l_drop(lua_State *L)
 	return 0;
 }
 
+// Resolves self to a target id plus, for a filtered players.broadcast{...}
+// clone, the filter to send with it. `filter` comes back empty for a plain
+// player or the unfiltered players.broadcast.
+static int self_broadcast_target(lua_State *L, PlayerFilter &filter)
+{
+	int id = self_id(L);
+	if (id != 0)
+		return id;
+
+	cslua_read_broadcast_filter(L, 1, filter);
+	if (filter.needs_regamedll() && !cslua_regamedll_ready())
+		return luaL_error(L, "players.broadcast{alive=..., team=...} needs ReGameDLL");
+
+	return 0;
+}
+
 static int l_console(lua_State *L)
 {
-	cslua_send_console(self_id(L), luaL_checkstring(L, 2));
+	PlayerFilter filter;
+	int id = self_broadcast_target(L, filter);
+	cslua_send_console(id, luaL_checkstring(L, 2), filter.empty() ? NULL : &filter);
 	return 0;
 }
 
 // p:chat(text) or p:chat(text, { from = otherPlayer })
 static int l_chat(lua_State *L)
 {
-	int id = self_id(L);
+	PlayerFilter filter;
+	int id = self_broadcast_target(L, filter);
 	const char *text = luaL_checkstring(L, 2);
 
 	int from = 0;
@@ -1197,35 +1233,39 @@ static int l_chat(lua_State *L)
 		lua_pop(L, 1);
 	}
 
-	cslua_send_chat(id, text, from);
+	cslua_send_chat(id, text, from, filter.empty() ? NULL : &filter);
 	return 0;
 }
 
 static int l_center(lua_State *L)
 {
-	cslua_send_center(self_id(L), luaL_checkstring(L, 2));
+	PlayerFilter filter;
+	int id = self_broadcast_target(L, filter);
+	cslua_send_center(id, luaL_checkstring(L, 2), filter.empty() ? NULL : &filter);
 	return 0;
 }
 
 static int l_hud(lua_State *L)
 {
-	int id = self_id(L);
+	PlayerFilter filter;
+	int id = self_broadcast_target(L, filter);
 	const char *text = luaL_checkstring(L, 2);
 
 	HudParams params;
 	cslua_read_hud_params(L, 3, params);
-	cslua_send_hud(id, text, params);
+	cslua_send_hud(id, text, params, filter.empty() ? NULL : &filter);
 	return 0;
 }
 
 static int l_dhud(lua_State *L)
 {
-	int id = self_id(L);
+	PlayerFilter filter;
+	int id = self_broadcast_target(L, filter);
 	const char *text = luaL_checkstring(L, 2);
 
 	HudParams params;
 	cslua_read_hud_params(L, 3, params);
-	cslua_send_dhud(id, text, params);
+	cslua_send_dhud(id, text, params, filter.empty() ? NULL : &filter);
 	return 0;
 }
 
@@ -1233,7 +1273,8 @@ static int l_dhud(lua_State *L)
 // UTIL_ScreenShake units. No radius/PVS filtering.
 static int l_screen_shake(lua_State *L)
 {
-	int id = self_id(L);
+	PlayerFilter filter;
+	int id = self_broadcast_target(L, filter);
 
 	float amplitude = 16.0f, frequency = 150.0f, duration = 1.0f;
 
@@ -1253,7 +1294,7 @@ static int l_screen_shake(lua_State *L)
 		lua_pop(L, 1);
 	}
 
-	cslua_send_screen_shake(id, amplitude, frequency, duration);
+	cslua_send_screen_shake(id, amplitude, frequency, duration, filter.empty() ? NULL : &filter);
 	return 0;
 }
 
@@ -1261,11 +1302,12 @@ static int l_screen_shake(lua_State *L)
 // stay }.
 static int l_screen_fade(lua_State *L)
 {
-	int id = self_id(L);
+	PlayerFilter filter;
+	int id = self_broadcast_target(L, filter);
 
 	ScreenFadeParams params;
 	cslua_read_screen_fade_params(L, 2, params);
-	cslua_send_screen_fade(id, params);
+	cslua_send_screen_fade(id, params, filter.empty() ? NULL : &filter);
 	return 0;
 }
 
@@ -1273,7 +1315,8 @@ static int l_screen_fade(lua_State *L)
 // attenuation 0 = no falloff (UI-ish sounds).
 static int l_play_sound(lua_State *L)
 {
-	int id = self_id(L);
+	PlayerFilter filter;
+	int id = self_broadcast_target(L, filter);
 	const char *sample = luaL_checkstring(L, 2);
 
 	float volume = VOL_NORM;
@@ -1306,12 +1349,14 @@ static int l_play_sound(lua_State *L)
 		lua_pop(L, 1);
 	}
 
+	const PlayerFilter *filter_ptr = filter.empty() ? NULL : &filter;
+
 	if (priv) {
-		cslua_play_sound_private(id, sample);
+		cslua_play_sound_private(id, sample, filter_ptr);
 		return 0;
 	}
 
-	cslua_play_sound(id, sample, channel, volume, attenuation, pitch);
+	cslua_play_sound(id, sample, channel, volume, attenuation, pitch, filter_ptr);
 	return 0;
 }
 
@@ -1473,6 +1518,37 @@ static int l_broadcast_index(lua_State *L)
 		"To read or change player state, walk players.list()", key);
 }
 
+// players.broadcast{ alive =, team =, bot =, hltv =, name = } -> a clone of
+// players.broadcast that only reaches the matching subset - same filter
+// fields as players.list{...}. players.broadcast itself is left untouched;
+// this hands back a new one-off target. players.broadcast() with no filter
+// (or an empty one) is the same as plain players.broadcast.
+static int l_broadcast_call(lua_State *L)
+{
+	if (lua_isnoneornil(L, 2)) {
+		cslua_push_all(L);
+		return 1;
+	}
+	luaL_checktype(L, 2, LUA_TTABLE);
+
+	lua_newtable(L);				// the filtered clone
+	lua_pushinteger(L, 0);
+	lua_setfield(L, -2, "id");
+
+	static const char *filter_keys[] = { "alive", "bot", "hltv", "team", "name" };
+	for (size_t i = 0; i < sizeof(filter_keys) / sizeof(filter_keys[0]); i++) {
+		lua_getfield(L, 2, filter_keys[i]);
+		if (lua_isnil(L, -1))
+			lua_pop(L, 1);
+		else
+			lua_setfield(L, -2, filter_keys[i]);
+	}
+
+	lua_rawgeti(L, LUA_REGISTRYINDEX, s_broadcast_mt_ref);
+	lua_setmetatable(L, -2);
+	return 1;
+}
+
 static void push_broadcast_metatable(lua_State *L)
 {
 	lua_newtable(L);				// metatable
@@ -1481,6 +1557,9 @@ static void push_broadcast_metatable(lua_State *L)
 	register_all(L, s_messaging);
 	lua_pushcclosure(L, l_broadcast_index, 1);
 	lua_setfield(L, -2, "__index");
+
+	lua_pushcfunction(L, l_broadcast_call);
+	lua_setfield(L, -2, "__call");
 
 	finish_metatable(L);
 }
@@ -1538,6 +1617,8 @@ void cslua_player_init(lua_State *L)
 	lua_pop(L, 1);					// player metatable
 
 	push_broadcast_metatable(L);
+	lua_pushvalue(L, -1);
+	s_broadcast_mt_ref = luaL_ref(L, LUA_REGISTRYINDEX);
 	lua_newtable(L);
 	lua_pushinteger(L, 0);
 	lua_setfield(L, -2, "id");
@@ -1557,6 +1638,7 @@ void cslua_player_shutdown()
 	for (int id = 0; id < CSLUA_MAXPLAYERS; id++)
 		s_player_ref[id] = LUA_NOREF;
 	s_all_ref = LUA_NOREF;
+	s_broadcast_mt_ref = LUA_NOREF;
 	s_methods_ref = LUA_NOREF;
 }
 

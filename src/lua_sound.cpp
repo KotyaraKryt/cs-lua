@@ -6,6 +6,7 @@
 #include "lua_timers.h"
 #include "rehlds.h"
 #include "players.h"
+#include "player_filter.h"
 
 #include <rehlds_api.h>
 
@@ -245,7 +246,7 @@ static int l_model_exists(lua_State *L)
 }
 
 void cslua_play_sound(int id, const char *sample, int channel, float volume,
-	float attenuation, int pitch)
+	float attenuation, int pitch, const PlayerFilter *filter)
 {
 	if (id > 0) {
 		edict_t *e = g_engfuncs.pfnPEntityOfEntIndex(id);
@@ -257,6 +258,8 @@ void cslua_play_sound(int id, const char *sample, int channel, float volume,
 	// id 0 (broadcast): EMIT_SOUND reaches whoever is in PAS of the source, and
 	// attenuation may not be 0, so emit from every connected player in turn.
 	for (int slot = 1; slot < CSLUA_MAXPLAYERS; slot++) {
+		if (filter && !cslua_player_matches_filter(slot, *filter))
+			continue;
 		if (!g_players.is_connected(slot))
 			continue;
 		edict_t *e = g_engfuncs.pfnPEntityOfEntIndex(slot);
@@ -265,13 +268,15 @@ void cslua_play_sound(int id, const char *sample, int channel, float volume,
 	}
 }
 
-void cslua_play_sound_private(int id, const char *sample)
+void cslua_play_sound_private(int id, const char *sample, const PlayerFilter *filter)
 {
 	if (strlen(sample) > 120)
 		return;
 
 	if (id == 0) {
 		for (int slot = 1; slot < CSLUA_MAXPLAYERS; slot++) {
+			if (filter && !cslua_player_matches_filter(slot, *filter))
+				continue;
 			if (!g_players.is_connected(slot))
 				continue;
 

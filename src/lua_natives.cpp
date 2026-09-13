@@ -6,10 +6,10 @@
 #include "lua_timers.h"
 #include "regamedll.h"
 #include "players.h"
+#include "player_filter.h"
 #include "platform.h"
 
 #include <cstdio>
-#include <cctype>
 
 // Creates the global table if it is not there yet, then registers into it.
 // `players` is filled from here, from lua_player.cpp and from core/commands.lua.
@@ -452,94 +452,23 @@ static int l_players_get(lua_State *L)
 	return 1;
 }
 
-// Case-insensitive substring, ASCII only. Empty needle matches anything.
-static bool name_contains_ci(const char *hay, const char *needle)
-{
-	if (!needle || !*needle)
-		return true;
-	if (!hay)
-		return false;
-
-	for (const char *h = hay; *h; h++) {
-		const char *a = h;
-		const char *b = needle;
-		while (*a && *b &&
-		       tolower((unsigned char)*a) == tolower((unsigned char)*b)) {
-			a++;
-			b++;
-		}
-		if (!*b)
-			return true;
-	}
-	return false;
-}
-
 // players.list() -> everyone connected.
 // players.list{ alive =, team =, bot =, hltv =, name = } -> only those matching.
 // alive/team need ReGameDLL.
 static int l_players_list(lua_State *L)
 {
-	int filter_alive = -1;			// -1 = don't care, 0 = dead, 1 = alive
-	int filter_bot = -1;
-	int filter_hltv = -1;
-	std::string filter_team;
-	std::string filter_name;
+	PlayerFilter filter;
+	if (lua_istable(L, 1))
+		cslua_read_player_filter(L, 1, filter);
 
-	if (lua_istable(L, 1)) {
-		lua_getfield(L, 1, "alive");
-		if (lua_isboolean(L, -1))
-			filter_alive = lua_toboolean(L, -1) ? 1 : 0;
-		lua_pop(L, 1);
-
-		lua_getfield(L, 1, "bot");
-		if (lua_isboolean(L, -1))
-			filter_bot = lua_toboolean(L, -1) ? 1 : 0;
-		lua_pop(L, 1);
-
-		lua_getfield(L, 1, "hltv");
-		if (lua_isboolean(L, -1))
-			filter_hltv = lua_toboolean(L, -1) ? 1 : 0;
-		lua_pop(L, 1);
-
-		lua_getfield(L, 1, "team");
-		if (lua_isstring(L, -1))
-			filter_team = lua_tostring(L, -1);
-		lua_pop(L, 1);
-
-		lua_getfield(L, 1, "name");
-		if (lua_isstring(L, -1))
-			filter_name = lua_tostring(L, -1);
-		lua_pop(L, 1);
-	}
-
-	bool needs_cs = filter_alive >= 0 || !filter_team.empty();
-	if (needs_cs && !cslua_regamedll_ready())
+	if (filter.needs_regamedll() && !cslua_regamedll_ready())
 		return luaL_error(L, "players.list{alive=..., team=...} needs ReGameDLL");
 
 	lua_newtable(L);
 
 	int n = 0;
 	for (int id = 1; id < CSLUA_MAXPLAYERS; id++) {
-		if (!g_players.is_connected(id))
-			continue;
-		if (filter_alive >= 0 && (cslua_player_alive(id) ? 1 : 0) != filter_alive)
-			continue;
-		if (!filter_team.empty() && filter_team != cslua_player_team_name(id))
-			continue;
-
-		if (filter_bot >= 0 || filter_hltv >= 0) {
-			edict_t *e = g_engfuncs.pfnPEntityOfEntIndex(id);
-			if (!e || e->free)
-				continue;
-			const int flags = e->v.flags;
-			if (filter_bot >= 0 && ((flags & FL_FAKECLIENT) ? 1 : 0) != filter_bot)
-				continue;
-			if (filter_hltv >= 0 && ((flags & FL_PROXY) ? 1 : 0) != filter_hltv)
-				continue;
-		}
-
-		if (!filter_name.empty() &&
-		    !name_contains_ci(g_players.name(id), filter_name.c_str()))
+		if (!cslua_player_matches_filter(id, filter))
 			continue;
 
 		cslua_push_player(L, id);

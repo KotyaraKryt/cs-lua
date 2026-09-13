@@ -120,6 +120,12 @@ local function run()
 	local trap = errmsg(function() return players.broadcast.alive end)
 	ok("broadcast отказывает по состоянию", trap and trap:find("broadcast"), trap)
 
+	local filtered = players.broadcast{ name = "nobody_here_at_all" }
+	ok("broadcast{filter} — тоже приёмник", type(filtered.chat) == "function")
+	ok("broadcast{filter} — не сам players.broadcast", filtered ~= players.broadcast)
+	ok("broadcast{filter} умеет слать", errmsg(function() filtered:chat("x") end) == nil)
+	ok("broadcast() без фильтра — как обычный", players.broadcast() == players.broadcast)
+
 	----------------------------------------------------------------
 	-- Цвет
 	----------------------------------------------------------------

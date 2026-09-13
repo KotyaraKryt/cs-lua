@@ -115,18 +115,37 @@ end
                     'example': """
 players.broadcast:chat("{green}[Server]{default} раунд начался")
 players.broadcast:play_sound("items/9mmclip1.wav")
+
+-- тот же фильтр, что у players.list, сужает приёмник до подмножества
+players.broadcast{ team = "CT" }:chat("{green}[Server]{default} у вас заложник")
 """,
+                    'fields': ('Фильтр', [
+                        ('alive', 'boolean', 'только живые или только мёртвые'),
+                        ('team', 'string', '`CT`, `T`, `SPEC`'),
+                        ('bot', 'boolean', 'только боты или только живые люди'),
+                        ('hltv', 'boolean', 'включать ли HLTV-прокси'),
+                        ('name', 'string', 'подстрока ника, регистр не важен'),
+                    ]),
                     'extra': """
 Понимает те же методы отправки, что и обычный игрок:
 [`chat`](chat.md), [`console`](console.md), [`center`](center.md),
 [`hud`](hud.md), [`dhud`](dhud.md), [`play_sound`](play_sound.md).
+
+`players.broadcast(filter)` возвращает не сам `players.broadcast`, а его
+одноразовый отфильтрованный клон — тот же набор полей, что у
+[`players.list`](#list) (`alive`, `team`, `bot`, `hltv`, `name`).
+`players.broadcast` при этом не меняется, вызывать фильтр можно сколько
+угодно раз подряд.
 
 `play_sound` тут — один `EMIT_SOUND` от первого подключённого игрока, а не
 цикл по всем: `EMIT_SOUND` и так слышен всем, у кого PAS накрывает точку
 излучения, повторять его на каждого — значит дать части слушателей услышать
 один и тот же клип по два-три раза подряд.
 """,
-                    'notes': [('warning', 'Состояния у него нет: `players.broadcast:alive()` бросает ошибку\nс объяснением. Для чтения и записи состояния перебирай\n`players.list()`.')],
+                    'notes': [
+                        ('warning', 'Состояния у него нет: `players.broadcast:alive()` бросает ошибку\nс объяснением. Для чтения и записи состояния перебирай\n`players.list()`.'),
+                        ('warning', 'Фильтры `alive`/`team` читают живое CS-состояние и требуют\nReGameDLL, как и в `players.list`.'),
+                    ],
                 },
                 {
                     'name': 'players.method',
