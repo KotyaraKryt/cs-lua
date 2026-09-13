@@ -109,12 +109,14 @@ end
                 },
                 {
                     'name': 'players.broadcast',
-                    'brief': 'Приёмник «всем сразу»: только отправка сообщений.',
+                    'brief': 'Приёмник «всем сразу»: рассылка и запись состояния, без чтения.',
                     'sig': 'players.broadcast:chat(text[, opts])',
                     'args': None,
                     'example': """
 players.broadcast:chat("{green}[Server]{default} раунд начался")
 players.broadcast:play_sound("items/9mmclip1.wav")
+players.broadcast:health(100)                 -- всем по 100 хп
+players.broadcast{ team = "T" }:give("weapon_hegrenade")
 
 -- тот же фильтр, что у players.list, сужает приёмник до подмножества
 players.broadcast{ team = "CT" }:chat("{green}[Server]{default} у вас заложник")
@@ -129,7 +131,15 @@ players.broadcast{ team = "CT" }:chat("{green}[Server]{default} у вас зал
                     'extra': """
 Понимает те же методы отправки, что и обычный игрок:
 [`chat`](chat.md), [`console`](console.md), [`center`](center.md),
-[`hud`](hud.md), [`dhud`](dhud.md), [`play_sound`](play_sound.md).
+[`hud`](hud.md), [`dhud`](dhud.md), [`screen_shake`](screen_shake.md),
+[`screen_fade`](screen_fade.md), [`play_sound`](play_sound.md).
+
+Плюс фиксированный набор действий и записи состояния, каждое — на всех сразу:
+[`health`](health.md), [`armor`](armor.md), [`maxspeed`](maxspeed.md),
+[`freeze`](freeze.md), [`godmode`](godmode.md), [`noclip`](noclip.md),
+[`team`](team.md), [`spawn`](spawn.md), [`money`](money.md), [`give`](give.md),
+[`strip`](strip.md), [`ammo`](ammo.md), [`clip`](clip.md), [`drop`](drop.md),
+[`slay`](slay.md), [`slap`](slap.md).
 
 `players.broadcast(filter)` возвращает не сам `players.broadcast`, а его
 одноразовый отфильтрованный клон — тот же набор полей, что у
@@ -143,8 +153,9 @@ players.broadcast{ team = "CT" }:chat("{green}[Server]{default} у вас зал
 один и тот же клип по два-три раза подряд.
 """,
                     'notes': [
-                        ('warning', 'Состояния у него нет: `players.broadcast:alive()` бросает ошибку\nс объяснением. Для чтения и записи состояния перебирай\n`players.list()`.'),
-                        ('warning', 'Фильтры `alive`/`team` читают живое CS-состояние и требуют\nReGameDLL, как и в `players.list`.'),
+                        ('warning', 'Ловушка та же, что у обычного игрока: `p:health()` без аргумента\nчитает. У `players.broadcast` читать нечего — нет одного ответа на\nвсех, — поэтому `players.broadcast:health()` бросает ошибку вместо\nтого, чтобы молча ничего не сделать. Читай per-player через\n`players.list()`.'),
+                        ('warning', 'Всё, чего нет в списке выше (`alive`, `weapon`, `weapons`,\n`is_bot`, `pev` и т.д.) — тоже ошибка: `players.broadcast` не\nзаменяет объект игрока целиком.'),
+                        ('warning', 'Фильтры `alive`/`team`, а также ReGameDLL-действия\n(`team`, `spawn`, `money`, `give`, `strip`, `ammo`, `clip`, `drop`,\n`slay`, `slap`) требуют ReGameDLL, как и у обычного игрока.'),
                     ],
                 },
                 {

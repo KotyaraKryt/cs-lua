@@ -126,6 +126,19 @@ local function run()
 	ok("broadcast{filter} умеет слать", errmsg(function() filtered:chat("x") end) == nil)
 	ok("broadcast() без фильтра — как обычный", players.broadcast() == players.broadcast)
 
+	-- Действия на broadcast: реальных целей на тестовом сервере нет, так что
+	-- проверяем только регистрацию методов и то, что пустой фильтр ничего
+	-- не задевает (никто не подходит — тело цикла форварда не выполняется).
+	for _, name in ipairs({ "health", "armor", "maxspeed", "freeze", "godmode",
+			"noclip", "team", "spawn", "money", "give", "strip", "ammo",
+			"clip", "drop", "slay", "slap" }) do
+		ok("broadcast умеет " .. name, type(players.broadcast[name]) == "function")
+	end
+	ok("broadcast{filter}:health на пустой цели не падает",
+		errmsg(function() filtered:health(100) end) == nil)
+	ok("broadcast{filter}:give на пустой цели не падает",
+		errmsg(function() filtered:give("weapon_ak47") end) == nil)
+
 	----------------------------------------------------------------
 	-- Цвет
 	----------------------------------------------------------------

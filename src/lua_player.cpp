@@ -1513,9 +1513,83 @@ static int l_broadcast_index(lua_State *L)
 
 	const char *key = lua_isstring(L, 2) ? lua_tostring(L, 2) : luaL_typename(L, 2);
 
-	return luaL_error(L, "players.broadcast has no '%s' - it only sends to "
-		"everyone at once (chat, console, center, hud, dhud, play_sound). "
-		"To read or change player state, walk players.list()", key);
+	return luaL_error(L, "players.broadcast has no '%s' - it can send (chat, "
+		"console, center, hud, dhud, screen_shake, screen_fade, play_sound) and "
+		"act (health, armor, maxspeed, freeze, godmode, noclip, team, spawn, "
+		"money, give, strip, ammo, clip, drop, slap, slay) on everyone at once. "
+		"To read player state, walk players.list()", key);
+}
+
+// Wraps a per-player action/state method - already on the player metatable -
+// so players.broadcast (optionally filtered) can drive it across every
+// matching target at once: players.broadcast:health(100),
+// players.broadcast{team="CT"}:slap().
+//
+// These methods double as a query when called with no value: self:health()
+// reads, self:health(100) writes. There is no single answer to hand back for
+// "everyone", so the forward checks each call's result count - a write always
+// comes back empty, so the first one that returns something is a missing
+// argument, not a value to collect.
+static int l_broadcast_forward(lua_State *L)
+{
+	PlayerFilter filter;
+	self_broadcast_target(L, filter);
+
+	int nargs = lua_gettop(L) - 1;
+
+	for (int target = 1; target < CSLUA_MAXPLAYERS; target++) {
+		if (!cslua_player_matches_filter(target, filter))
+			continue;
+
+		lua_pushvalue(L, lua_upvalueindex(1));		// the underlying method
+		cslua_push_player(L, target);			// its own self
+		for (int i = 0; i < nargs; i++)
+			lua_pushvalue(L, 2 + i);
+
+		int base = lua_gettop(L) - nargs - 2;
+		lua_call(L, nargs + 1, LUA_MULTRET);
+		int nresults = lua_gettop(L) - base;
+
+		if (nresults > 0) {
+			lua_pop(L, nresults);
+			return luaL_error(L, "players.broadcast:%s() needs a value - there "
+				"is no single answer for everyone, read per player with "
+				"players.list()", lua_tostring(L, lua_upvalueindex(2)));
+		}
+	}
+
+	return 0;
+}
+
+static const luaL_Reg s_broadcastable[] =
+{
+	{ "health",   l_health },
+	{ "armor",    l_armor },
+	{ "maxspeed", l_maxspeed },
+	{ "freeze",   l_freeze },
+	{ "godmode",  l_godmode },
+	{ "noclip",   l_noclip },
+	{ "team",     l_team },
+	{ "spawn",    l_spawn },
+	{ "money",    l_money },
+	{ "give",     l_give },
+	{ "strip",    l_strip },
+	{ "ammo",     l_ammo },
+	{ "clip",     l_clip },
+	{ "drop",     l_drop },
+	{ "slay",     l_slay },
+	{ "slap",     l_slap },
+	{ NULL, NULL }
+};
+
+static void register_broadcastable(lua_State *L, const luaL_Reg *list)
+{
+	for (const luaL_Reg *r = list; r->name; r++) {
+		lua_pushcfunction(L, r->func);
+		lua_pushstring(L, r->name);
+		lua_pushcclosure(L, l_broadcast_forward, 2);
+		lua_setfield(L, -2, r->name);
+	}
 }
 
 // players.broadcast{ alive =, team =, bot =, hltv =, name = } -> a clone of
@@ -1555,6 +1629,7 @@ static void push_broadcast_metatable(lua_State *L)
 
 	lua_newtable(L);				// methods
 	register_all(L, s_messaging);
+	register_broadcastable(L, s_broadcastable);
 	lua_pushcclosure(L, l_broadcast_index, 1);
 	lua_setfield(L, -2, "__index");
 
