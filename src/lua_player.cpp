@@ -932,6 +932,16 @@ static int l_defuser(lua_State *L)
 	return 0;
 }
 
+// p:ignorerad() - whether the player has "ignorerad" active client-side.
+// Read-only: m_bIgnoreRadio is flipped by the client's own console command,
+// nothing server-side should override it.
+static int l_ignorerad(lua_State *L)
+{
+	CBasePlayer *player = self_cbase(L);
+	lua_pushboolean(L, player->m_bIgnoreRadio);
+	return 1;
+}
+
 // p:give("weapon_ak47"[, opts]) - GiveNamedItemEx does the full pickup.
 //
 // opts disguises the result for inventory-bookkeeping only:
@@ -1453,6 +1463,7 @@ static const luaL_Reg s_queries[] =
 	{ "money",     l_money },
 	{ "deaths",    l_deaths },
 	{ "defuser",   l_defuser },
+	{ "ignorerad", l_ignorerad },
 	{ "give",      l_give },
 	{ "strip",     l_strip },
 	{ "weapon",    l_weapon },

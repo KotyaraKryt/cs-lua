@@ -330,6 +330,9 @@ p:team("T", { force = true })     -- через смерть и повторны
                    extra='Запись обновляет строку в таблице счёта.', notes=[REGAMEDLL]),
                 rw('defuser', 'Есть ли у игрока дефузер.', 'boolean',
                    example='p:defuser(true)     -- выдаёт дефузер бесплатно', notes=[REGAMEDLL]),
+                ro('ignorerad', 'Включил ли игрок у себя в консоли `ignorerad`.', 'boolean',
+                   extra='Только чтение: `m_bIgnoreRadio` переключает клиентская консольная команда `ignorerad`, сервер её не выставляет.',
+                   notes=[REGAMEDLL]),
                 {
                     'name': 'p:give',
                     'brief': 'Выдаёт игроку предмет по classname.',
