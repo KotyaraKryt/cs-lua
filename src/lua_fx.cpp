@@ -1,6 +1,7 @@
 #include "cslua.h"
 #include "lua_fx.h"
 #include "lua_natives.h"
+#include "players.h"
 
 #define SVC_TEMPENTITY 23
 
@@ -54,6 +55,30 @@ static void opt_color(lua_State *L, int table, int &r, int &g, int &b)
 		lua_rawgeti(L, -1, 3); b = (int)luaL_optinteger(L, -1, 255); lua_pop(L, 1);
 	}
 	lua_pop(L, 1);
+}
+
+// opts.only = player -> that connected player's edict, so the caller can send
+// to just them (MSG_ONE_UNRELIABLE) instead of broadcasting to the PVS.
+// Absent/not a player -> NULL, meaning "broadcast as usual".
+static edict_t *opt_recipient(lua_State *L, int table)
+{
+	lua_getfield(L, table, "only");
+	if (!lua_istable(L, -1)) {
+		lua_pop(L, 1);
+		return NULL;
+	}
+
+	lua_getfield(L, -1, "id");
+	int id = lua_isnumber(L, -1) ? (int)lua_tointeger(L, -1) : -1;
+	lua_pop(L, 2);				// id, the "only" table
+
+	if (!cslua_valid_player_id(id) || !g_players.is_connected(id))
+		luaL_error(L, "fx: opts.only must be a connected player");
+
+	edict_t *ed = g_engfuncs.pfnPEntityOfEntIndex(id);
+	if (!ed || ed->free)
+		luaL_error(L, "fx: opts.only player has no valid entity");
+	return ed;
 }
 
 // opts.to = { x, y, z } if present, otherwise start + (0, 0, height).
@@ -217,6 +242,7 @@ static int l_firefield(lua_State *L)
 }
 
 // fx.beam(x1, y1, z1, x2, y2, z2, opts) - a straight line between two points.
+// opts.only restricts it to one player instead of the whole PVS.
 static int l_beam(lua_State *L)
 {
 	Vector start, endpoint;
@@ -233,8 +259,12 @@ static int l_beam(lua_State *L)
 	opt_color(L, 7, r, g, b);
 	int brightness = opt_int(L, 7, "brightness", 255);
 	int speed = opt_int(L, 7, "speed", 0);
+	edict_t *only = opt_recipient(L, 7);
 
-	MESSAGE_BEGIN(MSG_PVS, SVC_TEMPENTITY, start, (edict_t *)NULL);
+	if (only)
+		MESSAGE_BEGIN(MSG_ONE_UNRELIABLE, SVC_TEMPENTITY, NULL, only);
+	else
+		MESSAGE_BEGIN(MSG_PVS, SVC_TEMPENTITY, start, (edict_t *)NULL);
 	WRITE_BYTE(TE_BEAMPOINTS);
 	WRITE_COORD(start.x);
 	WRITE_COORD(start.y);

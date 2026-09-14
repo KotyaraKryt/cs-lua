@@ -107,6 +107,40 @@ fx.sprite_trail(x, y, z, { sprite = "sprites/reapi_healthnade/heal_shape.spr", h
                     'notes': [PRECACHED],
                     'see': [('res.model', '../res/index.md')],
                 },
+                {
+                    'name': 'fx.beam',
+                    'brief': 'Прямая линия луча между двумя точками.',
+                    'sig': 'fx.beam(x1, y1, z1, x2, y2, z2, opts)',
+                    'args': [
+                        ('x1, y1, z1', 'number', 'начало'),
+                        ('x2, y2, z2', 'number', 'конец'),
+                        ('opts', 'table', 'см. Опции'),
+                    ],
+                    'extra': """
+### Опции
+
+| поле | тип |  |
+|---|---|---|
+| `sprite` | string | путь спрайта луча, обязателен |
+| `only` | player \\| nil | увидит только этот игрок (`MSG_ONE_UNRELIABLE`); без него — все в PVS начальной точки |
+| `life` | number | секунд; `0.3` по умолчанию |
+| `width` | number | толщина луча; `5` по умолчанию |
+| `noise` | number | дрожание; `0` по умолчанию |
+| `color` | table | `{ r, g, b }`; `{255,255,255}` по умолчанию |
+| `brightness` | number | `255` по умолчанию |
+| `speed` | number | скорость анимации текстуры; `0` по умолчанию |
+| `framerate` | number | `0` по умолчанию |
+""",
+                    'example': """
+-- виден всем в PVS
+fx.beam(x1, y1, z1, x2, y2, z2, { sprite = "sprites/laserbeam.spr", color = { 255, 0, 0 } })
+
+-- виден только p (например, приватный ESP-луч для админа)
+fx.beam(x1, y1, z1, x2, y2, z2, { sprite = "sprites/laserbeam.spr", only = p })
+""",
+                    'notes': [PRECACHED],
+                    'see': [('res.model', '../res/index.md')],
+                },
             ],
         },
     ],
